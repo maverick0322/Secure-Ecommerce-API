@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../../index');
-const { categoria } = require('../../models');
+const { categoria, bitacora } = require('../../models');
 const { GeneraToken } = require('../../services/jwttoken.service');
 
 describe('Pruebas de Integración: Endpoints de Categorías (/api/categorias)', () => {
@@ -10,6 +10,10 @@ describe('Pruebas de Integración: Endpoints de Categorías (/api/categorias)', 
   beforeAll(() => {
     adminToken = GeneraToken('admin@uv.mx', 'Guillermo Vera', 'Administrador');
     usuarioToken = GeneraToken('usuario@uv.mx', 'Usuario Normal', 'Usuario');
+  });
+
+  beforeEach(() => {
+    jest.spyOn(bitacora, 'create').mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -38,6 +42,34 @@ describe('Pruebas de Integración: Endpoints de Categorías (/api/categorias)', 
     });
   });
 
+  describe('GET /api/categorias/:id', () => {
+    it('debe responder con 200 OK si la categoría existe', async () => {
+      jest.spyOn(categoria, 'findByPk').mockResolvedValue({
+        categoriaId: 1,
+        nombre: 'Televisores',
+        protegida: true
+      });
+
+      const res = await request(app)
+        .get('/api/categorias/1')
+        .set('Authorization', `Bearer ${usuarioToken}`);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.nombre).toBe('Televisores');
+    });
+
+    it('debe responder con 404 Not Found si la categoría no existe', async () => {
+      jest.spyOn(categoria, 'findByPk').mockResolvedValue(null);
+
+      const res = await request(app)
+        .get('/api/categorias/999')
+        .set('Authorization', `Bearer ${usuarioToken}`);
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body.mensaje).toContain('no encontrada');
+    });
+  });
+
   describe('POST /api/categorias (Control de Acceso RBAC y Validación)', () => {
     it('debe responder con 403 Forbidden si un rol Usuario intenta crear una categoría', async () => {
       const res = await request(app)
@@ -53,7 +85,7 @@ describe('Pruebas de Integración: Endpoints de Categorías (/api/categorias)', 
       const res = await request(app)
         .post('/api/categorias')
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ nombre: '' }); // Nombre vacío
+        .send({ nombre: '' });
 
       expect(res.statusCode).toBe(400);
       expect(res.body.mensaje).toContain('Errores de validación');
@@ -78,12 +110,46 @@ describe('Pruebas de Integración: Endpoints de Categorías (/api/categorias)', 
     });
   });
 
+  describe('PUT /api/categorias/:id', () => {
+    it('debe responder con 400 Bad Request si el nombre está vacío', async () => {
+      const res = await request(app)
+        .put('/api/categorias/1')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ nombre: '' });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('debe responder con 404 Not Found si la categoría no existe al actualizar', async () => {
+      jest.spyOn(categoria, 'findByPk').mockResolvedValue(null);
+
+      const res = await request(app)
+        .put('/api/categorias/999')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ nombre: 'Nombre Válido' });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('debe responder con 204 No Content al actualizar una categoría exitosamente', async () => {
+      jest.spyOn(categoria, 'findByPk').mockResolvedValue({ id: 16, nombre: 'Viejo' });
+      jest.spyOn(categoria, 'update').mockResolvedValue([1]);
+
+      const res = await request(app)
+        .put('/api/categorias/16')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ nombre: 'Nombre Nuevo' });
+
+      expect(res.statusCode).toBe(204);
+    });
+  });
+
   describe('DELETE /api/categorias/:id (Reglas de Protección del Sistema)', () => {
     it('debe responder con 400 Bad Request al intentar eliminar una categoría protegida', async () => {
       jest.spyOn(categoria, 'findByPk').mockResolvedValue({
         id: 1,
         nombre: 'Televisores',
-        protegida: true // Categoría protegida del catálogo del sistema
+        protegida: true
       });
 
       const res = await request(app)

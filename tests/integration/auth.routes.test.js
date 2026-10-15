@@ -1,7 +1,7 @@
 const request = require('supertest');
 const bcrypt = require('bcrypt');
 const app = require('../../index');
-const { usuario } = require('../../models');
+const { usuario, bitacora } = require('../../models');
 const { GeneraToken } = require('../../services/jwttoken.service');
 
 describe('Pruebas de Integración: Endpoints de Autenticación (/api/auth)', () => {
@@ -9,6 +9,10 @@ describe('Pruebas de Integración: Endpoints de Autenticación (/api/auth)', () 
 
   beforeAll(async () => {
     adminPasswordHash = await bcrypt.hash('patito', 10);
+  });
+
+  beforeEach(() => {
+    jest.spyOn(bitacora, 'create').mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -73,12 +77,41 @@ describe('Pruebas de Integración: Endpoints de Autenticación (/api/auth)', () 
       expect(res.body.jwt).toBeDefined();
       expect(res.body.jwt.split('.').length).toBe(3);
     });
+
+    it('debe responder con 500 si ocurre un fallo en la base de datos al autenticar', async () => {
+      jest.spyOn(usuario, 'findOne').mockRejectedValue(new Error('Fallo crítico de BD'));
+
+      const res = await request(app)
+        .post('/api/auth')
+        .send({ email: 'error@uv.mx', password: 'cualquiera' });
+
+      expect(res.statusCode).toBe(500);
+    });
   });
 
   describe('GET /api/auth/tiempo', () => {
-    it('debe rechazar con 401 si no se envía token', async () => {
+    it('debe rechazar con 401 si no se envía token de autenticación', async () => {
       const res = await request(app).get('/api/auth/tiempo');
       expect(res.statusCode).toBe(401);
+    });
+
+    it('debe responder con 404 si el servicio no puede determinar el tiempo restante', async () => {
+      const jwt = require('jsonwebtoken');
+      jest.spyOn(jwt, 'verify')
+        .mockReturnValueOnce({
+          'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name': 'gvera@uv.mx',
+          'http://schemas.microsoft.com/ws/2008/06/identity/claims/role': 'Administrador'
+        })
+        .mockImplementationOnce(() => {
+          throw new Error('Manipulación de token');
+        });
+
+      const res = await request(app)
+        .get('/api/auth/tiempo')
+        .set('Authorization', 'Bearer token_valido_para_authorize');
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body.mensaje).toContain('No se pudo determinar el tiempo');
     });
 
     it('debe responder con 200 OK y el tiempo restante de sesión con un token válido', async () => {

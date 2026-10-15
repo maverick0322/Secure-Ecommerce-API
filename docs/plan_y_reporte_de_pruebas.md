@@ -68,12 +68,17 @@ Los archivos de prueba han sido organizados modularmente en la carpeta `tests/`:
 c:\codigo\ps\backendnode\tests\
 ├── unit/
 │   ├── auth.middleware.test.js          # Pruebas de RBAC, 401/403 y Rolling Tokens
+│   ├── bitacora.middleware.test.js      # Pruebas de auditoría, IP real, claims y resiliencia
 │   ├── errorhandler.middleware.test.js  # Pruebas de mitigación de fuga de stack traces
 │   ├── jwttoken.service.test.js         # Pruebas de cifrado, claims y expiración
 │   └── upload.middleware.test.js        # Pruebas de filtros MIME, Path Traversal y DoS
 └── integration/
+    ├── archivos.routes.test.js          # Pruebas de subida a disco/BD, visualización y borrado
     ├── auth.routes.test.js              # Pruebas de flujo de login y tiempo de sesión
+    ├── bitacora.routes.test.js          # Pruebas de consulta de eventos y control RBAC
     ├── categorias.routes.test.js        # Pruebas de CRUD de categorías y protección
+    ├── productos.routes.test.js         # Pruebas de CRUD de productos, filtros y categorías N:M
+    ├── roles.routes.test.js             # Pruebas de consulta de catálogo de roles y RBAC
     ├── security_headers.test.js         # Pruebas de X-Powered-By y exposición CORS
     └── usuarios.routes.test.js          # Pruebas de gestión de usuarios y robustez
 ```
@@ -104,8 +109,9 @@ c:\codigo\ps\backendnode\tests\
 
 | Métrica / Dimensión | Resultado | Estado |
 | :--- | :--- | :--- |
-| **Suites de Prueba (Test Suites)** | 8 aprobadas de 8 totales (100%) | 🟢 PASS |
-| **Casos de Prueba (Tests)** | 49 aprobados de 49 totales (100%) | 🟢 PASS |
+| **Suites de Prueba (Test Suites)** | 13 aprobadas de 13 totales (100%) | 🟢 PASS |
+| **Casos de Prueba (Tests)** | 121 aprobados de 121 totales (100%) | 🟢 PASS |
+| **Cobertura General de Sentencias** | 92.63% de cobertura de código | 🟢 PASS |
 | **Auditoría de Vulnerabilidades (`npm audit`)** | 0 vulnerabilidades (0 Críticas, 0 Altas, 0 Moderadas, 0 Bajas) | 🟢 SECURE |
 | **Cadena de Suministro (SCA)** | `bcrypt@6.0.0`, `multer@2.0.1`, `jest@30.0.0`, `supertest@7.1.0` con overrides de seguridad | 🟢 UPDATED |
 | **Generación OpenAPI / Swagger** | 100% libre de advertencias (`npm run swagger`) | 🟢 PASS |

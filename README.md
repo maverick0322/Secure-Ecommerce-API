@@ -239,7 +239,7 @@ Arquitectura distribuida en 3 capas físicas/virtuales conectadas a la misma red
 
 ## 🧪 Pruebas Automatizadas y Auditoría de Seguridad
 
-El proyecto cuenta con una cobertura integral de 49 pruebas unitarias y de integración:
+El proyecto cuenta con una cobertura integral del **92.6%** con **121 casos de prueba** (unitarias y de integración) distribuidos en 13 suites:
 
 ```bash
 # Ejecutar todas las pruebas (Unitarias e Integración)
