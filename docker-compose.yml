@@ -1,0 +1,55 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: ecommerce_db
+    restart: unless-stopped
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_DATABASE:-mercadolibrenode}
+      MYSQL_USER: ${DB_USER:-mercadolibre_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-M3rc@d0}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./bd.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u $$MYSQL_USER -p$$MYSQL_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecommerce_api
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-3000}:3000"
+    environment:
+      - DB_HOST=${DOCKER_DB_HOST:-db}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_DATABASE=${DB_DATABASE:-mercadolibrenode}
+      - DB_USER=${DB_USER:-mercadolibre_user}
+      - DB_PASSWORD=${DB_PASSWORD:-M3rc@d0}
+      - SERVER_PORT=${SERVER_PORT:-3000}
+      - NODE_ENV=${NODE_ENV:-development}
+      - JWT_SECRET=${JWT_SECRET:-3ca4407f27a00a1b628b9f1416356e6d799b6b6a93f820a6098b560df066f5537a5ccb}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8080,http://localhost:8081}
+      - FILES_IN_BD=${FILES_IN_BD:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+      - ./log:/usr/src/app/log
+
+volumes:
+  mysql_data:
