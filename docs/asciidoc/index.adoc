@@ -1,0 +1,37 @@
+= Documentación del Proyecto: E-Commerce Backend API Seguro
+Facultad de Estadística e Informática — Universidad Veracruzana
+:doctype: book
+:toc: left
+:toclevels: 3
+:sectnums:
+:sectlinks:
+:icons: font
+:source-highlighter: highlight.js
+:experimental:
+:stem:
+:imagesdir: ./assets
+
+[preface]
+== Información del Proyecto
+
+* **Materia:** Programación Segura
+* **Institución:** Facultad de Estadística e Informática — Universidad Veracruzana
+* **Proyecto:** Plataforma E-Commerce Backend API RESTful
+* **Tecnologías Base:** Node.js (v20+), Express.js, Sequelize ORM, MySQL 8.0, Docker, JWT, SonarQube Cloud
+* **Repositorio:** https://github.com/maverick0322/Secure-Ecommerce-API[maverick0322/Secure-Ecommerce-API]
+
+include::01_introduccion.adoc[]
+
+include::02_requisitos.adoc[]
+
+include::03_diseno_arquitectonico.adoc[]
+
+include::04_construccion_segura.adoc[]
+
+include::05_estandares_codificacion.adoc[]
+
+include::06_plan_pruebas.adoc[]
+
+include::07_despliegue_seguro.adoc[]
+
+include::08_conclusiones.adoc[]

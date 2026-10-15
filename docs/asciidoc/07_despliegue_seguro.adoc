@@ -1,0 +1,42 @@
+== Estrategia de Despliegue Seguro
+
+=== Configuración de Servidores y Servicios
+La infraestructura de despliegue se apoya en contenedores **Docker** y **Docker Compose**, lo que garantiza paridad entre desarrollo y producción:
+
+* **Servicio de Base de Datos (`ecommerce_db`):**
+** Imagen oficial: `mysql:8.0`.
+** Cotejamiento de caracteres: `utf8mb4` con `utf8mb4_unicode_ci` para soporte completo de caracteres internacionales y emojis.
+** Persistencia: Volumen gestionado `mysql_data` para resguardar la información ante reinicios.
+** Salud del servicio: Sondeo activo mediante `healthcheck` (`mysqladmin ping`) antes de permitir el arranque del backend.
+* **Servicio de Aplicación (`ecommerce_api`):**
+** Imagen base: `node:20-alpine` (mínima superficie de ataque y sin utilidades innecesarias).
+** Principio de Menor Privilegio (CWE-250): La aplicación no corre como `root`; se ejecuta bajo la cuenta de sistema sin privilegios `USER node`.
+** Puertos Expuestos: Solo el puerto `3000` hacia el proxy o red autorizada.
+
+=== Reporte de Estrategia de Respaldos
+La política de respaldo de datos asegura la recuperación ante fallos de disco o corrupción de datos:
+
+* **Respaldos Lógicos Periódicos:**
+** Ejecución programada mediante script automatizado utilizando `mysqldump`:
++
+[source,bash]
+----
+# Generación de respaldo consistente con bloqueo de tablas de lectura
+mysqldump -u root -p --single-transaction --quick --databases mercadolibrenode > backup_$(date +%F_%T).sql
+----
+* **Respaldos Físicos de Volúmenes:**
+** Copia de seguridad en frío del volumen `mysql_data` hacia almacenamiento externo redundante.
+* **Política de Retención (RPO y RTO):**
+** RPO (Recovery Point Objective): Máximo 24 horas.
+** RTO (Recovery Time Objective): Menor a 30 minutos para restauración completa de esquema y datos.
+
+=== Sistema de Auditoría y Respuesta a Incidentes
+* **Bitácora Inmutable en Base de Datos:**
+** Cada operación crítica (creación, edición y eliminación de usuarios, productos, categorías y archivos) se almacena en la tabla relacional `bitacora`.
+** Registra de forma indeleble: Acción realizada, identificador del elemento, IP de origen del cliente (capturada mediante `request-ip`), usuario responsable y marca de tiempo exacta (`timestamp`).
+* **Registro de Eventos y Errores en Disco:**
+** La carpeta `log/` almacena el histórico persistente de anomalías y excepciones no controladas en `log.txt`.
+* **Respuesta a Incidentes:**
+** Detección: Monitoreo de anomalías en códigos HTTP 4xx y 5xx.
+** Contención: Revocación de sesiones forzando la expiración de la ventana de 20 minutos de los JWT o desactivación de cuentas mediante bandera en base de datos.
+** Erradicación y Recuperación: Despliegue inmediato de imágenes corregidas mediante el pipeline de GitHub Actions y restauración de respaldos verificados.

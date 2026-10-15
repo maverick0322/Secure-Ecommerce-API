@@ -1,0 +1,28 @@
+== Introducción
+
+=== Propósito
+El propósito del presente documento es formalizar la especificación de requisitos, arquitectura, diseño defensivo, estándares de codificación, aseguramiento de la calidad y estrategia de despliegue seguro para el backend de una plataforma de comercio electrónico (E-Commerce). Este sistema provee servicios web RESTful robustos bajo los principios fundamentales de la seguridad de la información: Confidencialidad, Integridad y Disponibilidad (Tríada CIA).
+
+=== Justificación
+Las aplicaciones de comercio electrónico operan en entornos altamente hostiles expuestos continuamente a vectores de ataque como inyección de código SQL, ataques de fuerza bruta, secuestro de sesión y exposición involuntaria de información confidencial. Construir un backend resiliente desde sus cimientos mitiga riesgos de alto impacto financiero, legal y reputacional, alineándose a los estándares de OWASP (Open Web Application Security Project) y el catálogo CWE/SANS Top 25.
+
+=== Objetivo
+* **Objetivo General:** Desarrollar, auditar y documentar una API RESTful segura en Node.js que soporte las operaciones comerciales clave (catálogo de categorías, inventario de productos, autenticación de usuarios y administración de archivos multimedia), garantizando el cumplimiento de los estándares de programación defensiva.
+* **Objetivos Específicos:**
+** Implementar persistencia relacional con Sequelize ORM neutralizando vulnerabilidades de inyección SQL (CWE-89).
+** Establecer un esquema de autenticación sin estado mediante JSON Web Tokens (JWT) y control de acceso basado en roles (RBAC).
+** Configurar un esquema de renovación de sesión transparente (Rolling Tokens) que reduzca la ventana de exposición ante interceptación.
+** Asegurar una cobertura de pruebas automatizadas superior al 90% y validar el código con análisis estático en SonarQube Cloud.
+
+=== Metodología
+El desarrollo del proyecto se fundamenta en el ciclo de vida de desarrollo de software seguro (**S-SDLC** / Secure Software Development Life Cycle), complementado con:
+* **Defensa en Profundidad (Defense in Depth):** Aplicación de múltiples capas de seguridad (validaciones en capas HTTP, middlewares de autorización, ORM parametrizado y aislamiento en contenedores Docker).
+* **Principio de Menor Privilegio:** Restricción de permisos en base de datos, usuarios del sistema operativo dentro del contenedor (`USER node`) y roles de acceso a la API.
+* **Integración Continua Segura (CI/CD):** Automatización de pruebas unitarias, de integración y análisis estático en GitHub Actions.
+
+=== Referencias
+* OWASP Top 10 API Security Risks (2023).
+* RFC 7519: JSON Web Token (JWT).
+* NIST SP 800-63B: Digital Identity Guidelines (Authentication and Lifecycle Management).
+* CWE/SANS Top 25 Most Dangerous Software Weaknesses.
+* Estándares de Codificación Segura para Node.js y Express (OpenSSF / OWASP Node.js Cheat Sheet).

@@ -10,6 +10,7 @@
     "start": "node --env-file=.env --watch index.js",
     "dev": "node --env-file=.env --watch index.js",
     "swagger": "node swagger.js",
+    "docs:build": "npx @asciidoctor/cli docs/asciidoc/index.adoc -D dist",
     "migrate": "sequelize db:migrate",
     "migrate:undo": "sequelize db:migrate:undo:all",
     "seed": "sequelize db:seed:all",

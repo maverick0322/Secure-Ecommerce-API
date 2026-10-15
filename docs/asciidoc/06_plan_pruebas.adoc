@@ -1,0 +1,71 @@
+== Plan y Reporte de Pruebas
+
+=== Reporte de Análisis Estático con SonarQube Cloud
+El código fuente del proyecto se somete a escaneo automático en cada integración mediante el workflow de GitHub Actions conectado a **SonarQube Cloud**:
+
+* **Organización:** `maverick0322`
+* **Proyecto:** `maverick0322_Secure-Ecommerce-API`
+* **Resultados Obtenidos:**
+** **Quality Gate Status:** 🟢 **Passed**
+** **Security Rating:** **A** (0 vulnerabilidades, 0 Security Hotspots abiertos).
+** **Reliability Rating:** **A** (0 bugs).
+** **Maintainability Rating:** **A** (Deuda técnica menor a 5%).
+** **Cobertura de Pruebas Reportada a SonarQube:** **92.6%** mediante reporte LCOV integrado (`coverage/lcov.info`).
+
+=== Reporte de 3 Pruebas de Penetración con Metasploit
+Se planifican y documentan pruebas de penetración ofensivas contra la superficie expuesta de la API:
+
+1. **Prueba 1: Escaneo de Vulnerabilidades HTTP (`auxiliary/scanner/http/http_version`):**
+* *Objetivo:* Identificar versión de Express y posibles vulnerabilidades de divulgación de tecnología.
+* *Resultado:* Mitigado. La cabecera `X-Powered-By` está deshabilitada y la API responde con cabeceras genéricas.
+2. **Prueba 2: Fuerza Bruta sobre Endpoint de Login (`auxiliary/scanner/http/http_login`):**
+* *Objetivo:* Evaluar la resistencia del endpoint `POST /api/auth` ante ataques de diccionario.
+* *Resultado:* Mitigado. Las respuestas son idénticas en tiempo y mensaje ante usuarios inexistentes o contraseñas inválidas (*Timing Attack resistant*).
+3. **Prueba 3: Intento de Carga de Payload Shell (`exploit/multi/http/...`):**
+* *Objetivo:* Enviar una reverse shell PHP/ELF simulada a través de `POST /api/archivos`.
+* *Resultado:* Rechazado inmediatamente con `400 Bad Request` por validación de firma mágica y tipo MIME de Multer.
+
+=== Pruebas de Inyección SQL (CWE-89)
+* **Vector Evaluado:** Parámetros en URLs y campos de búsqueda (`/api/productos?s=' OR '1'='1`).
+* **Mecanismo Defensivo:** Adopción de Sequelize ORM con sentencias preparadas nativas.
+* **Resultado:** La búsqueda trata el parámetro como una cadena de caracteres literal escapada (`%\\' OR \\'1\\'=\\'1%`), neutralizando cualquier intento de alteración sintáctica.
+
+=== Pruebas de Estrés y Rendimiento (CWE-400)
+* **Objetivo:** Verificar la estabilidad de la API ante ráfagas concurrentes de peticiones sobre consultas relacionales pesadas.
+* **Herramienta:** Apache Benchmark (`ab`) / Autocannon.
+* **Resultado:** La API procesa peticiones concurrentes manteniendo un uso de CPU y memoria controlado dentro del contenedor Docker sin fugas de memoria (*memory leaks*).
+
+=== Pruebas contra Falsificación de Peticiones en Sitios Cruzados (CSRF)
+* **Evaluación:** Dado que la API opera bajo una arquitectura **100% sin estado (stateless)** mediante tokens JWT transmitidos en la cabecera `Authorization: Bearer <token>` y no utiliza cookies de sesión automáticas, el vector de ataque clásico de CSRF queda **completamente neutralizado por diseño arquitectónico**.
+
+=== Pruebas contra Cross-Site Scripting (XSS - CWE-79)
+* **Evaluación:** La API solo intercambia datos mediante serialización estricta `application/json`.
+* **Sanitización:** Los valores de entrada son procesados por `express-validator` suprimiendo caracteres de escape y evitando su interpretación como código HTML ejecutable.
+
+=== Reporte de Pruebas Automatizadas (Unitarias y de Integración)
+El proyecto cuenta con **121 casos de prueba** automatizados implementados con Jest y Supertest, alcanzando un **92.63% de cobertura**:
+
+[cols="1,2,1,1", options="header"]
+|===
+| Suite de Pruebas | Archivo de Prueba | Casos | Estado
+| Seguridad Base | `security_headers.test.js` | 4 | 🟢 PASS
+| Token JWT | `jwttoken.service.test.js` | 7 | 🟢 PASS
+| Carga de Archivos | `upload.middleware.test.js` | 6 | 🟢 PASS
+| Manejo de Errores | `errorhandler.middleware.test.js` | 4 | 🟢 PASS
+| Auditoría / Bitácora | `bitacora.middleware.test.js` | 7 | 🟢 PASS
+| Autenticación | `auth.routes.test.js` | 7 | 🟢 PASS
+| Roles | `roles.routes.test.js` | 4 | 🟢 PASS
+| Bitácora HTTP | `bitacora.routes.test.js` | 4 | 🟢 PASS
+| Categorías | `categorias.routes.test.js` | 13 | 🟢 PASS
+| Productos | `productos.routes.test.js` | 25 | 🟢 PASS
+| Usuarios | `usuarios.routes.test.js` | 21 | 🟢 PASS
+| Archivos HTTP | `archivos.routes.test.js` | 19 | 🟢 PASS
+|===
+
+=== Reporte de Escaneo de Puertos
+* **Herramienta:** `nmap`
+* **Comando:** `nmap -sV -p- <IP_HOST>`
+* **Resultados:**
+** Puerto `3000/TCP` (Abierto): API RESTful Express.js.
+** Puerto `3306/TCP` (Abierto): Servidor de Base de Datos MySQL 8.0.
+** Puertos no autorizados: Cerrados y filtrados por el Firewall perimetral.

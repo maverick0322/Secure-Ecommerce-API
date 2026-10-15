@@ -40,3 +40,6 @@ swagger-output.json
 coverage/
 *.lcov
 
+# Directorio de compilación de documentación (Asciidoctor)
+dist/
+

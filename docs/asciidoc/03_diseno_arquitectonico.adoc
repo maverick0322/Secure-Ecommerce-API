@@ -1,0 +1,125 @@
+== Diseño Arquitectónico Seguro
+
+=== Vista de Casos de Uso
+La interacción de los usuarios con el sistema se articula a través de las capacidades asignadas a cada rol (Usuario y Administrador):
+
+[source,text]
+----
+                   +---------------------------+
+                   |     API E-Commerce        |
+                   +---------------------------+
+                   |                           |
+ (Usuario) ------> | [ Consultar Catálogo ]    |
+    |              | [ Visualizar Imagen ]     |
+    |              |                           |
+ (Administrador) ->| [ Iniciar Sesión (JWT) ]  |
+    |              | [ Crear/Editar Productos ]|
+    |              | [ Eliminar Productos ]    |
+    |              | [ Asignar Categorías ]    |
+    |              | [ Subir Archivos ]        |
+    |              | [ Auditar Bitácora ]      |
+    |              | [ Gestionar Usuarios ]    |
+                   +---------------------------+
+----
+
+=== Vista Lógica (Diagrama de Clases / Modelos)
+El modelo del dominio se estructura en entidades relacionales mapeadas mediante Sequelize:
+
+* **Usuario:** `id` (UUID), `email` (Unique), `passwordhash`, `nombre`, `protegido` (Boolean), `rolid` (FK).
+* **Rol:** `id` (PK), `nombre` (Unique).
+* **Producto:** `id` (PK), `titulo`, `descripcion`, `precio`, `archivoid` (FK).
+* **Categoria:** `id` (PK), `nombre`, `protegida` (Boolean).
+* **CategoriaProducto:** `productoid` (FK), `categoriaid` (FK) [Asociación N:M].
+* **Archivo:** `id` (PK), `mime`, `indb` (Boolean), `nombre`, `size`, `datos` (BLOB).
+* **Bitacora:** `id` (PK), `accion`, `elementoid`, `ip`, `usuario`, `fecha`.
+
+=== Vista de Implementación (Diagrama de Componentes)
+El backend implementa el patrón Modelo-Vista-Controlador (MVC):
+
+[source,text]
+----
++-----------------------------------------------------------------+
+|                       Express.js Application                   |
+|                                                                 |
+|   [ index.js ] ---> [ Middlewares ] (CORS, Bitacora, Auth, DoS) |
+|                            │                                    |
+|                            ▼                                    |
+|   [ Routes / Endpoints ] ──► [ Controllers / Business Logic ]    |
+|                                         │                       |
+|                                         ▼                       |
+|   [ Services ] (JWT) <─────── [ Models / Sequelize ORM ]        |
++─────────────────────────────────────────┬───────────────────────+
+                                          │ Parametrized SQL
+                                          ▼
+                              +───────────────────────+
+                              |   MySQL 8.0 Database  |
+                              +───────────────────────+
+----
+
+=== Vista de Procesos (Diagrama de Secuencia de Autenticación y Rolling Tokens)
+El siguiente flujo describe la renovación continua de sesión para reducir el tiempo de exposición de credenciales:
+
+[source,text]
+----
+Cliente (Frontend)             Express API (Auth Middleware)            Base de Datos
+      │                                    │                                  │
+      ├── POST /api/auth (Login) ─────────►│                                  │
+      │                                    ├── SELECT usuario WHERE email ───►│
+      │                                    │◄── Retorna passwordhash ─────────┤
+      │                                    ├── bcrypt.compare()               │
+      │                                    ├── Genera JWT (Vence en 20 min)   │
+      │◄── 200 OK + JWT ───────────────────┤                                  │
+      │                                    │                                  │
+      │   (Pasan 16 minutos... tiempo restante = 4 min < 5 min)               │
+      │                                    │                                  │
+      ├── GET /api/productos (Bearer JWT) ─►│                                 │
+      │                                    ├── Valida Firma y Claims JWT      │
+      │                                    ├── Tiempo remanente < 5 min? SÍ   │
+      │                                    ├── Genera NUEVO JWT (20 min)      │
+      │                                    ├── Inyecta Set-Authorization: JWT │
+      │◄── 200 OK + Set-Authorization ─────┤                                  │
+----
+
+=== Vista de Despliegue (Topología en Red LAN / Docker)
+La arquitectura admite ejecución local mediante Docker Compose o despliegue distribuido en 3 máquinas en red para la presentación:
+
+[source,text]
+----
+┌────────────────────────┐      ┌────────────────────────┐      ┌────────────────────────┐
+│   EQUIPO 1: BASE DATOS │      │  EQUIPO 2: BACKEND API │      │   EQUIPO 3: CLIENTE    │
+│  Contenedor MySQL 8.0  │◄────►│  Contenedor Node API   │◄────►│  Cliente Web / Swagger │
+│  Puerto TCP: 3306      │      │  Puerto TCP: 3000      │      │  Consumo HTTP REST     │
+│  Firewall Inbound 3306 │      │  Firewall Inbound 3000 │      │  Visualización Datos   │
+└────────────────────────┘      └────────────────────────┘      └────────────────────────┘
+----
+
+=== Modelo de Amenazas (OWASP Threat Dragon / STRIDE)
+Se analizaron los componentes del sistema frente a las 6 categorías del modelo STRIDE:
+
+[cols="1,2,2", options="header"]
+|===
+| Categoría | Amenaza Identificada | Mitigación Implementada
+| **S**poofing (Suplantación) | Falsificación de identidad o manipulación de tokens de sesión. | Firma criptográfica de JWT con secreto de alta entropía (35 bytes) y expiración corta (20 min).
+| **T**ampering (Alteración) | Modificación de parámetros de entrada o inyección SQL. | Consultas parametrizadas con Sequelize ORM y validadores de express-validator.
+| **R**epudiation (Repudio) | Usuario negando haber eliminado o creado un registro. | Bitácora inmutable con registro de acción, IP real, usuario y timestamp.
+| **I**nformation Disclosure | Exposición de stack traces o contraseñas en respuestas. | Supresión de `x-powered-by`, hash unidireccional bcrypt con salt=10 y ocultación de stack en producción.
+| **D**enial of Service | Sobrecarga por archivos gigantescos o nombres maliciosos. | Cuota máxima de 2 MB en Multer y sanitización aleatoria de nombres de archivo.
+| **E**levation of Privilege | Usuario normal ejecutando acciones de Administrador. | Middleware de autorización RBAC con comparación estricta de claims de rol.
+|===
+
+=== Modelo de Datos
+
+==== Diagrama Entidad-Relación
+* `rol` (1) ── (N) `usuario`
+* `producto` (N) ── (M) `categoria` (a través de `categoriaproducto`)
+* `producto` (N) ── (1) `archivo`
+* `bitacora` (Entidad independiente de auditoría inmutable)
+
+==== Modelo Relacional Normalizado (3FN)
+* `rol` (**id**, nombre)
+* `usuario` (**id**, email, passwordhash, nombre, protegido, rolid*)
+* `categoria` (**id**, nombre, protegida)
+* `producto` (**id**, titulo, descripcion, precio, archivoid*)
+* `categoriaproducto` (**productoid***, **categoriaid***)
+* `archivo` (**id**, mime, indb, nombre, size, datos)
+* `bitacora` (**id**, accion, elementoid, ip, usuario, fecha)

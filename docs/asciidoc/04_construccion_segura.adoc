@@ -1,0 +1,70 @@
+== Construcción Segura
+
+=== Selección Justificada del Stack Tecnológico
+* **Node.js (v20 LTS):** Motor de ejecución basado en V8 con soporte nativo para características modernas de JavaScript (ESM, `--watch`, `--env-file`), manejo asíncrono no bloqueante de alto rendimiento y ecosistema maduro de seguridad.
+* **Express.js (v4.21):** Framework minimalista para APIs REST con arquitectura modular basada en middlewares de intercepción.
+* **Sequelize ORM (v6.37) y MySQL2:** Capa de abstracción relacional que elimina la necesidad de concatenar sentencias SQL crudas, previniendo por diseño inyecciones SQL (CWE-89).
+* **Bcrypt (v6.0):** Algoritmo adaptativo de hashing de contraseñas basado en Blowfish, resistente a ataques acelerados por GPU y ASICs mediante factor de trabajo configurable (salt rounds = 10).
+* **JSON Web Token (jsonwebtoken v9.0):** Implementación del estándar RFC 7519 para tokens de sesión sin estado autenticados mediante HMAC SHA-256.
+* **Docker y Docker Compose:** Aislamiento de procesos y dependencias, eliminando discrepancias de entorno entre desarrollo, pruebas y producción.
+
+=== Patrón Arquitectónico de Software Elegido
+Se implementó el patrón **Modelo-Vista-Controlador (MVC)** desacoplado para servicios web:
+* **Controladores (`controllers/`):** Contienen la lógica de negocio, sanitización, manejo de excepciones y despacho de códigos HTTP semánticos.
+* **Modelos (`models/`):** Definen las entidades del dominio, restricciones de integridad referencial, tipos de datos y asociaciones Sequelize.
+* **Rutas/Vistas (`routes/`):** Actúan como la interfaz de la API, exponiendo contratos JSON y aplicando guardas de autorización antes de transferir el control a los controladores.
+
+=== Configuración del Entorno de Desarrollo
+1. Aislamiento de variables de entorno mediante `.env` (excluido de control de versiones).
+2. Manifiesto público `.env.example` documentando llaves y puertos sin valores sensibles.
+3. Servidor de desarrollo con recarga en caliente nativa: `node --env-file=.env --watch index.js`.
+4. Suite de pruebas automatizadas con Jest y Supertest en memoria: `npm test`.
+
+=== Estrategia de Autenticación y Autorización
+* **Autenticación (JWT Stateless):**
+** Algoritmo: `HS256`.
+** Duración máxima: 20 minutos (1200 segundos).
+** Claims estandarizados: Identificador de nombre (`ClaimTypes.Name`), nombre de pila (`ClaimTypes.GivenName`), rol (`ClaimTypes.Role`), emisor (`iss`) y audiencia (`aud`).
+* **Autorización (RBAC - Role-Based Access Control):**
+** El middleware `Authorize('Rol1, Rol2')` intercepta cada petición protegida.
+** Extrae y valida la firma del token con la llave secreta del servidor.
+** Sanitiza los roles permitidos mediante `.trim()` para evitar fallos de autorización por espacios.
+** Si el rol del usuario no tiene privilegios, responde de inmediato con `403 Forbidden`.
+* **Renovación Continua (Rolling Tokens):**
+** Si a una petición válida le restan menos de 5 minutos de vigencia, el middleware genera un nuevo JWT con vigencia de 20 minutos y lo despacha en la cabecera HTTP `Set-Authorization`.
+
+=== Estrategia de Integración Segura con la Base de Datos (ORM)
+* **Eliminación Total de SQL Crudo:** Todas las operaciones de lectura, escritura y borrado se realizan mediante métodos de Sequelize (`findAll`, `findByPk`, `create`, `update`, `destroy`).
+* **Parametrización Nativa:** El ORM utiliza consultas preparadas con marcadores de posición (`?`), forzando al motor MySQL a tratar todos los valores del usuario como datos literales y nunca como instrucciones ejecutables.
+* **Control de Esquema Versionado:** Las tablas se gestionan mediante migraciones estrictas en `migrations/`, eliminando la ejecución manual de comandos DDL en producción.
+
+=== Estrategia de Comunicación Segura entre Frontend y Backend
+* **Políticas de CORS Dinámicas:** Control de acceso por orígenes permitidos configurables vía variable de entorno `CORS_ORIGIN`, permitiendo la interoperabilidad con clientes en red LAN o en dominios autorizados.
+* **Exposición Explícita de Cabeceras:** Exposición de `Set-Authorization` mediante `exposedHeaders` en CORS para que navegadores modernos y clientes SPA puedan leer y almacenar el token renovado.
+* **Supresión de Huellas Digitales (CWE-200):** Supresión explícita de `X-Powered-By: Express` mediante `app.disable('x-powered-by')` para dificultar el fingerprinting de tecnologías.
+
+=== Validaciones de Entrada en Cliente y Servidor
+* **En el Servidor (Defensa Mandatoria):** Se implementó la librería `express-validator` en capas de middleware:
+** Validación de campos no vacíos (`notEmpty()`).
+** Longitudes máximas controladas (`isLength({ max: 255 })`).
+** Tipos de datos estrictos (`isDecimal()` para precios).
+** Sanitización de espacios en blanco (`trim()`).
+* **Manejo Centralizado de Errores de Validación:** Si las reglas fallan, se interrumpe el procesamiento y se devuelve un `400 Bad Request` con el listado detallado de campos con error.
+
+=== Medidas Contra Vulnerabilidades Comunes
+[cols="1,2,2", options="header"]
+|===
+| Vulnerabilidad | Vector de Ataque | Medida Preventiva en el Backend
+| **CWE-89 (Inyección SQL)** | Inserción de comillas y comandos en parámetros. | Sequelize ORM con consultas preparadas transparentes.
+| **CWE-434 (Subida de Archivos Peligrosos)** | Envío de scripts PHP, EXE o shells con doble extensión. | Filtro MIME estricto (`image/jpeg`) y verificación de extensión en Multer.
+| **CWE-22 (Path Traversal)** | Nombres con secuencias `../../` para sobrescribir archivos del sistema. | Generación de nombres de archivo criptográficos aleatorios (`crypto.randomUUID()`).
+| **CWE-400 (Denegación de Servicio)** | Archivos multimedia desproporcionados para llenar el disco. | Límite forzado a 2 MB en el middleware de carga.
+| **CWE-915 (Mass Assignment)** | Inyección de atributos ocultos como `protegido: false`. | Mapeo explícito mediante listas blancas en controladores.
+| **CWE-200 (Fuga de Información)** | Stack traces de base de datos visibles al usuario. | Middleware de error centralizado que enmascara los errores en producción.
+|===
+
+=== Estrategias y Políticas de Almacenamiento y Gestión de Contraseñas
+* **Cifrado Unidireccional:** Nunca se almacenan contraseñas en texto claro; solo se persiste el hash generado por Bcrypt.
+* **Factor de Trabajo (Work Factor):** Configurado con 10 rondas de salt (2^10 iteraciones de derivación de clave).
+* **Aislamiento de Atributos:** El atributo `passwordhash` está protegido y nunca es devuelto en las respuestas JSON de consulta o autenticación.
+* **Mitigación de Timing Attacks en Login:** Ante un usuario inexistente, el sistema ejecuta un hash simulado contra un hash dummy para que el tiempo de respuesta sea idéntico al de una contraseña errónea, neutralizando ataques de temporización.

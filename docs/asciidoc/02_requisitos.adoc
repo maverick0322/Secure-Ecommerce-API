@@ -1,0 +1,52 @@
+== Documento de Especificación de Requisitos
+
+=== Contexto
+El sistema forma parte de una infraestructura de comercio electrónico orientada a la venta minorista de bienes de consumo organizados por departamentos y categorías. La API provee servicios desacoplados a clientes web y móviles, gestionando identidades, catálogo de productos, almacenamiento de medios digitales y auditoría inmutable de eventos.
+
+=== Impacto
+La correcta operación del sistema previene el compromiso de cuentas de clientes y administradores, garantiza la confidencialidad de datos financieros e identidades, y salvaguarda la continuidad operativa mediante resistencia contra denegaciones de servicio (DoS) por carga maliciosa de archivos o parámetros no sanitizados.
+
+=== Casos de Uso con Prototipos
+[cols="1,3,2", options="header"]
+|===
+| ID | Caso de Uso | Actores
+| CU-01 | Iniciar Sesión en la Plataforma | Usuario, Administrador
+| CU-02 | Gestionar Catálogo de Categorías | Administrador
+| CU-03 | Administrar Productos e Inventario | Administrador
+| CU-04 | Consultar Productos y Categorías | Usuario, Administrador
+| CU-05 | Asociar Categorías a Productos (N:M) | Administrador
+| CU-06 | Subir y Descargar Archivos Multimedia | Usuario, Administrador
+| CU-07 | Auditoría y Consulta de Bitácora | Administrador
+|===
+
+*(Nota: Los prototipos de interfaz de usuario correspondientes al cliente frontend se integrarán conforme se vincule el repositorio cliente).*
+
+=== Requisitos Funcionales por Casos de Uso
+* **RF-01 (Autenticación):** El sistema debe autenticar usuarios mediante correo y contraseña, emitiendo un JWT firmado con HS256 si las credenciales son válidas.
+* **RF-02 (Tiempo de Sesión):** El sistema debe proveer un endpoint (`/api/auth/tiempo`) que informe el tiempo de vigencia restante del token.
+* **RF-03 (CRUD de Categorías):** El sistema debe permitir crear, consultar, actualizar y eliminar categorías, impidiendo la eliminación de aquellas marcadas como protegidas.
+* **RF-04 (Gestión de Productos):** Debe permitir el registro, actualización y eliminación de productos con atributos de título, descripción, precio y archivo multimedia asociado.
+* **RF-05 (Búsqueda de Productos):** Debe permitir filtrar el catálogo mediante el parámetro de consulta `?s=termino`.
+* **RF-06 (Asociación Relacional):** Debe permitir asociar y desasociar múltiples categorías a un producto.
+* **RF-07 (Carga de Archivos):** Debe permitir la subida de imágenes en formato JPEG/JPG validando tamaño y tipo MIME, soportando almacenamiento tanto en disco como en base de datos (BLOB).
+* **RF-08 (Registro de Auditoría):** Cada operación de creación, modificación o eliminación debe registrar automáticamente la acción, IP y usuario en la bitácora.
+
+=== Requisitos No Funcionales (RNF)
+* **RNF-01 (Seguridad - Autenticación Stateless):** Autenticación mediante tokens JWT efímeros de 20 minutos sin almacenamiento de estado en el servidor.
+* **RNF-02 (Seguridad - Renovación Continua):** Renovación automática del token vía cabecera `Set-Authorization` si la sesión tiene menos de 5 minutos restantes.
+* **RNF-03 (Seguridad - RBAC):** Control de acceso estricto basado en roles (`Usuario`, `Administrador`) para proteger endpoints sensibles.
+* **RNF-04 (Rendimiento):** Tiempo de respuesta menor a 200 ms para consultas de catálogo con índices relacionales en base de datos.
+* **RNF-05 (Disponibilidad y Portabilidad):** Arquitectura contenerizada mediante Docker y Docker Compose para ejecución multiplataforma.
+
+=== Reglas de Negocio
+* **RN-01 (Protección de Elementos del Sistema):** Las categorías y usuarios con el flag `protegido = true` no pueden ser eliminados bajo ninguna circunstancia.
+* **RN-02 (Unicidad de Identidad):** No se permite el registro de dos cuentas con el mismo correo electrónico.
+* **RN-03 (Límite de Archivos):** Los archivos multimedia subidos no deben exceder 2 MB de tamaño físico.
+* **RN-04 (Restricción de Formatos):** Solo se admiten archivos con extensión `.jpg` o `.jpeg` cuyo tipo MIME corresponda a `image/jpeg`.
+
+=== Riesgos de Seguridad Identificados
+* **RS-01 (Inyección SQL - CWE-89):** Manipulación de parámetros de búsqueda o identificadores. *Mitigado mediante Sequelize ORM.*
+* **RS-02 (Ataques de Fuerza Bruta / Timing Attacks - CWE-208):** Deducción de cuentas válidas midiendo el tiempo de respuesta en login. *Mitigado mediante hash dummy con bcrypt.*
+* **RS-03 (Mass Assignment - CWE-915):** Modificación indebida de campos críticos como `protegido`. *Mitigado mediante listas blancas en controladores.*
+* **RS-04 (Path Traversal - CWE-22):** Manipulación de rutas en nombres de archivo al subir imágenes. *Mitigado mediante renombramiento aleatorio con UUIDs.*
+* **RS-05 (Agotamiento de Recursos / DoS - CWE-400):** Carga masiva de archivos gigantes. *Mitigado con cuota forzada en Multer (2 MB).*

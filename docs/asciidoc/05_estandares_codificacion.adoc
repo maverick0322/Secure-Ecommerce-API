@@ -1,0 +1,62 @@
+== Estándar de Codificación para Ambos Lenguajes
+
+=== Estándar de Codificación en JavaScript (Backend Node.js)
+
+Para este proyecto backend, el equipo adopta una guía de estilo basada en **Clean Code** y las directrices de codificación defensiva de **OWASP Secure Coding Practices**:
+
+==== 1. Convenciones de Nomenclatura
+* **Variables y Funciones:** Notación `camelCase` (ej: `usuarioExistente`, `generaToken`, `tiempoRestante`).
+* **Clases y Modelos:** Notación `PascalCase` para constructores y esquemas (ej: `Sequelize`, `ClaimTypes`). Los modelos relacionales se exportan en singular (ej: `usuario`, `producto`, `categoria`).
+* **Constantes y Configuraciones Globales:** Notación `UPPER_SNAKE_CASE` (ej: `SERVER_PORT`, `JWT_SECRET`, `DUMMY_HASH`).
+* **Archivos y Módulos:** Notación en minúsculas separadas por puntos según su responsabilidad arquitectónica (ej: `productos.controller.js`, `auth.middleware.js`, `jwttoken.service.js`).
+
+==== 2. Manejo de Tipos y Comparaciones
+* **Comparación Estricta:** Se prohíbe el uso de igualdad débil (`==` o `!=`) debido a la coerción de tipos impredecible de JavaScript. Es obligatorio el uso de identidad estricta (`===` y `!==`).
+* **Declaración de Variables:** Uso exclusivo de `const` por defecto para garantizar inmutabilidad referencial. Se permite `let` únicamente cuando la reasignación es estrictamente necesaria. Queda totalmente prohibido el uso de `var` para evitar problemas de elevación (*hoisting*) y polución de ámbito global.
+
+==== 3. Flujo Asíncrono y Manejo de Errores
+* **Async / Await sobre Callbacks:** Todas las operaciones de entrada/salida (acceso a base de datos, lectura de archivos, hashing criptográfico) deben implementarse con funciones `async/await`.
+* **Bloques Try / Catch Mandatorios:** Toda función asíncrona en controladores debe envolverse en un bloque `try/catch`. En caso de fallo inesperado, el error debe delegarse al middleware centralizado mediante `next(error)`.
+* **Prohibición de Promesas Flotantes:** Ninguna llamada que retorne una Promesa debe quedar sin `await` o `.catch()`, evitando excepciones no controladas de tipo `UnhandledPromiseRejection`.
+
+==== 4. Reglas de Programación Segura en JavaScript
+* **Prohibición de `eval()` y Funciones Dinámicas:** Queda estrictamente vetado el uso de `eval()`, `new Function()`, `setTimeout(string)` o `setInterval(string)` para evitar inyecciones directas de código en el motor V8.
+* **Prototipos Inmutables:** No alterar ni extender los prototipos de objetos nativos de JavaScript (`Object.prototype`, `Array.prototype`) para prevenir vulnerabilidades de **Prototype Pollution**.
+* **Manejo Seguro de Secretos:** Nunca escribir llaves, contraseñas o tokens en código fuente quemado (*hardcoded*). Todos los valores sensibles deben cargarse desde `process.env`.
+* **Validación de Parámetros:** Todas las entradas provenientes de `req.body`, `req.params` o `req.query` deben validarse antes de ser consumidas por la lógica de negocio.
+
+[source,javascript]
+----
+// Ejemplo de aplicación del estándar en un controlador seguro
+self.get = async function (req, res, next) {
+  try {
+    const id = req.params.id; // Parámetro extraído limpiamente
+    const data = await producto.findByPk(id);
+
+    if (data === null) {
+      return res.status(404).json({ mensaje: 'Producto no encontrado.' });
+    }
+
+    return res.status(200).json(data);
+  } catch (error) {
+    next(error); // Delegación segura al middleware centralizado de errores
+  }
+};
+----
+
+---
+
+=== Estándar de Codificación en C# (Cliente / Frontend)
+
+*(Nota: Esta sección define los lineamientos generales que regirán el desarrollo del cliente en C# una vez que se vincule el repositorio correspondiente).*
+
+==== 1. Convenciones de Nomenclatura en C#
+* **Clases, Métodos y Propiedades:** Notación `PascalCase` (ej: `ProductService`, `GetProductByIdAsync`, `CustomerName`).
+* **Variables Locales y Parámetros:** Notación `camelCase` (ej: `productId`, `authToken`).
+* **Campos Privados:** Prefijo con guion bajo en `camelCase` (ej: `_httpClient`, `_configuration`).
+* **Interfaces:** Prefijo con `I` mayúscula en `PascalCase` (ej: `IAuthenticationService`, `IProductRepository`).
+
+==== 2. Reglas Defensivas en C#
+* **Uso de HttpClient Seguro:** Inyección de dependencias mediante `IHttpClientFactory` para evitar agotamiento de sockets TCP.
+* **Serialización Segura:** Uso de `System.Text.Json` con opciones estrictas de deserialización para evitar ataques de inyección de objetos.
+* **Manejo de Tokens en Cliente:** Almacenamiento de tokens JWT en almacenamiento seguro y transmisión automática mediante `AuthenticationHeaderValue("Bearer", token)`.

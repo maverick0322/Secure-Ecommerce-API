@@ -1,0 +1,14 @@
+== Conclusiones
+
+=== Contribuciones del Proyecto en Materia de Seguridad Informática
+
+El desarrollo de este backend API para E-Commerce demuestra que la seguridad no debe concebirse como una capa cosmética agregada al final del ciclo de vida del software, sino como un **atributo de calidad arquitectónico transversal** presente desde la concepción del diseño:
+
+1. **Neutralización por Diseño de la Inyección SQL:**
+* La eliminación radical de concatenación de cadenas SQL en favor de Sequelize ORM erradica la vulnerabilidad más devastadora del OWASP Top 10 (A03: Injection / CWE-89), garantizando la integridad de la base de datos comercial.
+2. **Autenticación Moderna y Stateless:**
+* La combinación de JWT firmado con HMAC SHA-256, expiración efímera de 20 minutos y Rolling Tokens resuelve el dilema entre usabilidad y seguridad, ofreciendo sesiones continuas al usuario legítimo mientras limita drásticamente la ventana de oportunidad ante robos de tokens.
+3. **Resistencia contra Ataques de Infraestructura y DoS:**
+* La sanitización criptográfica de nombres de archivos en la subida y los límites de cuota estricta (2 MB) protegen el servidor contra Path Traversal (CWE-22) y Denegación de Servicio (CWE-400).
+4. **Cultura de Calidad Verificable:**
+* Una cobertura automatizada del **92.6%** respaldada por 121 pruebas unitarias y de integración, sumada al cumplimiento del Quality Gate **A** en SonarQube Cloud, garantiza que cada cambio futuro mantenga estándares industriales de confiabilidad y seguridad.
