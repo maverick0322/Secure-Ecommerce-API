@@ -10,7 +10,7 @@
     "start": "node --env-file=.env --watch index.js",
     "dev": "node --env-file=.env --watch index.js",
     "swagger": "node swagger.js",
-    "docs:build": "npx @asciidoctor/cli docs/asciidoc/index.adoc -D dist",
+    "docs:build": "node docs/build.js",
     "migrate": "sequelize db:migrate",
     "migrate:undo": "sequelize db:migrate:undo:all",
     "seed": "sequelize db:seed:all",
@@ -41,6 +41,7 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@asciidoctor/core": "^4.1.1",
     "jest": "^30.0.0",
     "sequelize-cli": "^6.6.5",
     "supertest": "^7.1.0",
