@@ -16,9 +16,20 @@ app.disable('x-powered-by');
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// 4. Configuración de CORS con lista blanca y exposición de cabeceras de renovación
+// 4. Configuración de CORS con lista blanca dinámica y exposición de cabeceras de renovación
+const defaultOrigins = ['http://localhost:8080', 'http://localhost:8081'];
+const envOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean)
+  : [];
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+
 const corsOptions = {
-  origin: ['http://localhost:8080', 'http://localhost:8081'],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`Origen no permitido por política CORS: ${origin}`));
+  },
   methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   // CORRECCIÓN CRÍTICA: Exponer Set-Authorization para que clientes frontend puedan leer el token renovado
