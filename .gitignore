@@ -10,9 +10,11 @@ lerna-debug.log*
 .env
 .env.local
 .env.*.local
+config/config.json
 
-# Scripts y volcados de base de datos (según pág. 70 de la práctica)
+# Scripts y volcados de base de datos (ignorar dumps generales pero incluir script de inicialización)
 *.sql
+!bd.sql
 
 # Pruebas REST Client (pueden contener tokens y contraseñas según pág. 70)
 restclient/

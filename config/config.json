@@ -1,9 +1,0 @@
-{
-  "development": {
-    "username": "mercadolibre_user",
-    "password": "M3rc@d0",
-    "database": "mercadolibrenode",
-    "host": "127.0.0.1",
-    "dialect": "mysql"
-  }
-}
