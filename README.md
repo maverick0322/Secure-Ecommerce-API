@@ -270,3 +270,22 @@ cd backendnode
 cp .env.example .env
 npm install
 ```
+
+---
+
+## 🚀 Integración Continua y Calidad de Código (CI/CD)
+
+El repositorio cuenta con dos flujos de trabajo automatizados en GitHub Actions (`.github/workflows/`):
+
+1. **`test.yml` (Suite de Pruebas & Auditoría):**
+   * Se ejecuta automáticamente ante cada `push` directo o `pull_request` a las ramas `main` y `develop`.
+   * Instala dependencias limpias (`npm ci`), ejecuta `npm audit` y corre los 121 casos de prueba con reporte de cobertura.
+2. **`sonar.yml` (Análisis Estático con SonarQube Cloud):**
+   * Genera el reporte LCOV (`coverage/lcov.info`) y ejecuta el escáner de SonarQube Cloud.
+   * Evalúa mantenibilidad, confiabilidad, seguridad (vulnerabilidades/hotspots) y cobertura mediante [sonar-project.properties](sonar-project.properties).
+   * **Configuración requerida en GitHub:** Configurar el token generado en SonarCloud como secreto del repositorio en `Settings -> Secrets and variables -> Actions` con el nombre `SONAR_TOKEN`.
+
+### 🔄 Política de Integración y Pull Requests
+* **Push Directo Permitido:** Los flujos están diseñados para dispararse tanto en `push` directo como en `pull_request`. Mientras no se activen reglas restrictivas de protección de rama en GitHub, todos los colaboradores pueden seguir subiendo su trabajo directamente a `main` sin esperas ni bloqueos.
+* **Validación Opcional en Pull Requests:** Si algún colaborador decide abrir un Pull Request para revisión en equipo, ambos flujos validarán automáticamente la integridad del código y el Gate de Calidad de SonarQube antes del merge.
+
