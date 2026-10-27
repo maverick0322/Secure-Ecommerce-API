@@ -10,6 +10,7 @@
     "start": "node --env-file=.env --watch index.js",
     "dev": "node --env-file=.env --watch index.js",
     "swagger": "node swagger.js",
+    "docs:diagrams": "node docs/generate-diagrams.js",
     "docs:build": "node docs/build.js",
     "migrate": "sequelize db:migrate",
     "migrate:undo": "sequelize db:migrate:undo:all",
