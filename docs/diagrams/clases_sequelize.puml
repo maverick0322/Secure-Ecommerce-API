@@ -1,0 +1,88 @@
+@startuml clases_sequelize
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #EEF4FF
+  BorderColor #3366CC
+  HeaderBackgroundColor #3366CC
+  HeaderFontColor #FFFFFF
+}
+title Vista Lógica — Modelos ORM Sequelize (Node.js)\n(Fuente: models/*.js)
+
+class "rol" {
+  +id : UUID [PK]
+  +nombre : STRING
+  --
+  {static} associate(models): void
+  hasMany(usuario, FK: rolid)
+}
+
+class "usuario" {
+  +id : UUID [PK]
+  +email : STRING [UNIQUE, NOT NULL]
+  +passwordhash : STRING [NOT NULL]
+  +nombre : STRING [NOT NULL]
+  +protegido : BOOLEAN [DEFAULT false]
+  +rolid : UUID [FK]
+  --
+  {static} associate(models): void
+  belongsTo(rol, FK: rolid)
+}
+
+class "categoria" {
+  +id : INTEGER [PK, AI]
+  +nombre : STRING [NOT NULL]
+  +protegida : BOOLEAN [DEFAULT false]
+  --
+  {static} associate(models): void
+  belongsToMany(producto, through: categoriaproducto)
+}
+
+class "producto" {
+  +id : INTEGER [PK, AI]
+  +titulo : STRING [DEFAULT 'Sin titulo']
+  +descripcion : TEXT
+  +precio : DECIMAL(10,2) [NOT NULL]
+  +archivoid : INTEGER [FK, NULL]
+  --
+  {static} associate(models): void
+  belongsToMany(categoria, through: categoriaproducto)
+  belongsTo(archivo, FK: archivoid)
+}
+
+class "archivo" {
+  +id : INTEGER [PK, AI]
+  +mime : STRING [NOT NULL]
+  +nombre : STRING [NOT NULL]
+  +size : INTEGER [NOT NULL]
+  +indb : BOOLEAN [NOT NULL, DEFAULT true]
+  +datos : BLOB('long') [NULL]
+  --
+  {static} associate(models): void
+  hasMany(producto, FK: archivoid)
+}
+
+class "bitacora" {
+  +id : INTEGER [PK, AI]
+  +accion : STRING [NOT NULL]
+  +elementoid : STRING [NULL]
+  +ip : STRING [NOT NULL]
+  +usuario : STRING [NOT NULL]
+  +fecha : DATE [DEFAULT NOW]
+  --
+  {static} associate(models): void
+}
+
+class "categoriaproducto" <<junction>> {
+  +categoriaid : INTEGER [FK]
+  +productoid : INTEGER [FK]
+  --
+  Tabla pivote belongsToMany
+}
+
+rol "1" --> "0..*" usuario : rolid
+archivo "1" --> "0..*" producto : archivoid
+producto "1" --> "0..*" categoriaproducto : productoid
+categoria "1" --> "0..*" categoriaproducto : categoriaid
+
+@enduml

@@ -1,0 +1,64 @@
+@startuml seq_rolling_token
+!theme plain
+skinparam sequenceArrowThickness 1.5
+skinparam sequence {
+  LifeLineBorderColor #3366CC
+  NoteBackgroundColor #FFFDE7
+  NoteBorderColor #F9A825
+}
+autonumber
+title Secuencia 2 — Petición Protegida y Rolling Token\n(EnviaBearerDH → Node.js valida → Set-Authorization → RefrescaTokenDH renueva Cookie)
+
+actor "Usuario" as U
+participant "Navegador" as B
+participant "Razor View\n(.NET)" as RV
+participant "EnviaBearerDH\n(.NET)" as EBH
+participant "RefrescaTokenDH\n(.NET)" as RTH
+participant "auth.middleware\n(Node.js)" as AM
+participant "Authorize RBAC\n(Node.js)" as RBAC
+participant "productos.controller\n(Node.js)" as CTRL
+database "MySQL" as DB
+
+U -> B : Navega a /Productos
+B -> RV : GET /Productos
+RV -> EBH : HttpClient.SendAsync()\nGET /api/productos
+EBH -> EBH : Lee claim "jwt" desde\ncookie .frontendnet (AES-256)
+EBH -> RTH : Request + Authorization: Bearer <jwt>
+RTH -> AM : GET /api/productos\nAuthorization: Bearer <jwt>
+
+AM -> AM : jwt.verify(token, SECRET)
+note right of AM : Si token inválido/expirado → 401
+
+AM -> AM : tiempo_restante = (exp - Date.now()/1000)
+alt tiempo_restante < 300 seg (5 minutos)
+  AM -> AM : jwt.sign(same_claims, SECRET, {expiresIn:'20m'})
+  note right of AM : Rolling Token: nuevo JWT\ncon mismos claims y expiración renovada
+  AM -> RBAC : next() con req.decodedToken\n+ res.set('Set-Authorization', nuevo_jwt)
+  RBAC -> RBAC : claims.Role.trim() ∈ ['Administrador']?
+  RBAC -> CTRL : next()
+  CTRL -> DB : SELECT * FROM producto [Sequelize]
+  DB --> CTRL : [{id, titulo, precio, archivoid,...}]
+  CTRL --> AM : 200 OK JSON [productos]
+  AM --> RTH : HTTP 200\nSet-Authorization: <nuevo_jwt>
+  RTH -> RTH : Detecta cabecera Set-Authorization
+  RTH -> RTH : Reconstruye ClaimsIdentity\ncon nuevo jwt embebido
+  RTH -> B : HttpContext.SignInAsync()\nRenueva .frontendnet (sliding 20 min)
+  RTH --> RV : Response 200 JSON
+  RV --> B : HTML — Lista de productos
+  B --> U : Página actualizada sin interrupción
+else tiempo_restante >= 300 seg
+  AM -> RBAC : next() — sin renovación
+  RBAC -> CTRL : next()
+  CTRL -> DB : SELECT * FROM producto
+  DB --> CTRL : [productos]
+  CTRL --> RTH : 200 OK — sin Set-Authorization
+  RTH --> RV : Response 200 (cookie sin cambios)
+  RV --> B : HTML — Lista de productos
+  B --> U : Página (token sigue vigente)
+else Token inválido o expirado
+  AM --> RTH : 401 Unauthorized
+  RTH --> RV : HTTP 401
+  RV --> B : Redirect /Auth (Login)
+  B --> U : Pantalla de inicio de sesión
+end
+@enduml

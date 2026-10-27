@@ -1,0 +1,118 @@
+@startuml clases_csharp
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #EFFFEF
+  BorderColor #2E7D32
+  HeaderBackgroundColor #2E7D32
+  HeaderFontColor #FFFFFF
+}
+title Vista Lógica — Modelos de Transferencia y DataAnnotations (C# .NET 8)\n(Frontend ASP.NET Core 8.0 MVC)
+
+class "Login" <<ViewModel>> {
+  [Required(ErrorMessage = "El correo es obligatorio")]
+  [EmailAddress]
+  +Email : string
+  --
+  [Required(ErrorMessage = "La contraseña es obligatoria")]
+  [MinLength(6)]
+  +Password : string
+}
+
+class "TokenResponse" <<DTO>> {
+  +Email : string
+  +Nombre : string
+  +Rol : string
+  +Jwt : string
+}
+
+class "Categoria" <<Model>> {
+  +Id : int
+  [Required]
+  [MaxLength(255)]
+  +Nombre : string
+  +Protegida : bool
+}
+
+class "Producto" <<Model>> {
+  +Id : int
+  [Required]
+  [MaxLength(255)]
+  +Titulo : string
+  [Required]
+  +Descripcion : string
+  [Required]
+  [RegularExpression(@"^\d+(\.\d{1,2})?$")]
+  +Precio : decimal
+  +Archivoid : int?
+  +Archivo : Archivo
+  +Categorias : List~Categoria~
+}
+
+class "Archivo" <<Model>> {
+  +Id : int
+  +Mime : string
+  +Nombre : string
+  +Size : int
+  +Indb : bool
+}
+
+class "Upload" <<ViewModel>> {
+  [Required]
+  [MaxFileSize(102400)]
+  [AllowedFileType("image/jpeg")]
+  +File : IFormFile
+}
+
+class "Usuario" <<Model>> {
+  +Id : string
+  [Required]
+  [EmailAddress]
+  +Email : string
+  [Required]
+  [MinLength(6)]
+  +Password : string
+  [Required]
+  +Nombre : string
+  [Required]
+  +Rolid : string
+  +Protegido : bool
+}
+
+class "Rol" <<Model>> {
+  +Id : string
+  +Nombre : string
+}
+
+class "BitacoraEntrada" <<Model>> {
+  +Id : int
+  +Accion : string
+  +Elementoid : string
+  +Ip : string
+  +Usuario : string
+  +Fecha : DateTime
+}
+
+class "EnviaBearerDelegatingHandler" <<DelegatingHandler>> {
+  -_httpContextAccessor : IHttpContextAccessor
+  --
+  #SendAsync(request, token) : Task~HttpResponseMessage~
+  ' Lee claim "jwt" de la cookie .frontendnet
+  ' Añade Authorization: Bearer <jwt>
+}
+
+class "RefrescaTokenDelegatingHandler" <<DelegatingHandler>> {
+  -_httpContextAccessor : IHttpContextAccessor
+  --
+  #SendAsync(request, token) : Task~HttpResponseMessage~
+  ' Detecta Set-Authorization en respuesta
+  ' Llama SignInAsync() para renovar cookie
+}
+
+Producto --> Archivo : archivoid (nullable)
+Producto "N" --> "M" Categoria : categorias
+Login ..> TokenResponse : produce (POST /api/auth)
+Usuario --> Rol : rolid
+EnviaBearerDelegatingHandler --> Login : lee jwt claim
+RefrescaTokenDelegatingHandler --> TokenResponse : renueva cookie
+@enduml

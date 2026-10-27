@@ -1,0 +1,52 @@
+@startuml seq_mutacion_catalogo
+!theme plain
+skinparam sequenceArrowThickness 1.5
+skinparam sequence {
+  LifeLineBorderColor #3366CC
+  NoteBackgroundColor #FFFDE7
+  NoteBorderColor #F9A825
+}
+autonumber
+title Secuencia 4 — Mutación Segura de Catálogo\n(Whitelist DTO + express-validator + Trazabilidad en Bitácora)
+
+actor "Administrador" as A
+participant "ProductosController\n(.NET)" as PC
+participant "EnviaBearerDH\n(.NET)" as EBH
+participant "auth.middleware\n(Node.js)" as AM
+participant "Authorize RBAC\n(Node.js)" as RBAC
+participant "productoValidator\n(express-validator)" as EV
+participant "productos.controller\n(Node.js)" as CTRL
+database "MySQL" as DB
+
+A -> PC : POST /Productos/Crear\n{titulo, descripcion, precio, archivoid}
+PC -> PC : ModelState.IsValid?\n[Required][MaxLength(255)]\n[Required][RegularExpression(decimal)]
+note right : FA: Validación C# falla →\nerror en vista, sin petición
+
+PC -> EBH : HttpClient.SendAsync()\nPOST /api/productos
+EBH -> EBH : Inyecta Authorization: Bearer <jwt>
+EBH -> AM : POST /api/productos {body}\n+ Bearer <jwt>
+
+AM -> AM : jwt.verify(token, SECRET)\nDecodifica claims
+AM -> RBAC : next() + req.decodedToken
+RBAC -> RBAC : claims.Role.trim() === 'Administrador'?
+RBAC -> EV : next()
+EV -> EV : body('titulo').trim().notEmpty()\n.isLength({max:255})
+EV -> EV : body('precio').isDecimal()
+EV -> EV : validationResult(req) → ¿errors?
+alt Validación aprobada (sin errores)
+  EV -> CTRL : next()
+  CTRL -> CTRL : Whitelist DTO — construcción explícita:\n{\n  titulo: req.body.titulo,\n  descripcion: req.body.descripcion,\n  precio: req.body.precio,\n  archivoid: req.body.archivoid\n}\n[Mitigación CWE-915 Mass Assignment]
+  note right of CTRL : req.body.protegido → IGNORADO\nreq.body.id → IGNORADO\ncualquier campo extra → IGNORADO
+  CTRL -> DB : producto.create(whitelist_dto)\n[Sequelize — SQL parametrizado]
+  DB --> CTRL : {id, titulo, descripcion, precio,...}
+  CTRL -> DB : bitacora.create({\n  accion: 'producto.crear',\n  elementoid: producto.id,\n  ip: requestIp.getClientIp(req),\n  usuario: req.decodedToken.email\n})
+  CTRL --> EBH : 201 Created {id, titulo, precio}
+  EBH --> PC : HTTP 201
+  PC --> A : Redirect /Productos (lista actualizada)
+else Validación fallida (express-validator)
+  EV --> RBAC : 400 Bad Request\n{errors: [{field, msg}]}
+  RBAC --> EBH : HTTP 400
+  EBH --> PC : Response 400
+  PC --> A : Vista con mensajes de error por campo
+end
+@enduml

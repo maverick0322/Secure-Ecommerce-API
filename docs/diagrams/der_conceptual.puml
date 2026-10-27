@@ -1,0 +1,46 @@
+@startuml der_conceptual
+!theme plain
+hide circle
+skinparam linetype ortho
+skinparam entity {
+  BackgroundColor #EEF4FF
+  BorderColor #3366CC
+}
+title DER Conceptual — Entidades y Relaciones del Dominio
+
+entity "ROL" as ROL {
+  Catálogo de roles del sistema
+}
+
+entity "USUARIO" as USR {
+  Cuenta de acceso a la plataforma
+}
+
+entity "CATEGORIA" as CAT {
+  Clasificación del catálogo de productos
+}
+
+entity "PRODUCTO" as PRD {
+  Ítem de inventario disponible para venta
+}
+
+entity "ARCHIVO" as ARC {
+  Recurso multimedia asociado a un producto
+}
+
+entity "BITÁCORA" as BIT {
+  Registro inmutable de auditoría de eventos
+}
+
+ROL ||--o{ USR : "asigna rol a\n(1 usuario tiene 1 rol)"
+ARC ||--o{ PRD : "ilustra\n(1 archivo en varios productos)"
+PRD }o--o{ CAT : "clasificado en\n(N:M via tabla pivote)"
+
+note bottom of BIT
+  Sin FK hacia USUARIO.
+  Decisión de diseño: inmutabilidad
+  histórica — el correo se persiste
+  como dato desnormalizado (STRING)
+  para sobrevivir eliminaciones.
+end note
+@enduml

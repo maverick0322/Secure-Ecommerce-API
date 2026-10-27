@@ -1,0 +1,69 @@
+@startuml dfd_seguridad
+!theme plain
+skinparam rectangle {
+  BackgroundColor #F8F9FA
+  BorderColor #495057
+}
+skinparam database {
+  BackgroundColor #FFF3E0
+  BorderColor #F57C00
+}
+
+title Diagrama de Flujo de Datos (DFD) — Fronteras de Confianza y Modelo de Amenazas STRIDE
+
+actor "Usuario Final /\nNavegador Web" as User
+
+package "Frontera de Confianza 1: Perímetro de Red Pública (Internet / WAN)" {
+  rectangle "Cliente ASP.NET Core 8 MVC\n[Controllers + DelegatingHandlers]\n- Valida AntiForgeryToken\n- Valida DataAnnotations\n- Maneja Cookie HttpOnly" as Frontend
+}
+
+package "Frontera de Confianza 2: Red Privada / DMZ de Servicios" {
+  rectangle "API Gateway / Express.js Backend\n[Middlewares: Auth, Bitacora, RateLimit]\n- Valida Firma JWT (HS256)\n- Sanitiza Entrada (express-validator)\n- RBAC: Claims de Rol" as Backend
+  
+  folder "Almacén Local de Archivos\n[/uploads/ - indb=0]\n- UUID Filename\n- Validar Extension/MIME" as FileStore
+}
+
+package "Frontera de Confianza 3: Red Aislada de Datos (Data Tier)" {
+  database "MySQL 8.0 Server\n[mercadolibrenode]\n- Sequelize Prepared Statements\n- Permisos Restringidos mercadolibre_user" as Database
+}
+
+User --> Frontend : "(1) HTTP/S Requests\n[Cookies, Form Data]\nAmenazas: Spoofing, CSRF, XSS"
+Frontend --> User : "(2) HTML Renderizado + Cookie .frontendnet (HttpOnly)"
+
+Frontend --> Backend : "(3) Peticiones REST con Bearer JWT\n[Set-Authorization para Rolling Token]\nAmenazas: Man-in-the-Middle, Replay Attack"
+Backend --> Frontend : "(4) JSON Response con Headers Expuestos"
+
+Backend --> FileStore : "(5) Stream de bytes saneado\nAmenazas: Path Traversal, Web Shell"
+
+Backend --> Database : "(6) Consultas SQL Parametrizadas (TCP 3306)\nAmenazas: SQL Injection, Fuga de Datos"
+Database --> Backend : "(7) Recordsets / Filas afectadas"
+
+note right of Frontend
+  **Frontera de Confianza 1:**
+  Cero confianza en input de cliente.
+  Mitigaciones:
+  - Cookie HttpOnly, SameSite=Lax
+  - [ValidateAntiForgeryToken]
+  - DataAnnotations
+end note
+
+note right of Backend
+  **Frontera de Confianza 2:**
+  Validación criptográfica JWT.
+  Mitigaciones:
+  - Rolling Token (5 min delta)
+  - Whitelist DTO en mutaciones
+  - Bitácora inmutable de auditoría
+  - Cuota 2 MB en Multer
+end note
+
+note right of Database
+  **Frontera de Confianza 3:**
+  Aislamiento estricto de la base de datos.
+  Mitigaciones:
+  - 100% Prepared Statements
+  - Sin exposición de stack trace
+  - DUMMY_HASH contra timing attacks
+end note
+
+@enduml

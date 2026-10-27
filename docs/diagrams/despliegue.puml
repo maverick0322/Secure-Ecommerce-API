@@ -1,0 +1,61 @@
+@startuml despliegue
+!theme plain
+skinparam node {
+  BackgroundColor #F8F9FA
+  BorderColor #495057
+}
+skinparam artifact {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+}
+skinparam component {
+  BackgroundColor #E8F5E9
+  BorderColor #388E3C
+}
+skinparam database {
+  BackgroundColor #FFF3E0
+  BorderColor #F57C00
+}
+
+title Vista Física / Despliegue — Topología Docker y Distribución en Red LAN\n(Arquitectura Segura Distribuida en 3 Nodos / Equipos)
+
+node "Equipo 3: Estación Cliente / Frontend (LAN 192.168.1.100)" as E3 {
+  node "Host OS (Windows / Linux)" {
+    artifact "Browser Web (Edge / Chrome / Firefox)" as Browser {
+      [Almacén Cookies HTTP (.frontendnet)]
+    }
+    node "Runtime .NET 8 (Kestrel Server :8080)" as NetHost {
+      component "Frontend ASP.NET Core 8 MVC\n(Secure-Ecommerce-FrontendNet)" as NetApp
+      file "appsettings.json\n(Secretos y URLs)" as NetConfig
+      NetApp ..> NetConfig : lee
+    }
+  }
+}
+
+node "Equipo 2: Servidor de Aplicaciones API (LAN 192.168.1.101)" as E2 {
+  node "Docker Host (Bridge Network: ecommerce_net)" {
+    node "Contenedor: ecommerce_api (:3000)" as C_API {
+      component "Express.js REST API\n(Node.js 20 LTS)" as NodeApp
+      file ".env\n(JWT_SECRET, DB_PASS, CORS)" as NodeEnv
+      folder "/app/uploads\n(Volumen de Disco Local)" as UploadsDir
+      NodeApp ..> NodeEnv : lee
+      NodeApp ..> UploadsDir : almacena si indb=0
+    }
+  }
+}
+
+node "Equipo 1: Servidor de Base de Datos (LAN 192.168.1.102)" as E1 {
+  node "Docker Host (Bridge Network: db_net)" {
+    node "Contenedor: ecommerce_db (:3306)" as C_DB {
+      database "MySQL 8.0 Community\n(mercadolibrenode)" as MySQLInstance
+      folder "/var/lib/mysql\n(Docker Volume: db_data)" as DBVolume
+      MySQLInstance ..> DBVolume : persistencia ACID
+    }
+  }
+}
+
+Browser --> NetApp : "HTTPS / HTTP :8080\n(Solicitudes HTML + Cookie .frontendnet)"
+NetApp --> NodeApp : "HTTP REST :3000\n(Bearer JWT via DelegatingHandler)\n[Firewall Inbound TCP:3000]"
+NodeApp --> MySQLInstance : "TCP :3306 (Sequelize Pool / SQL Parametrizado)\n[Firewall Inbound TCP:3306]"
+
+@enduml

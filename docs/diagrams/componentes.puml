@@ -1,0 +1,56 @@
+@startuml componentes
+!theme plain
+skinparam componentStyle rectangle
+skinparam component {
+  BackgroundColor #EEF4FF
+  BorderColor #3366CC
+}
+skinparam node {
+  BackgroundColor #F8F9FA
+  BorderColor #6C757D
+}
+skinparam database {
+  BackgroundColor #FFF3CD
+  BorderColor #856404
+}
+
+title Vista de Implementación — Diagrama de Componentes en 3 Capas
+
+node "Capa 1: Presentación (ASP.NET Core 8.0 MVC — :8080)" as CAPA1 {
+  component "Controladores MVC\n(Auth, Productos, Categorias,\nArchivos, Usuarios, Bitacora)" as MVC_CTRL
+  component "Vistas Razor (.cshtml)\n+ Bootstrap 5 + Validación JS" as RAZOR
+  component "EnviaBearerDelegatingHandler\n(Inyecta Bearer JWT)" as EBH
+  component "RefrescaTokenDelegatingHandler\n(Captura Set-Authorization)" as RTH
+  database "Cookie .frontendnet\n(AES-256 HttpOnly Sliding)" as COOKIE
+}
+
+node "Capa 2: Negocio / API (Node.js 20 LTS / Express — :3000)" as CAPA2 {
+  component "Enrutadores REST Express\n(auth, productos, categorias,\narchivos, usuarios, bitacora)" as ROUTES
+  component "Middlewares de Seguridad\n(Helmet, CORS, ErrorHandler)" as SEC_MW
+  component "Auth Middleware\n(HS256 verify + Rolling Token)" as AUTH_MW
+  component "Authorize RBAC\n(Deny by Default + Check Roles)" as RBAC_MW
+  component "Validación de Entrada\n(express-validator + Multer 2MB)" as VAL_MW
+  component "Controladores de Negocio\n(auth, productos, categorias,\narchivos, usuarios, bitacora)" as API_CTRL
+}
+
+node "Capa 3: Persistencia (MySQL 8.0 — :3306)" as CAPA3 {
+  component "Sequelize ORM v6\n(Pool de conexiones + SQL Parametrizado)" as ORM
+  database "Base de Datos MySQL\n(mercadolibrenode)\n- rol, usuario, categoria\n- producto, archivo, bitacora" as DB
+}
+
+RAZOR --> MVC_CTRL : "Petición HTTP Usuario"
+MVC_CTRL --> EBH : "Invocación HttpClient"
+EBH --> COOKIE : "Lee claim JWT"
+EBH --> RTH : "Pipeline Handler"
+RTH --> COOKIE : "Actualiza Cookie si renovó"
+
+RTH --> SEC_MW : "HTTP REST :3000"
+SEC_MW --> ROUTES : "Petición filtrada"
+ROUTES --> AUTH_MW : "Valida Token"
+AUTH_MW --> RBAC_MW : "Valida Rol"
+RBAC_MW --> VAL_MW : "Saneamiento DTO"
+VAL_MW --> API_CTRL : "Datos limpios"
+API_CTRL --> ORM : "Consultas de Entidad"
+ORM --> DB : "TCP :3306 SQL Preparado"
+
+@enduml

@@ -1,0 +1,68 @@
+@startuml uc_sistema
+!theme plain
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #EEF4FF
+  BorderColor #3366CC
+  ArrowColor #333333
+}
+left to right direction
+title Vista de Escenarios — Casos de Uso del Sistema E-Commerce
+
+actor "Usuario" as U
+actor "Administrador" as A
+actor "Cliente Frontend .NET\n(Sistema)" as FE <<system>>
+
+rectangle "Sistema E-Commerce API" {
+  usecase "CU-01\nIniciar Sesión\n(Emite JWT HS256)" as UC01
+  usecase "CU-02\nGestionar Categorías\n(CRUD)" as UC02
+  usecase "CU-03\nAdministrar Productos\n(CRUD + Whitelist DTO)" as UC03
+  usecase "CU-04\nConsultar Catálogo\ny Buscar Productos" as UC04
+  usecase "CU-05\nAsociar Categorías\na Productos (N:M)" as UC05
+  usecase "CU-06\nSubir / Descargar\nArchivos Multimedia" as UC06
+  usecase "CU-07\nConsultar Bitácora\nde Auditoría" as UC07
+  usecase "CU-08\nGestionar Usuarios\ndel Sistema (CRUD)" as UC08
+  usecase "RF-10\nConsultar Catálogo\nde Roles" as UC09
+
+  usecase "Autenticar con JWT\n(bcrypt + HS256)" as AUTH #LightYellow
+  usecase "Registrar Evento\nen Bitácora" as BIT #LightYellow
+  usecase "Validar RBAC\n(Deny by Default)" as RBAC #LightYellow
+}
+
+U --> UC01
+U --> UC04
+A --> UC01
+A --> UC02
+A --> UC03
+A --> UC04
+A --> UC05
+A --> UC06
+A --> UC07
+A --> UC08
+
+UC01 .> AUTH : <<include>>
+UC02 .> RBAC : <<include>>
+UC03 .> RBAC : <<include>>
+UC05 .> RBAC : <<include>>
+UC06 .> RBAC : <<include>>
+UC07 .> RBAC : <<include>>
+UC08 .> RBAC : <<include>>
+
+UC02 .> BIT : <<include>>
+UC03 .> BIT : <<include>>
+UC05 .> BIT : <<include>>
+UC06 .> BIT : <<include>>
+UC08 .> BIT : <<include>>
+
+UC08 .> UC09 : <<include>>
+
+FE ..> UC01 : intermedia
+FE ..> UC02 : intermedia
+FE ..> UC03 : intermedia
+FE ..> UC04 : intermedia
+FE ..> UC05 : intermedia
+FE ..> UC06 : intermedia
+FE ..> UC07 : intermedia
+FE ..> UC08 : intermedia
+@enduml

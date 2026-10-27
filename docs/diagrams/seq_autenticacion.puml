@@ -1,0 +1,61 @@
+@startuml seq_autenticacion
+!theme plain
+skinparam sequenceArrowThickness 1.5
+skinparam sequenceParticipant underline
+skinparam sequence {
+  LifeLineBorderColor #3366CC
+  ActorBorderColor #3366CC
+  NoteBackgroundColor #FFFDE7
+  NoteBorderColor #F9A825
+}
+autonumber
+title Secuencia 1 — Autenticación End-to-End\n(Browser → AuthController → Node.js API → MySQL → Cookie .frontendnet)
+
+actor "Usuario" as U
+participant "Navegador\n(Browser)" as B
+participant "AuthController\n(.NET)" as AC
+participant "EnviaBearerDH\n(.NET)" as EBH
+participant "auth.middleware\n(Node.js)" as AM
+participant "auth.controller\n(Node.js)" as CTRL
+database "MySQL\n:3306" as DB
+
+U -> B : Rellena email + password
+B -> B : jquery.validate.unobtrusive\n[Required] [EmailAddress] [MinLength(6)]
+note right of B : FA-01: Campos inválidos →\nerror en cliente, sin petición HTTP
+
+B -> AC : POST /auth {email, password}
+AC -> AC : ModelState.IsValid?
+AC -> AC : AuthClientService\n.ObtenTokenAsync(email, password)
+AC -> EBH : HttpClient.SendAsync()
+note right of EBH : Sin sesión activa aún,\nno agrega cabecera Bearer
+EBH -> AM : POST /api/auth\n{email, password}
+
+AM -> AM : ¿Requiere autenticación? No (ruta pública)
+AM -> CTRL : login(req, res)
+
+CTRL -> DB : SELECT usuario + rol\nWHERE email = ? [parametrizado]
+alt Usuario encontrado en BD
+  DB --> CTRL : {id, email, passwordhash, nombre, rol}
+  CTRL -> CTRL : bcrypt.compare(password, passwordhash)\n~100ms CPU-bound
+  alt Contraseña válida
+    CTRL -> CTRL : jwt.sign({Name, GivenName, Role},\nSECRET_35bytes, {expiresIn:'20m', alg:'HS256'})
+    CTRL -> DB : INSERT bitacora\n('usuario.login', email, ip, fecha)
+    CTRL --> EBH : 200 OK {email, nombre, rol, jwt}
+    EBH --> AC : HTTP 200 Response
+    AC -> AC : new ClaimsIdentity([Name, GivenName, Role, jwt])
+    AC -> B : HttpContext.SignInAsync(.frontendnet)\nSet-Cookie: .frontendnet=<AES256(claims)>;\nSameSite=Lax; HttpOnly; Max-Age=1200
+    B --> U : Redirect /Productos (Admin) | /Home (Usuario)
+  else Contraseña incorrecta
+    CTRL --> EBH : 401 Unauthorized
+    EBH --> AC : HTTP 401
+    AC --> B : ViewBag.Error = "Usuario o contraseña incorrectos"
+    note right : FA-03: Mensaje genérico —\nno revela si el correo existe
+  end
+else Usuario NO encontrado
+  CTRL -> CTRL : bcrypt.compare(password, DUMMY_HASH)\n[Mitigación CWE-208 — Timing Attack]
+  CTRL --> EBH : 401 Unauthorized
+  EBH --> AC : HTTP 401
+  AC --> B : ViewBag.Error = "Usuario o contraseña incorrectos"
+  note right : FA-02: Mismo tiempo de respuesta ~100ms\nNo revela enumeración de usuarios
+end
+@enduml

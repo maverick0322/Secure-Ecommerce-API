@@ -1,0 +1,59 @@
+@startuml seq_archivos
+!theme plain
+skinparam sequenceArrowThickness 1.5
+skinparam sequence {
+  LifeLineBorderColor #3366CC
+  NoteBackgroundColor #FFFDE7
+  NoteBorderColor #F9A825
+}
+autonumber
+title Secuencia 3 — Ingesta de Archivos Multimedia\n(IFormFile C# → Multer → Persistencia Dual: Disco vs BLOB MySQL)
+
+actor "Administrador" as A
+participant "Navegador" as B
+participant "ArchivosController\n(.NET)" as AC
+participant "EnviaBearerDH\n(.NET)" as EBH
+participant "upload.middleware\n(Multer — Node.js)" as UM
+participant "archivos.controller\n(Node.js)" as CTRL
+participant "Authorize RBAC" as RBAC
+database "MySQL\n(LONGBLOB)" as DB
+collections "Filesystem\n/uploads/" as FS
+
+A -> B : Selecciona archivo .jpg
+B -> AC : POST /Archivos/Crear\nmultipart/form-data
+
+AC -> AC : Valida Upload.cs:\nContentType == "image/jpeg"?\nLength <= 102400? (100KB cliente)
+note right of AC : FA: Falla validación C# →\n400 antes de enviar al backend
+
+AC -> EBH : HttpClient.SendAsync()\nMultipartFormDataContent
+EBH -> EBH : Inyecta Authorization: Bearer <jwt>
+EBH -> RBAC : POST /api/archivos\n+ Bearer token + multipart
+RBAC -> RBAC : Verifica rol Administrador
+RBAC -> UM : next()
+
+UM -> UM : limits: {fileSize: 2*1024*1024}\n¿Excede 2MB?
+note right : FA-01: MulterError → 400 Bad Request
+
+UM -> UM : fileFilter:\nmimetype === 'image/jpeg'?\next === '.jpg' | '.jpeg'?
+note right : FA-02: Tipo inválido → 400 Bad Request
+
+UM -> UM : filename = crypto.randomUUID() + '.jpg'\n[Mitigación CWE-22 Path Traversal]
+UM -> FS : diskStorage.destination()\n→ Escribe en /uploads/<uuid>.jpg
+UM -> CTRL : next() → req.file disponible
+
+alt FILES_IN_BD === 'true'
+  CTRL -> FS : fs.readFileSync(req.file.path) → Buffer
+  CTRL -> FS : fs.unlinkSync(req.file.path) — borra archivo temporal
+  CTRL -> DB : INSERT INTO archivo\n(mime, nombre, size, indb=true, datos=Buffer)
+else FILES_IN_BD === 'false'
+  CTRL -> DB : INSERT INTO archivo\n(mime, nombre, size, indb=false, datos=NULL)
+  note right : Archivo permanece en /uploads/
+end
+
+DB --> CTRL : {id, mime, nombre, size, indb}
+CTRL -> DB : INSERT INTO bitacora\n('archivos.crear', id, ip, email)
+CTRL --> EBH : 201 Created {id, mime, nombre, indb}
+EBH --> AC : HTTP 201
+AC --> B : Redirect /Archivos/Detalle/{id}
+B --> A : Vista detalle con imagen renderizada\n(GET /api/archivos/{id})
+@enduml

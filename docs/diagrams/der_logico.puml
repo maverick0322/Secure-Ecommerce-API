@@ -1,0 +1,93 @@
+@startuml der_logico
+!theme plain
+hide circle
+skinparam linetype ortho
+skinparam entity {
+  BackgroundColor #EEF4FF
+  BorderColor #3366CC
+}
+title DER Lógico — Esquema Relacional Normalizado en 3FN\n(Fuente: Modelos Sequelize ORM — models/*.js)
+
+entity "rol" as ROL {
+  *id : CHAR(36) <<PK, UUID>>
+  --
+  nombre : VARCHAR(255) NOT NULL
+  --
+  [Sequelize: freezeTableName=true]
+  [Seeder: 'Administrador', 'Usuario']
+}
+
+entity "usuario" as USR {
+  *id : CHAR(36) <<PK, UUID>>
+  --
+  email : VARCHAR(255) NOT NULL <<UNIQUE>>
+  passwordhash : VARCHAR(255) NOT NULL
+  nombre : VARCHAR(255) NOT NULL
+  protegido : TINYINT(1) DEFAULT 0
+  rolid : CHAR(36) NOT NULL <<FK→rol.id>>
+  --
+  [RN-01: protegido=1 → DELETE bloqueado 403]
+  [RN-02: email UNIQUE → INSERT dup = 409]
+}
+
+entity "categoria" as CAT {
+  *id : INT <<PK, AUTO_INCREMENT>>
+  --
+  nombre : VARCHAR(255) NOT NULL
+  protegida : TINYINT(1) DEFAULT 0
+  --
+  [RN-01: protegida=1 → DELETE bloqueado 400]
+}
+
+entity "archivo" as ARC {
+  *id : INT <<PK, AUTO_INCREMENT>>
+  --
+  mime : VARCHAR(255) NOT NULL
+  nombre : VARCHAR(255) NOT NULL
+  size : INT NOT NULL
+  indb : TINYINT(1) NOT NULL DEFAULT 1
+  datos : LONGBLOB NULL
+  --
+  [indb=1: binario en 'datos', NULL en disco]
+  [indb=0: NULL en 'datos', archivo en /uploads]
+  [RN-03: size ≤ 2097152 bytes (2 MB)]
+  [RN-04: mime='image/jpeg', ext=.jpg|.jpeg]
+}
+
+entity "producto" as PRD {
+  *id : INT <<PK, AUTO_INCREMENT>>
+  --
+  titulo : VARCHAR(255) DEFAULT 'Sin titulo'
+  descripcion : TEXT DEFAULT 'Sin descripcion'
+  precio : DECIMAL(10,2) NOT NULL
+  archivoid : INT NULL <<FK→archivo.id, SET NULL>>
+  --
+  [Whitelist DTO: solo titulo, desc, precio, archivoid]
+}
+
+entity "categoriaproducto" as CP {
+  *categoriaid : INT <<PK, FK→categoria.id>>
+  *productoid : INT <<PK, FK→producto.id>>
+  --
+  [Tabla pivote N:M — Sequelize belongsToMany]
+  [ON DELETE CASCADE desde categoria y producto]
+}
+
+entity "bitacora" as BIT {
+  *id : INT <<PK, AUTO_INCREMENT>>
+  --
+  accion : VARCHAR(255) NOT NULL
+  elementoid : VARCHAR(255) NULL
+  ip : VARCHAR(255) NOT NULL
+  usuario : VARCHAR(255) NOT NULL
+  fecha : DATETIME DEFAULT NOW()
+  --
+  [Sin FK — dato desnormalizado intencional]
+  [Inmutabilidad histórica — solo INSERT, nunca UPDATE/DELETE]
+}
+
+ROL ||--o{ USR : "1 rol : N usuarios\nFK: usuario.rolid"
+ARC ||--o{ PRD : "1 archivo : N productos\nFK: producto.archivoid (NULL)"
+PRD ||--o{ CP : "1 producto : N asociaciones\nFK: categoriaproducto.productoid"
+CAT ||--o{ CP : "1 categoria : N asociaciones\nFK: categoriaproducto.categoriaid"
+@enduml
