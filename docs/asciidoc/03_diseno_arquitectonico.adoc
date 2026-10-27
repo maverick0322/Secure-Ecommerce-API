@@ -1,125 +1,268 @@
 == Diseño Arquitectónico Seguro
 
-=== Vista de Casos de Uso
-La interacción de los usuarios con el sistema se articula a través de las capacidades asignadas a cada rol (Usuario y Administrador):
+El diseño arquitectónico de la plataforma E-Commerce se fundamenta en el modelo de vistas de arquitectura **4+1 de Philippe Kruchten**, enriquecido con dos dimensiones esenciales de ingeniería moderna: la **Vista de Datos** (modelado conceptual, lógico y normalización formal) y la **Vista de Seguridad / Modelo de Amenazas** bajo la metodología **STRIDE** de OWASP. Esta estructura garantiza una separación estricta de responsabilidades, alta cohesión modular y una defensa en profundidad que abarca desde la capa perimetral hasta el motor de base de datos relacional.
 
-[source,text]
-----
-                   +---------------------------+
-                   |     API E-Commerce        |
-                   +---------------------------+
-                   |                           |
- (Usuario) ------> | [ Consultar Catálogo ]    |
-    |              | [ Visualizar Imagen ]     |
-    |              |                           |
- (Administrador) ->| [ Iniciar Sesión (JWT) ]  |
-    |              | [ Crear/Editar Productos ]|
-    |              | [ Eliminar Productos ]    |
-    |              | [ Asignar Categorías ]    |
-    |              | [ Subir Archivos ]        |
-    |              | [ Auditar Bitácora ]      |
-    |              | [ Gestionar Usuarios ]    |
-                   +---------------------------+
-----
+=== Vista de Escenarios (Casos de Uso)
 
-=== Vista Lógica (Diagrama de Clases / Modelos)
-El modelo del dominio se estructura en entidades relacionales mapeadas mediante Sequelize:
+La Vista de Escenarios ilustra la interacción entre los actores identificados en el sistema y las funcionalidades nucleares del software. En conformidad con el estándar UML 2.5, se definen relaciones de asociación directa entre los actores y los casos de uso, así como relaciones de inclusión (`<<include>>`) para los mecanismos transversales de autenticación, autorización basada en roles (RBAC) y auditoría inmutable en bitácora.
 
-* **Usuario:** `id` (UUID), `email` (Unique), `passwordhash`, `nombre`, `protegido` (Boolean), `rolid` (FK).
-* **Rol:** `id` (PK), `nombre` (Unique).
-* **Producto:** `id` (PK), `titulo`, `descripcion`, `precio`, `archivoid` (FK).
-* **Categoria:** `id` (PK), `nombre`, `protegida` (Boolean).
-* **CategoriaProducto:** `productoid` (FK), `categoriaid` (FK) [Asociación N:M].
-* **Archivo:** `id` (PK), `mime`, `indb` (Boolean), `nombre`, `size`, `datos` (BLOB).
-* **Bitacora:** `id` (PK), `accion`, `elementoid`, `ip`, `usuario`, `fecha`.
+==== Diagrama General de Casos de Uso del Sistema
 
-=== Vista de Implementación (Diagrama de Componentes)
-El backend implementa el patrón Modelo-Vista-Controlador (MVC):
+image::uc_sistema.svg[align="center",title="Figura 3.1: Vista de Escenarios — Diagrama General de Casos de Uso del Sistema (UML 2.5)"]
 
-[source,text]
-----
-+-----------------------------------------------------------------+
-|                       Express.js Application                   |
-|                                                                 |
-|   [ index.js ] ---> [ Middlewares ] (CORS, Bitacora, Auth, DoS) |
-|                            │                                    |
-|                            ▼                                    |
-|   [ Routes / Endpoints ] ──► [ Controllers / Business Logic ]    |
-|                                         │                       |
-|                                         ▼                       |
-|   [ Services ] (JWT) <─────── [ Models / Sequelize ORM ]        |
-+─────────────────────────────────────────┬───────────────────────+
-                                          │ Parametrized SQL
-                                          ▼
-                              +───────────────────────+
-                              |   MySQL 8.0 Database  |
-                              +───────────────────────+
-----
+==== Matriz de Trazabilidad de Casos de Uso vs Actores y Mecanismos Transversales
 
-=== Vista de Procesos (Diagrama de Secuencia de Autenticación y Rolling Tokens)
-El siguiente flujo describe la renovación continua de sesión para reducir el tiempo de exposición de credenciales:
+A continuación se detalla la correspondencia entre los casos de uso del sistema (formalizados en el Capítulo 2), los actores facultados y las inclusiones transversales de seguridad:
 
-[source,text]
-----
-Cliente (Frontend)             Express API (Auth Middleware)            Base de Datos
-      │                                    │                                  │
-      ├── POST /api/auth (Login) ─────────►│                                  │
-      │                                    ├── SELECT usuario WHERE email ───►│
-      │                                    │◄── Retorna passwordhash ─────────┤
-      │                                    ├── bcrypt.compare()               │
-      │                                    ├── Genera JWT (Vence en 20 min)   │
-      │◄── 200 OK + JWT ───────────────────┤                                  │
-      │                                    │                                  │
-      │   (Pasan 16 minutos... tiempo restante = 4 min < 5 min)               │
-      │                                    │                                  │
-      ├── GET /api/productos (Bearer JWT) ─►│                                 │
-      │                                    ├── Valida Firma y Claims JWT      │
-      │                                    ├── Tiempo remanente < 5 min? SÍ   │
-      │                                    ├── Genera NUEVO JWT (20 min)      │
-      │                                    ├── Inyecta Set-Authorization: JWT │
-      │◄── 200 OK + Set-Authorization ─────┤                                  │
-----
-
-=== Vista de Despliegue (Topología en Red LAN / Docker)
-La arquitectura admite ejecución local mediante Docker Compose o despliegue distribuido en 3 máquinas en red para la presentación:
-
-[source,text]
-----
-┌────────────────────────┐      ┌────────────────────────┐      ┌────────────────────────┐
-│   EQUIPO 1: BASE DATOS │      │  EQUIPO 2: BACKEND API │      │   EQUIPO 3: CLIENTE    │
-│  Contenedor MySQL 8.0  │◄────►│  Contenedor Node API   │◄────►│  Cliente Web / Swagger │
-│  Puerto TCP: 3306      │      │  Puerto TCP: 3000      │      │  Consumo HTTP REST     │
-│  Firewall Inbound 3306 │      │  Firewall Inbound 3000 │      │  Visualización Datos   │
-└────────────────────────┘      └────────────────────────┘      └────────────────────────┘
-----
-
-=== Modelo de Amenazas (OWASP Threat Dragon / STRIDE)
-Se analizaron los componentes del sistema frente a las 6 categorías del modelo STRIDE:
-
-[cols="1,2,2", options="header"]
+[cols="1,2,1,2,2", options="header"]
 |===
-| Categoría | Amenaza Identificada | Mitigación Implementada
-| **S**poofing (Suplantación) | Falsificación de identidad o manipulación de tokens de sesión. | Firma criptográfica de JWT con secreto de alta entropía (35 bytes) y expiración corta (20 min).
-| **T**ampering (Alteración) | Modificación de parámetros de entrada o inyección SQL. | Consultas parametrizadas con Sequelize ORM y validadores de express-validator.
-| **R**epudiation (Repudio) | Usuario negando haber eliminado o creado un registro. | Bitácora inmutable con registro de acción, IP real, usuario y timestamp.
-| **I**nformation Disclosure | Exposición de stack traces o contraseñas en respuestas. | Supresión de `x-powered-by`, hash unidireccional bcrypt con salt=10 y ocultación de stack en producción.
-| **D**enial of Service | Sobrecarga por archivos gigantescos o nombres maliciosos. | Cuota máxima de 2 MB en Multer y sanitización aleatoria de nombres de archivo.
-| **E**levation of Privilege | Usuario normal ejecutando acciones de Administrador. | Middleware de autorización RBAC con comparación estricta de claims de rol.
+| Código | Caso de Uso | Actor | Inclusiones (`<<include>>`) | Reglas de Negocio Vinculadas
+| `CU-01` | Iniciar Sesión y Gestionar Sesión | Usuario / Administrador | Generación de JWT (HS256) | RN-02 (Anti-brute force, dummy hash)
+| `CU-02` | Consultar Catálogo y Visualizar Productos | Visitante / Usuario / Administrador | Ninguna (Público) | Caché condicional, paginación
+| `CU-03` | Administrar Productos (Crear, Editar, Eliminar) | Administrador | `<<include>>` Autenticación JWT + RBAC, `<<include>>` Auditoría Bitácora | RN-01 (Whitelist DTO, validación estricta)
+| `CU-04` | Administrar Categorías | Administrador | `<<include>>` Autenticación JWT + RBAC, `<<include>>` Auditoría Bitácora | RN-01 (Protección de categorías del sistema)
+| `CU-05` | Carga e Ingesta de Archivos e Imágenes | Administrador | `<<include>>` Autenticación JWT + RBAC, `<<include>>` Validación Multer | RN-03 (Límite 2 MB), RN-04 (MIME `image/jpeg`)
+| `CU-06` | Descarga y Servido Seguro de Imágenes | Visitante / Usuario / Administrador | Sanitización de Nombres de Archivo | Prevención de CWE-22 (Path Traversal)
+| `CU-07` | Auditoría y Consulta de Bitácora | Administrador | `<<include>>` Autenticación JWT + RBAC | Inmutabilidad histórica, no repudio
+| `CU-08` | Gestión Integral de Usuarios (CRUD) | Administrador | `<<include>>` Autenticación JWT + RBAC, `<<include>>` Auditoría Bitácora | RN-01 (Usuario protegido no eliminable)
 |===
 
-=== Modelo de Datos
+=== Vista de Datos
 
-==== Diagrama Entidad-Relación
-* `rol` (1) ── (N) `usuario`
-* `producto` (N) ── (M) `categoria` (a través de `categoriaproducto`)
-* `producto` (N) ── (1) `archivo`
-* `bitacora` (Entidad independiente de auditoría inmutable)
+La persistencia del sistema se implementa sobre el motor relacional **MySQL 8.0** con almacenamiento transaccional **InnoDB**. Para garantizar la coherencia, atomicidad y prevención de redundancias, el modelo de datos fue diseñado siguiendo una progresión rigurosa desde el modelo conceptual de entidades hasta el esquema lógico relacional normalizado.
 
-==== Modelo Relacional Normalizado (3FN)
-* `rol` (**id**, nombre)
-* `usuario` (**id**, email, passwordhash, nombre, protegido, rolid*)
-* `categoria` (**id**, nombre, protegida)
-* `producto` (**id**, titulo, descripcion, precio, archivoid*)
-* `categoriaproducto` (**productoid***, **categoriaid***)
-* `archivo` (**id**, mime, indb, nombre, size, datos)
-* `bitacora` (**id**, accion, elementoid, ip, usuario, fecha)
+==== Diagrama Entidad-Relación Conceptual
+
+El modelo conceptual captura las entidades nucleares del dominio y sus relaciones semánticas abstractas, independientemente de detalles de implementación:
+
+image::der_conceptual.svg[align="center",title="Figura 3.2: Vista de Datos — Diagrama Entidad-Relación Conceptual"]
+
+==== Diagrama Entidad-Relación Lógico
+
+El modelo lógico especifica las llaves primarias, llaves foráneas, tipos de datos concretos de MySQL 8.0, restricciones de unicidad y reglas de integridad referencial (`ON DELETE SET NULL`, `ON DELETE CASCADE`):
+
+image::der_logico.svg[align="center",title="Figura 3.3: Vista de Datos — Diagrama Entidad-Relación Lógico y Restricciones"]
+
+==== Normalización Formal del Esquema en Tercera Forma Normal (3FN)
+
+El diseño del esquema relacional fue validado algebraicamente mediante las reglas de normalización formal de Codd:
+
+===== 1. Primera Forma Normal (1FN)
+Una tabla se encuentra en 1FN si y solo si todos sus atributos contienen valores atómicos (indivisibles) y no existen grupos repetitivos o listas embebidas dentro de una misma columna.
+* **Cumplimiento:** Cada columna almacena un único valor escalar primitivo (`VARCHAR`, `INT`, `DECIMAL`, `BOOLEAN`, `DATETIME`).
+* **Resolución de cardinalidad N:M:** La relación entre productos y categorías no se implementa mediante listas de IDs delimitadas por comas, sino a través de la tabla de unión normalizada `categoriaproducto`, con clave primaria compuesta `(productoid, categoriaid)`.
+* **Identificadores inequívocos:** Todas las entidades cuentan con una clave primaria formalmente declarada (`id` numérico autoincremental o UUID v4).
+
+===== 2. Segunda Forma Normal (2FN)
+Una tabla se encuentra en 2FN si está en 1FN y ningún atributo no clave depende funcionalmente de un subconjunto propio de una clave candidata compuesta (ausencia de dependencias parciales).
+* **Cumplimiento:**
+  - En las tablas con clave primaria simple (`rol`, `usuario`, `categoria`, `producto`, `archivo`, `bitacora`), la 2FN se satisface por definición, ya que no existen claves compuestas.
+  - En la tabla `categoriaproducto`, la clave primaria es compuesta: `PK = (productoid, categoriaid)`. Dicha tabla no posee atributos no clave; su único propósito es modelar la relación de asociación pura. Por consiguiente, no existen dependencias funcionales parciales.
+
+===== 3. Tercera Forma Normal (3FN)
+Una tabla se encuentra en 3FN si está en 2FN y ningún atributo no clave depende transitivamente de la clave primaria (es decir, para toda dependencia funcional no trivial $X \rightarrow Y$, $X$ es una superclave o $Y$ es un atributo primo).
+* **Cumplimiento:**
+  - En `usuario`: Los atributos `email`, `passwordhash`, `nombre`, `protegido` y `rolid` dependen directa y exclusivamente de `id`. El nombre del rol no se almacena en `usuario` (lo que generaría una dependencia transitiva $id \rightarrow rolid \rightarrow nombre$), sino que se normaliza en la tabla `rol`.
+  - En `producto`: `titulo`, `descripcion`, `precio` y `archivoid` dependen de `id`. Los metadatos del archivo binario (MIME, tamaño, nombre) no se duplican en `producto`, residiendo exclusivamente en `archivo`.
+  - En `categoria`: `nombre` y `protegida` dependen únicamente de `id`.
+
+===== Decisión de Diseño Justificada: Desnormalización Intencional en `bitacora`
+En la tabla `bitacora`, los atributos `usuario` (VARCHAR) e `ip` (VARCHAR) no poseen una restricción de clave foránea (`FK`) hacia la tabla `usuario`. Esta decisión arquitectónica rompe intencionalmente la estrictez de la 3FN y se encuentra plenamente justificada bajo los siguientes principios de seguridad:
+1. **Preservación del Principio de No Repudio y Auditoría Forense:** Si un usuario es eliminado del sistema (`DELETE /api/usuarios/:id`), una clave foránea con `ON DELETE CASCADE` destruiría los registros de bitácora generados por dicho usuario, mientras que un `ON DELETE SET NULL` borraría la identidad del infractor. Mantener el correo o identificador como dato desnormalizado inmutable preserva el registro forense de forma perenne.
+2. **Inmutabilidad de la Bitácora:** La tabla de bitácora está diseñada exclusivamente para operaciones de inserción (`APPEND-ONLY`). No admite sentencias `UPDATE` ni `DELETE` por API. La desnormalización desacopla el ciclo de vida de los registros de auditoría del ciclo de vida de las entidades operativas.
+
+==== Diccionario de Datos del Sistema
+
+A continuación se detalla la especificación de las 7 tablas del esquema de base de datos:
+
+[cols="2,2,1,1,4", options="header"]
+|===
+| Campo | Tipo de Dato | Nulo | Default | Restricciones y Propósito
+5+| *Tabla: rol* (Catálogo de roles RBAC — Seeder: 'Administrador', 'Usuario')
+| `id` | CHAR(36) | NO | UUID() | Llave Primaria (PK). Identificador UUID v4 inmutable.
+| `nombre` | VARCHAR(255) | NO | - | Nombre único del rol (`UNIQUE`).
+5+| *Tabla: usuario* (Cuentas de usuario y credenciales)
+| `id` | CHAR(36) | NO | UUID() | Llave Primaria (PK). Identificador UUID v4.
+| `email` | VARCHAR(255) | NO | - | Correo electrónico (`UNIQUE`). Entrada para login.
+| `passwordhash` | VARCHAR(255) | NO | - | Hash bcrypt con factor de costo (salt) de 10 rondas.
+| `nombre` | VARCHAR(255) | NO | - | Nombre completo o alias del usuario.
+| `protegido` | TINYINT(1) | NO | 0 | Flag de protección contra borrado (`RN-01`). Si es 1, DELETE retorna 403.
+| `rolid` | CHAR(36) | NO | - | Llave Foránea (`FK -> rol.id`). Rol asignado para RBAC.
+5+| *Tabla: categoria* (Clasificación de productos)
+| `id` | INT | NO | AUTO_INCREMENT | Llave Primaria (PK).
+| `nombre` | VARCHAR(255) | NO | - | Nombre descriptivo de la categoría.
+| `protegida` | TINYINT(1) | NO | 0 | Flag de protección del sistema (`RN-01`). Si es 1, DELETE retorna 400.
+5+| *Tabla: producto* (Catálogo de artículos en venta)
+| `id` | INT | NO | AUTO_INCREMENT | Llave Primaria (PK).
+| `titulo` | VARCHAR(255) | NO | 'Sin titulo' | Denominación comercial del producto.
+| `descripcion` | TEXT | NO | 'Sin descripcion' | Descripción técnica o comercial.
+| `precio` | DECIMAL(10,2) | NO | 0.00 | Precio monetario con precisión fija de 2 decimales.
+| `archivoid` | INT | SÍ | NULL | Llave Foránea (`FK -> archivo.id`). ON DELETE SET NULL.
+5+| *Tabla: categoriaproducto* (Asociación N:M entre Productos y Categorías)
+| `categoriaid` | INT | NO | - | Llave Primaria Compuesta (`PK`, `FK -> categoria.id`). ON DELETE CASCADE.
+| `productoid` | INT | NO | - | Llave Primaria Compuesta (`PK`, `FK -> producto.id`). ON DELETE CASCADE.
+5+| *Tabla: archivo* (Persistencia dual de adjuntos e imágenes)
+| `id` | INT | NO | AUTO_INCREMENT | Llave Primaria (PK).
+| `mime` | VARCHAR(255) | NO | - | Tipo MIME validado (`image/jpeg` según `RN-04`).
+| `nombre` | VARCHAR(255) | NO | - | Nombre aleatorio generado con UUID para neutralizar Path Traversal.
+| `size` | INT | NO | - | Tamaño en bytes (restringido a un máximo de 2,097,152 bytes según `RN-03`).
+| `indb` | TINYINT(1) | NO | 1 | Indicador de almacenamiento: 1 = en base de datos (`datos`), 0 = en disco local (`/uploads`).
+| `datos` | LONGBLOB | SÍ | NULL | Contenido binario del archivo cuando `indb = 1`.
+5+| *Tabla: bitacora* (Pista de auditoría inmutable)
+| `id` | INT | NO | AUTO_INCREMENT | Llave Primaria (PK).
+| `accion` | VARCHAR(255) | NO | - | Verbo o evento auditado (`CREAR_PRODUCTO`, `LOGIN_EXITOSO`, etc.).
+| `elementoid` | VARCHAR(255) | SÍ | NULL | Identificador del recurso afectado.
+| `ip` | VARCHAR(255) | NO | - | Dirección IP cliente extraída mediante `request-ip`.
+| `usuario` | VARCHAR(255) | NO | - | Correo o identificador inmutable del operador.
+| `fecha` | DATETIME | NO | CURRENT_TIMESTAMP | Marca temporal de la transacción generada por el motor.
+|===
+
+=== Vista Lógica
+
+La Vista Lógica descompone el sistema en clases, modelos de entidad, objetos de transferencia de datos (DTOs) y controladores, evidenciando el desacoplamiento estructural entre la capa de presentación (ASP.NET Core 8 MVC en C#) y la capa de servicios backend (Node.js con Sequelize ORM).
+
+==== Modelos del Dominio y Mapeo Objeto-Relacional (Sequelize ORM — Node.js)
+
+En el backend, cada entidad del dominio se modela mediante Sequelize ORM, encapsulando la lógica de relaciones e inmutabilidad:
+
+image::clases_sequelize.svg[align="center",title="Figura 3.4: Vista Lógica — Modelos ORM Sequelize en Backend Node.js"]
+
+==== Modelos de Transferencia, ViewModels y Handlers (C# ASP.NET Core 8 MVC)
+
+En el frontend, la arquitectura MVC utiliza ViewModels fuertemente tipados con atributos de validación (`DataAnnotations`), complementados por una cadena de manejadores HTTP (`DelegatingHandlers`) que aíslan completamente el transporte y refresco de tokens:
+
+image::clases_csharp.svg[align="center",title="Figura 3.5: Vista Lógica — ViewModels, DataAnnotations y DelegatingHandlers en Frontend .NET"]
+
+=== Vista de Implementación / Desarrollo
+
+La arquitectura de implementación adopta un patrón en **3 Capas Desacopladas**, donde cada nivel físico o lógico encapsula estrictamente sus responsabilidades, interactuando únicamente con las interfaces públicas de los niveles adyacentes.
+
+image::componentes.svg[align="center",title="Figura 3.6: Vista de Implementación — Diagrama de Componentes en 3 Capas"]
+
+==== Detalle de las Tres Capas Arquitectónicas
+
+1. **Capa 1: Presentación (Frontend ASP.NET Core 8.0 MVC — Puerto 8080):**
+   * *Controladores MVC:* Procesan las solicitudes del navegador, validan tokens antifalsificación (`[ValidateAntiForgeryToken]`), gestionan los modelos y seleccionan las vistas Razor correspondientes.
+   * *Manejadores HTTP Delegados (`DelegatingHandler`):* 
+     - `EnviaBearerDelegatingHandler`: Intercepta cada solicitud saliente hacia la API y extrae el token JWT almacenado de forma cifrada en la cookie de sesión `.frontendnet`, inyectándolo en la cabecera estándar `Authorization: Bearer <token>`.
+     - `RefrescaTokenDelegatingHandler`: Inspecciona las cabeceras de respuesta de la API REST buscando `Set-Authorization`. Si está presente (indicando que el backend renovó el JWT vía Rolling Token), actualiza de manera transparente los claims de autenticación del usuario mediante `HttpContext.SignInAsync()`.
+   * *Seguridad en Sesión:* La cookie `.frontendnet` está configurada con las directivas más estrictas de ASP.NET Core: `HttpOnly = true` (inmune a lectura vía JavaScript/XSS), `SameSite = SameSiteMode.Lax` y cifrado simétrico AES-256 administrado por la infraestructura de *Data Protection*.
+
+2. **Capa 2: Negocio y Servicios (Backend Express.js — Puerto 3000):**
+   * *Tubería de Middlewares de Seguridad:* `Helmet` (eliminación de cabecera `X-Powered-By`, inyección de cabeceras HSTS y Content-Security-Policy), `CORS` con lista blanca estricta de orígenes autorizados y exposición explícita de `Set-Authorization`.
+   * *Capa de Autenticación y Autorización:* `auth.middleware.js` realiza la verificación criptográfica del token (algoritmo HS256) y evalúa el tiempo remanente de expiración. El middleware RBAC valida el claim `role` contra los permisos requeridos por la ruta antes de permitir el paso al controlador.
+   * *Saneamiento y Validación de Entrada:* `express-validator` aplica listas blancas (Whitelisting DTO) rechazando parámetros espurios, previniendo vulnerabilidades de asignación masiva (*Mass Assignment* / CWE-915). Para la subida de archivos, `Multer` verifica cuota máxima (2 MB), tipo MIME estricto y asigna nombres aleatorios mediante UUID.
+
+3. **Capa 3: Persistencia de Datos (MySQL 8.0 — Puerto 3306):**
+   * *Sequelize ORM v6:* Administra el pool de conexiones seguras hacia MySQL. Todas las consultas son ejecutadas indefectiblemente como sentencias preparadas parametrizadas (*Prepared Statements*), erradicando el riesgo de inyección de código SQL (*SQLi* / CWE-89).
+   * *Base de Datos Relacional:* Instancia transaccional ACID (`mercadolibrenode`) con motor de almacenamiento InnoDB, garantizando integridad referencial y aislamiento en concurrencia.
+
+=== Vista de Procesos
+
+La Vista de Procesos formaliza la dinámica de interacción temporal, concurrencia y flujo de mensajes entre componentes durante las operaciones más críticas del sistema, documentadas a través de cuatro Diagramas de Secuencia UML.
+
+==== Secuencia 1: Autenticación End-to-End con Cookie Puente y JWT
+
+Describe el flujo completo de inicio de sesión, desde el ingreso de credenciales en la vista Razor hasta la emisión de la cookie cifrada en el navegador:
+
+image::seq_autenticacion.svg[align="center",title="Figura 3.7: Vista de Procesos — Secuencia de Autenticación End-to-End"]
+
+*Detalle del flujo:*
+1. El usuario envía el formulario de inicio de sesión (`POST /Auth/Login`) al `AuthController` de ASP.NET Core con su respectivo `__RequestVerificationToken`.
+2. El `AuthController` valida el modelo de entrada (`LoginViewModel`) y efectúa una llamada REST `POST /api/auth` al backend Express.
+3. El `auth.controller` de Node.js consulta al usuario en MySQL mediante consulta parametrizada. Si el usuario no existe, ejecuta un cálculo simulado con `DUMMY_HASH` para neutralizar ataques de enumeración basados en tiempo (*Timing Attacks* / CWE-208).
+4. Se verifica el hash mediante `bcrypt.compare()`. Al ser exitoso, se firma un JWT con caducidad de 20 minutos (1,200 segundos) conteniendo claims estándar (`id`, `email`, `role`).
+5. El frontend recibe el JWT y construye un `ClaimsIdentity` con claims estándar WS-Federation, emitiendo una cookie de sesión `.frontendnet` protegida con `HttpOnly` y `SameSite=Lax`.
+
+==== Secuencia 2: Petición Protegida y Renovación Deslizante de Token (Rolling Token)
+
+Ilustra la invocación a un endpoint administrativo y la renovación transparente de la sesión cuando el tiempo remanente del JWT es inferior al umbral de seguridad de 5 minutos (300 segundos):
+
+image::seq_rolling_token.svg[align="center",title="Figura 3.8: Vista de Procesos — Petición Protegida y Rolling Token Automático"]
+
+*Mecanismo de Rolling Token:*
+* En cada petición autenticada, `auth.middleware.js` calcula:
++
+[stem]
+++++
+\Delta t = exp - \lfloor \text{Date.now}() / 1000 \rfloor
+++++
+* Si latexmath:[\Delta t < 300] segundos, el backend genera un nuevo JWT con vigencia renovada de 20 minutos y lo inyecta en la cabecera HTTP `Set-Authorization`.
+* En el cliente .NET, `RefrescaTokenDelegatingHandler` detecta dicha cabecera y renueva de forma asíncrona la cookie `.frontendnet`, evitando interrupciones en la sesión del usuario legítimo sin requerir que el token inicial posea una vigencia prolongada peligrosa.
+
+==== Secuencia 3: Ingesta Segura de Archivos con Persistencia Dual (Disco vs BD)
+
+Detalla el procesamiento defensivo de imágenes subidas por el administrador, contemplando la validación multinivel y la persistencia configurable (`indb`):
+
+image::seq_archivos.svg[align="center",title="Figura 3.9: Vista de Procesos — Ingesta Segura de Archivos y Persistencia Dual"]
+
+*Controles de Ingesta:*
+1. **Límite de Tamaño:** `Multer` rechaza cualquier transmisión que supere los 2 MB (`limits: { fileSize: 2 * 1024 * 1024 }`), arrojando error `LIMIT_FILE_SIZE` y previniendo ataques de Denegación de Servicio (CWE-400).
+2. **Validación de Firma MIME y Extensión:** Se exige coincidencia estricta de MIME `image/jpeg` y extensión `.jpg`/`.jpeg` (`fileFilter`), neutralizando la carga de scripts maliciosos o web shells (CWE-434).
+3. **Nombre Aleatorio Inmutable:** Se asigna un identificador UUID v4 como nombre del archivo, imposibilitando ataques de *Path Traversal* (CWE-22).
+4. **Almacenamiento:** Según el flag `indb`, el binario se persiste directamente en una columna `LONGBLOB` dentro de MySQL (`indb = 1`) o en el sistema de archivos del servidor (`indb = 0`).
+
+==== Secuencia 4: Mutación Segura de Catálogo, Whitelist DTO y Trazabilidad
+
+Describe el proceso de creación de productos, asegurando el filtrado riguroso de parámetros contra *Mass Assignment* y el registro inmutable en bitácora:
+
+image::seq_mutacion_catalogo.svg[align="center",title="Figura 3.10: Vista de Procesos — Mutación Segura de Catálogo y Registro en Bitácora"]
+
+*Garantías de la transacción:*
+* **Filtrado DTO:** El controlador extrae únicamente `{ titulo, descripcion, precio, archivoid }` de `req.body`, descartando cualquier propiedad inyectada maliciosamente (como banderas de privilegios).
+* **Auditoría Forense Automática:** Toda mutación (`POST`, `PUT`, `DELETE`) genera sincrónicamente un registro en la tabla `bitacora` capturando la acción, la IP de origen (extraída mediante `request-ip`) y el correo del operador autenticado.
+
+=== Vista Física y Despliegue
+
+La plataforma está diseñada para admitir dos modos de despliegue complementarios: despliegue local contenerizado mediante **Docker Compose** y despliegue distribuido en **red LAN física/virtual de 3 equipos independientes**, permitiendo demostrar la resiliencia y el aislamiento de red exigidos para la evaluación del proyecto.
+
+==== Diagrama de Despliegue y Topología de Red LAN
+
+image::despliegue.svg[align="center",title="Figura 3.11: Vista Física — Diagrama de Despliegue y Topología de Red LAN en 3 Equipos"]
+
+==== Especificación de los Nodos de Despliegue
+
+[cols="1,2,2,2", options="header"]
+|===
+| Nodo / Equipo | Componentes Alojados | Puertos y Protocolos | Políticas Perimetrales de Firewall
+| **Equipo 1:** Servidor de Base de Datos (192.168.1.102) | Instancia MySQL 8.0 Community en contenedor Docker (`ecommerce_db`) con volumen persistente `db_data`. | TCP 3306 (MySQL Native) | Firewall Inbound restrictivo: Solo se autoriza tráfico entrante en puerto 3306 procedente de la IP específica del Servidor de Aplicaciones (192.168.1.101). Tráfico directo desde clientes es bloqueado.
+| **Equipo 2:** Servidor de Aplicaciones API (192.168.1.101) | Runtime Node.js 20 LTS en contenedor Docker (`ecommerce_api`) con volumen montado `/uploads`. | TCP 3000 (HTTP REST API) | Firewall Inbound: Solo se autoriza tráfico en puerto 3000 procedente del Servidor Web Frontend (192.168.1.100). Tráfico saliente autorizado únicamente hacia Equipo 1 (TCP 3306).
+| **Equipo 3:** Servidor Web Frontend y Clientes (192.168.1.100) | Aplicación ASP.NET Core 8 MVC corriendo bajo Kestrel Server y navegadores clientes de la red. | TCP 8080 (HTTP/S Web App) | Puerto 8080 abierto a la red LAN para acceso de los usuarios finales. Tráfico saliente autorizado hacia Equipo 2 (TCP 3000).
+|===
+
+=== Vista de Seguridad y Modelo de Amenazas
+
+La seguridad no se concibe como una capa aditiva o tardía, sino como un pilar arquitectónico transversal. El sistema fue sometido a un análisis formal de amenazas empleando la metodología **STRIDE** desarrollada por Microsoft y recomendada por OWASP en la herramienta **OWASP Threat Dragon**.
+
+==== Diagrama de Flujo de Datos (DFD) con Fronteras de Confianza
+
+El modelado identifica con precisión las fronteras perimetrales donde los datos cruzan límites de privilegio y confianza:
+
+image::dfd_seguridad.svg[align="center",title="Figura 3.12: Vista de Seguridad — Diagrama de Flujo de Datos (DFD) y Fronteras de Confianza"]
+
+==== Identificación de Fronteras de Confianza (*Trust Boundaries*)
+
+1. **Frontera de Confianza 1 (Internet / Red Pública $\rightarrow$ Frontend .NET):** 
+   - *Riesgo:* Entrada de usuarios no autenticados o atacantes remotos a través de navegadores web.
+   - *Tratamiento:* Cero confianza (*Zero Trust*). Toda entrada se presume hostil. Mitigación mediante protección antifalsificación CSRF (`[ValidateAntiForgeryToken]`), validación obligatoria de modelos (`ModelState.IsValid` con `DataAnnotations`) y confinamiento de tokens en cookies con directiva `HttpOnly`.
+2. **Frontera de Confianza 2 (Frontend .NET $\rightarrow$ Backend Express API):**
+   - *Riesgo:* Peticiones REST forjadas, inyección de parámetros no autorizados o abuso de tokens interceptados.
+   - *Tratamiento:* Verificación criptográfica estricta de la firma HMAC-SHA256 en cada petición. Validación de roles y permisos mediante middleware RBAC *Deny-by-Default*. Sanitización y listas blancas de campos vía `express-validator`.
+3. **Frontera de Confianza 3 (Backend Express API $\rightarrow$ Base de Datos MySQL):**
+   - *Riesgo:* Inyección de código SQL malicioso (*SQL Injection* / CWE-89) o divulgación de errores internos (*CWE-200*).
+   - *Tratamiento:* Intermediación exclusiva a través de Sequelize ORM empleando *Prepared Statements* parametrizados. Principio de menor privilegio aplicado al usuario de base de datos (`mercadolibre_user`), sin permisos de administración global de la base de datos.
+
+==== Matriz de Amenazas y Mitigaciones STRIDE (OWASP Threat Dragon)
+
+A continuación se detalla la matriz integral de amenazas identificadas bajo los 6 vectores del modelo STRIDE y sus controles de mitigación implementados en el código:
+
+[cols="1,2,2,3,1", options="header"]
+|===
+| Vector STRIDE | Elemento Afectado | Amenaza Específica Identificada | Mitigación Arquitectónica Implementada | CWE / Estándar
+| **S**poofing (Suplantación) | Endpoint `/api/auth` y Cabeceras de Petición | Suplantación de identidad mediante manipulación de tokens de sesión o falsificación de credenciales. | Firma de tokens JWT con algoritmo HS256 empleando secreto de alta entropía (mínimo 35 caracteres alfanuméricos) almacenado en variable de entorno `.env`. Caducidad corta de 20 minutos complementada con Rolling Token. Hash unidireccional bcrypt con 10 rondas de salt para contraseñas. | CWE-287 / CWE-522
+| **T**ampering (Alteración) | Parámetros REST y Datos de Entidad | Alteración maliciosa de parámetros en tránsito, inyección SQL o manipulación de parámetros ocultos (*Mass Assignment*). | 100% de consultas parametrizadas mediante Sequelize ORM. Filtrado estricto de campos mediante Whitelisting DTO en controladores antes de invocar métodos de actualización o inserción. Validación de tipos y longitudes con `express-validator` en backend y `DataAnnotations` en frontend. | CWE-89 / CWE-915
+| **R**epudiation (Repudio) | Operaciones de Modificación y Eliminación | Un operador o administrador niega haber alterado o borrado registros críticos del catálogo o usuarios. | Registro obligatorio y sincrónico en tabla inmutable `bitacora` para toda mutación. Captura de acción, ID del recurso, IP remota del cliente (extraída con `request-ip`) y correo del usuario autenticado. La bitácora no expone métodos `UPDATE` ni `DELETE` en la API. | CWE-778
+| **I**nformation Disclosure (Fuga de Información) | Respuestas HTTP y Manejadores de Error | Exposición de versiones del servidor, rutas internas de archivos o stack traces de base de datos en respuestas de error. | Supresión explícita de la cabecera `X-Powered-By` mediante `Helmet`. Middleware centralizado de gestión de errores (`errorHandler`) que captura excepciones y retorna mensajes genéricos estructurados en producción, omitiendo el `stack trace`. Protección contra ataques de enumeración mediante `DUMMY_HASH` en login fallido. | CWE-200 / CWE-208
+| **D**enial of Service (Denegación de Servicio) | Endpoint de Carga `/api/archivos` y Pool de Conexiones | Agotamiento de almacenamiento o memoria mediante el envío de archivos masivos o saturación de peticiones concurrentes. | Restricción estricta de cuota de carga a un máximo de 2 MB mediante `Multer`. Configuración de pool de conexiones optimizado en Sequelize (`max: 5, min: 0, idle: 10000`). Sanitización de nombres de archivo mediante UUID v4 para prevenir saturación de directorios o colisiones forzadas. | CWE-400 / CWE-770
+| **E**levation of Privilege (Elevación de Privilegios) | Endpoints Administrativos (`/api/productos`, `/api/categorias`, etc.) | Un usuario regular con rol `Usuario` accede o invoca endpoints reservados exclusivamente para `Administrador`. | Middleware de autorización basado en roles (`authorizeRoles(['Administrador'])`) con política *Deny-by-Default*. Se extrae el rol de los claims verificados del JWT y se compara estrictamente en memoria antes de permitir la ejecución del controlador. | CWE-285 / OWASP A01:2021
+|===

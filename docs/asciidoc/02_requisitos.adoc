@@ -1,52 +1,556 @@
 == Documento de Especificación de Requisitos
 
-=== Contexto
-El sistema forma parte de una infraestructura de comercio electrónico orientada a la venta minorista de bienes de consumo organizados por departamentos y categorías. La API provee servicios desacoplados a clientes web y móviles, gestionando identidades, catálogo de productos, almacenamiento de medios digitales y auditoría inmutable de eventos.
+=== Contexto y Alcance del Dominio
 
-=== Impacto
-La correcta operación del sistema previene el compromiso de cuentas de clientes y administradores, garantiza la confidencialidad de datos financieros e identidades, y salvaguarda la continuidad operativa mediante resistencia contra denegaciones de servicio (DoS) por carga maliciosa de archivos o parámetros no sanitizados.
+El sistema constituye una plataforma de comercio electrónico orientada a la venta minorista de bienes de consumo organizados por departamentos y categorías. Su arquitectura sigue un modelo de **tres capas desacopladas** en comunicación síncrona:
 
-=== Casos de Uso con Prototipos
-[cols="1,3,2", options="header"]
+[source,text]
+----
+[Navegador del Usuario]
+         │ HTTP/HTTPS (Puerto 8080)
+         ▼
+[Capa de Presentación: ASP.NET Core 8.0 MVC — C# / Razor / Bootstrap 5.3.3]
+         │ HTTP REST / JSON (Puerto 3000)
+         ▼
+[Capa de Negocio y API: Node.js 20 LTS / Express — Sequelize ORM]
+         │ TCP / Consultas Parametrizadas (Puerto 3306)
+         ▼
+[Capa de Persistencia: MySQL 8.0 — InnoDB / utf8mb4]
+----
+
+La **API RESTful en Node.js** provee servicios desacoplados a clientes web y móviles, gestionando identidades de usuarios, catálogo de productos, almacenamiento de medios digitales y auditoría inmutable de eventos. El **frontend en ASP.NET Core 8.0 MVC** actúa como la interfaz web de usuario, consumiendo la API mediante un puente de autenticación Cookie-JWT implementado con `DelegatingHandlers` de `HttpClient`.
+
+=== Impacto de Seguridad y Justificación
+
+La correcta operación del sistema previene los siguientes riesgos:
+
+* **Compromiso de Cuentas:** La autenticación mediante contraseñas hasheadas con bcrypt (salt rounds = 10) y tokens JWT efímeros (20 minutos) limita la ventana de exposición ante robo de credenciales.
+* **Interceptación de Sesión (Session Hijacking):** La arquitectura de sesión híbrida — cookie cifrada en el navegador + JWT en cabeceras HTTP — protege contra el robo de tokens vía XSS en el DOM del cliente.
+* **Confidencialidad de Datos Financieros:** El acceso al catálogo administrativo (precios, usuarios, bitácora) se encuentra protegido por Control de Acceso Basado en Roles (RBAC) con principio de mínimo privilegio (`Deny by Default`).
+* **Continuidad Operativa:** Las validaciones de cuota, nombre de archivo criptográfico y tipo MIME en la carga de archivos impiden el agotamiento de almacenamiento por cargas maliciosas.
+
+=== Partes Interesadas y Actores del Sistema
+
+[cols="1,2,3", options="header"]
 |===
-| ID | Caso de Uso | Actores
-| CU-01 | Iniciar Sesión en la Plataforma | Usuario, Administrador
-| CU-02 | Gestionar Catálogo de Categorías | Administrador
-| CU-03 | Administrar Productos e Inventario | Administrador
-| CU-04 | Consultar Productos y Categorías | Usuario, Administrador
-| CU-05 | Asociar Categorías a Productos (N:M) | Administrador
-| CU-06 | Subir y Descargar Archivos Multimedia | Usuario, Administrador
-| CU-07 | Auditoría y Consulta de Bitácora | Administrador
+| Actor | Tipo | Responsabilidades y Capacidades
+| **Usuario** | Actor Principal (Humano) | Navega el catálogo de productos, filtra por categorías, agrega al carrito, solicita sesión activa, visualiza imágenes de productos. Opera en modo de solo lectura sobre el catálogo.
+| **Administrador** | Actor Principal (Humano) | Gestiona el ciclo de vida completo de categorías, productos, archivos y usuarios. Consulta la bitácora de auditoría. Tiene acceso a operaciones de mutación de datos restringidas a este rol.
+| **Cliente Frontend .NET** | Actor de Sistema | Aplicación ASP.NET Core 8.0 MVC ejecutándose en el puerto 8080. Actúa como intermediario entre el navegador y la API, implementando el puente Cookie—JWT, la propagación automática del token Bearer y la renovación continua vía `DelegatingHandlers`.
 |===
 
-*(Nota: Los prototipos de interfaz de usuario correspondientes al cliente frontend se integrarán conforme se vincule el repositorio cliente).*
+==== Diagrama Textual de Actores e Interacciones
 
-=== Requisitos Funcionales por Casos de Uso
-* **RF-01 (Autenticación):** El sistema debe autenticar usuarios mediante correo y contraseña, emitiendo un JWT firmado con HS256 si las credenciales son válidas.
-* **RF-02 (Tiempo de Sesión):** El sistema debe proveer un endpoint (`/api/auth/tiempo`) que informe el tiempo de vigencia restante del token.
-* **RF-03 (CRUD de Categorías):** El sistema debe permitir crear, consultar, actualizar y eliminar categorías, impidiendo la eliminación de aquellas marcadas como protegidas.
-* **RF-04 (Gestión de Productos):** Debe permitir el registro, actualización y eliminación de productos con atributos de título, descripción, precio y archivo multimedia asociado.
-* **RF-05 (Búsqueda de Productos):** Debe permitir filtrar el catálogo mediante el parámetro de consulta `?s=termino`.
-* **RF-06 (Asociación Relacional):** Debe permitir asociar y desasociar múltiples categorías a un producto.
-* **RF-07 (Carga de Archivos):** Debe permitir la subida de imágenes en formato JPEG/JPG validando tamaño y tipo MIME, soportando almacenamiento tanto en disco como en base de datos (BLOB).
-* **RF-08 (Registro de Auditoría):** Cada operación de creación, modificación o eliminación debe registrar automáticamente la acción, IP y usuario en la bitácora.
+[source,text]
+----
+                    ┌─────────────────────────────────────────────┐
+                    │          SISTEMA E-COMMERCE API             │
+                    │                                             │
+                    │  ┌─────────────────────────────────────┐   │
+(Usuario) ────────► │  │ [Consultar Catálogo de Productos]   │   │
+     │              │  │ [Buscar por Término (?s=)]          │   │
+     │              │  │ [Visualizar Imagen de Producto]     │   │
+     │              │  │ [Agregar al Carrito de Compras]     │   │
+     │              │  └─────────────────────────────────────┘   │
+     │              │                                             │
+(Administrador) ──► │  ┌─────────────────────────────────────┐   │
+     │              │  │ [Iniciar Sesión — Emite JWT (HS256)] │   │
+     │              │  │ [Gestionar Categorías — CRUD]        │   │
+     │              │  │ [Gestionar Productos — CRUD]         │   │
+     │              │  │ [Asociar/Desasociar Categorías N:M]  │   │
+     │              │  │ [Subir Archivos Multimedia (2MB)]    │   │
+     │              │  │ [Gestionar Usuarios del Sistema]     │   │
+     │              │  │ [Consultar Catálogo de Roles]        │   │
+     │              │  │ [Consultar Bitácora de Auditoría]    │   │
+     │              │  └─────────────────────────────────────┘   │
+     │              └─────────────────────────────────────────────┘
+     │
+(Cliente Frontend .NET)
+     ├── Puente Cookie ↔ JWT (DelegatingHandlers)
+     ├── Validaciones DataAnnotations en C#
+     ├── Vistas Razor con Bootstrap 5.3.3 y tema Mercado Libre
+     └── Vista Usuarios/Index + Crear + Editar + Eliminar (CRUD Admin)
+----
 
-=== Requisitos No Funcionales (RNF)
-* **RNF-01 (Seguridad - Autenticación Stateless):** Autenticación mediante tokens JWT efímeros de 20 minutos sin almacenamiento de estado en el servidor.
-* **RNF-02 (Seguridad - Renovación Continua):** Renovación automática del token vía cabecera `Set-Authorization` si la sesión tiene menos de 5 minutos restantes.
-* **RNF-03 (Seguridad - RBAC):** Control de acceso estricto basado en roles (`Usuario`, `Administrador`) para proteger endpoints sensibles.
-* **RNF-04 (Rendimiento):** Tiempo de respuesta menor a 200 ms para consultas de catálogo con índices relacionales en base de datos.
-* **RNF-05 (Disponibilidad y Portabilidad):** Arquitectura contenerizada mediante Docker y Docker Compose para ejecución multiplataforma.
+=== Requisitos Funcionales
 
-=== Reglas de Negocio
-* **RN-01 (Protección de Elementos del Sistema):** Las categorías y usuarios con el flag `protegido = true` no pueden ser eliminados bajo ninguna circunstancia.
-* **RN-02 (Unicidad de Identidad):** No se permite el registro de dos cuentas con el mismo correo electrónico.
-* **RN-03 (Límite de Archivos):** Los archivos multimedia subidos no deben exceder 2 MB de tamaño físico.
-* **RN-04 (Restricción de Formatos):** Solo se admiten archivos con extensión `.jpg` o `.jpeg` cuyo tipo MIME corresponda a `image/jpeg`.
+Los siguientes requisitos funcionales definen las **capacidades observables** que el sistema debe proveer (IEEE 830 §3.2). Cada requisito es: correcto, no ambiguo, verificable mediante su contrato HTTP, trazable al código fuente implementado, y clasificado por prioridad y estabilidad.
 
-=== Riesgos de Seguridad Identificados
-* **RS-01 (Inyección SQL - CWE-89):** Manipulación de parámetros de búsqueda o identificadores. *Mitigado mediante Sequelize ORM.*
-* **RS-02 (Ataques de Fuerza Bruta / Timing Attacks - CWE-208):** Deducción de cuentas válidas midiendo el tiempo de respuesta en login. *Mitigado mediante hash dummy con bcrypt.*
-* **RS-03 (Mass Assignment - CWE-915):** Modificación indebida de campos críticos como `protegido`. *Mitigado mediante listas blancas en controladores.*
-* **RS-04 (Path Traversal - CWE-22):** Manipulación de rutas en nombres de archivo al subir imágenes. *Mitigado mediante renombramiento aleatorio con UUIDs.*
-* **RS-05 (Agotamiento de Recursos / DoS - CWE-400):** Carga masiva de archivos gigantes. *Mitigado con cuota forzada en Multer (2 MB).*
+[cols="1,2,3,2,1,1", options="header"]
+|===
+| ID | Nombre | Descripción Detallada | Contrato HTTP | Prioridad | Estabilidad
+| **RF-01** | Autenticación e Inicio de Sesión | El sistema debe autenticar usuarios mediante correo electrónico y contraseña. Si las credenciales son válidas (comparación bcrypt con `salt rounds=10`), debe emitir un token JWT firmado con HMAC SHA-256 (`HS256`), con vigencia de 20 minutos y claims estándar WS-Federation: `Name`, `GivenName`, `Role`. El frontend almacena el JWT dentro de la cookie cifrada `.frontendnet` y lo reenvía automáticamente en cabecera `Authorization: Bearer <jwt>` mediante `EnviaBearerDelegatingHandler`. | `POST /api/auth` | Alta | Estable
+| **RF-02** | Consulta de Tiempo Restante de Sesión | El sistema debe proveer un endpoint protegido que retorne el tiempo de vida remanente del token activo en formato `HH:MM:SS`. Ante ausencia de token, debe responder `404 Not Found`. | `GET /api/auth/tiempo` | Media | Estable
+| **RF-03** | Gestión de Catálogo de Categorías | El sistema debe permitir crear, consultar, actualizar y eliminar categorías de productos. La eliminación de categorías marcadas con `protegida = true` debe ser rechazada con `400 Bad Request`. La eliminación de categorías no protegidas debe limpiar en cascada las relaciones en la tabla asociativa `categoriaproducto`. | `GET/POST/PUT/DELETE /api/categorias` | Alta | Estable
+| **RF-04** | Gestión de Inventario de Productos | El sistema debe permitir registrar, consultar, actualizar y eliminar productos. Cada producto tiene: `titulo` (máx. 255 chars), `descripcion`, `precio` (decimal válido) y referencia opcional a archivo multimedia (`archivoid`). La actualización emplea listas blancas (Whitelist DTO) para prevenir Mass Assignment (CWE-915). | `GET/POST/PUT/DELETE /api/productos` | Alta | Estable
+| **RF-05** | Búsqueda y Filtrado de Productos | El sistema debe permitir buscar productos por título mediante el parámetro de consulta `?s=termino`, utilizando coincidencia parcial (`LIKE %termino%`) parametrizada mediante Sequelize ORM para prevenir inyección SQL. | `GET /api/productos?s={termino}` | Media | Estable
+| **RF-06** | Asociación Relacional N:M (Categoría-Producto) | El sistema debe permitir asociar y desasociar múltiples categorías a un producto mediante la tabla pivote `categoriaproducto`. Antes de asociar, ambos recursos deben existir en base de datos. | `POST /api/productos/:id/categoria` + `DELETE /api/productos/:id/categoria/:catId` | Alta | Estable
+| **RF-07** | Carga y Descarga de Archivos Multimedia | El sistema debe permitir la subida de imágenes JPEG/JPG mediante `multipart/form-data` validando MIME (`image/jpeg`), extensión y cuota (≤ 2 MB). Los nombres de archivo deben ser generados criptográficamente (`crypto.randomUUID() + '.jpg'`). El almacenamiento es dual: filesystem o `LONGBLOB` en MySQL controlado por la variable `FILES_IN_BD`. La descarga retorna el binario con `Content-Type` apropiado. | `POST/PUT/GET/DELETE /api/archivos` | Alta | Estable
+| **RF-08** | Trazabilidad Inmutable — Bitácora de Auditoría | Toda operación de mutación (crear, editar, eliminar en cualquier recurso, e inicio de sesión) debe registrarse automáticamente en `bitacora`, capturando: acción, identificador del recurso afectado, IP real del cliente (resolviendo proxies con `request-ip`), usuario responsable y marca temporal. La bitácora es de solo lectura para todos los clientes. | `GET /api/bitacora` | Alta | Estable
+| **RF-09** | Gestión de Usuarios del Sistema | El sistema debe permitir al rol `Administrador` crear, consultar, actualizar y eliminar cuentas de usuario. La creación debe validar unicidad de correo (`409 Conflict`) y hash bcrypt de contraseña. La actualización aplica Whitelist DTO: solo acepta los campos `nombre`, `email`, `password` y `rolid`; si `password` se incluye, se re-deriva el hash con `bcrypt(10)`. Ninguna operación puede modificar los campos `protegido`, `id` o `passwordhash` directamente. La eliminación de usuarios con `protegido = true` es rechazada con `403 Forbidden`. | `GET/POST/PUT/DELETE /api/usuarios` | Alta | Estable
+| **RF-10** | Consulta del Catálogo de Roles | El sistema debe proveer un endpoint protegido que retorne el listado de roles disponibles del sistema (`Administrador`, `Usuario`) para ser utilizado en los formularios de creación y edición de cuentas de usuario. | `GET /api/roles` | Baja | Estable
+|===
+
+=== Casos de Uso del Sistema
+
+Los casos de uso detallan la **interacción paso a paso** entre los actores y el sistema, incluyendo flujos principales y flujos alternos de error.
+
+==== CU-01: Iniciar Sesión en la Plataforma
+
+[cols="1,3", options="header"]
+|===
+| Campo | Descripción
+| **Actor Principal** | Usuario / Administrador
+| **Sistema Participante** | Cliente Frontend .NET — `AuthController.cs` / API Backend — `auth.controller.js`
+| **Precondición** | El usuario no tiene una sesión activa. La base de datos tiene al menos una cuenta registrada.
+| **Disparador** | El usuario navega a la vista `/auth` y hace clic en "Iniciar Sesión".
+|===
+
+*Flujo Principal:*
+
+. El usuario escribe su correo electrónico y contraseña en el formulario de la vista `Auth/Index.cshtml`.
+. La librería `jquery.validate.unobtrusive.js` valida en cliente que el correo tiene formato válido (`[EmailAddress]`) y que ningún campo está vacío (`[Required]`).
+. El formulario realiza un `POST /auth` al `AuthController` de ASP.NET Core.
+. El `AuthController` verifica que `ModelState.IsValid` y llama a `AuthClientService.ObtenTokenAsync(email, password)`.
+. El servicio despacha una petición `POST http://localhost:3000/api/auth` con payload JSON.
+. El backend de Node.js busca el usuario por correo en MySQL (Sequelize). Si existe, ejecuta `bcrypt.compare(password, passwordhash)`.
+. Ante credenciales válidas, genera el JWT con claims `Name`, `GivenName`, `Role` y vigencia de 20 minutos. Registra `usuario.login` en bitácora.
+. El backend responde `200 OK` con el payload `{ email, nombre, rol, jwt }`.
+. El `AuthController` crea la identidad de claims C# con el token JWT embebido y ejecuta `HttpContext.SignInAsync()`, generando la cookie `.frontendnet` cifrada en el navegador.
+. El sistema redirige: si el rol es `Administrador` → `/Productos`; si es `Usuario` → `/Home`.
+
+*Flujos Alternos:*
+
+* *FA-01: Campos vacíos o formato inválido.* La validación unobtrusive impide el envío del formulario y muestra mensajes de error junto a cada campo. HTTP: No se realiza petición al servidor.
+* *FA-02: Correo inexistente en base de datos.* El backend ejecuta `bcrypt.compare(password, DUMMY_HASH)` (mitigación Timing Attack - CWE-208) y responde `401 Unauthorized`. El frontend muestra el mensaje "Usuario o contraseña incorrectos."
+* *FA-03: Contraseña incorrecta.* El backend ejecuta `bcrypt.compare` real y el resultado es `false`. Responde `401 Unauthorized` con el mismo mensaje genérico de FA-02 para no revelar si el usuario existe.
+* *FA-04: Campos de `email` o `password` ausentes en el request.* El backend retorna `400 Bad Request` indicando los campos requeridos.
+
+*Postcondición:* El usuario tiene una sesión activa representada por la cookie `.frontendnet` en su navegador. Las peticiones subsecuentes al backend llevan automáticamente el `Bearer <jwt>` vía `EnviaBearerDelegatingHandler`.
+
+---
+
+==== CU-02: Gestionar Catálogo de Categorías
+
+[cols="1,3", options="header"]
+|===
+| Campo | Descripción
+| **Actor Principal** | Administrador
+| **Sistema Participante** | `CategoriasController.cs` (Frontend) — `categorias.controller.js` (Backend)
+| **Precondición** | El Administrador tiene una sesión activa con rol `Administrador`.
+| **Disparador** | El Administrador navega a la vista `/Categorias`.
+|===
+
+*Operaciones del Flujo Principal:*
+
+* *Consultar:* El sistema muestra la lista completa de categorías. Cada fila indica si la categoría es protegida con un badge visual.
+* *Crear:* El Administrador llena el formulario de nueva categoría (nombre único). El sistema persiste el registro con `protegida = false` por defecto y registra `categoria.crear` en bitácora.
+* *Editar:* El Administrador modifica el nombre de una categoría existente. El sistema actualiza el registro y registra `categoria.editar` en bitácora.
+* *Eliminar:* El sistema evalúa el campo `protegida`. Si `protegida = true`, responde `400 Bad Request` indicando que la categoría no puede eliminarse. Si `protegida = false`, elimina el registro y limpia en cascada la tabla `categoriaproducto`. Registra `categoria.eliminar` en bitácora.
+
+*Flujos Alternos:*
+
+* *FA-01: Token expirado al realizar operación.* El middleware de autenticación del backend responde `401 Unauthorized`. Si el `RefrescaTokenDelegatingHandler` no pudo renovar la cookie, el frontend redirige al login.
+* *FA-02: Intento de eliminar categoría protegida.* El backend responde `400 Bad Request`. El frontend muestra un modal o mensaje de error indicando que la operación no está permitida.
+* *FA-03: Rol insuficiente.* Si se intenta acceder a este módulo sin rol `Administrador`, el backend responde `403 Forbidden` y el atributo `[Authorize(Roles = "Administrador")]` del controlador .NET redirige al inicio.
+
+*Postcondición:* El catálogo de categorías refleja el estado actualizado. El evento queda registrado en la tabla `bitacora`.
+
+---
+
+==== CU-03: Administrar Productos e Inventario
+
+[cols="1,3", options="header"]
+|===
+| Campo | Descripción
+| **Actor Principal** | Administrador
+| **Sistema Participante** | `ProductosController.cs` (Frontend) — `productos.controller.js` (Backend)
+| **Precondición** | El Administrador tiene una sesión activa.
+| **Disparador** | El Administrador navega a la vista `/Productos`.
+|===
+
+*Operaciones del Flujo Principal:*
+
+* *Consultar:* Lista todos los productos con sus categorías asignadas y la imagen asociada (`archivoid`). Soporta filtro por nombre con el parámetro `?s=termino`.
+* *Crear:* El formulario captura `titulo`, `descripcion`, `precio` y opcionalmente un `archivoid`. El backend valida con `express-validator` (título no vacío, precio decimal válido). Al crear, se registra `producto.crear` en bitácora.
+* *Editar:* El backend aplica **Whitelist DTO** — solo acepta los campos `titulo`, `descripcion`, `precio` y `archivoid`. Cualquier otro campo en `req.body` es ignorado silenciosamente (mitigación CWE-915). Registra `producto.editar`.
+* *Eliminar:* Se elimina el registro de producto. Las relaciones en `categoriaproducto` se limpian por cascada. La FK `producto.archivoid` no elimina el archivo (solo se desvincula). Registra `producto.eliminar`.
+
+*Flujos Alternos:*
+
+* *FA-01: Campos obligatorios vacíos o precio no numérico.* `express-validator` retorna `400 Bad Request` con el listado de errores detallados. El frontend muestra los mensajes junto a los campos inválidos.
+* *FA-02: Producto no encontrado en edición o eliminación.* El backend retorna `404 Not Found`.
+
+*Postcondición:* El catálogo de productos refleja el estado actualizado. El evento queda registrado en `bitacora`.
+
+---
+
+==== CU-04: Consultar Catálogo y Realizar Compras
+
+[cols="1,3", options="header"]
+|===
+| Campo | Descripción
+| **Actor Principal** | Usuario / Administrador
+| **Sistema Participante** | `HomeController.cs`, `ComprarController.cs`, `CarritoController.cs` (Frontend) — `GET /api/productos`, `GET /api/categorias` (Backend)
+| **Precondición** | El usuario puede tener o no tener sesión activa para consultar el catálogo público.
+| **Disparador** | El usuario accede a la portada (`/Home`) o a la sección de compras (`/Comprar`).
+|===
+
+*Flujo Principal:*
+
+. El sistema presenta en la portada un carrusel con productos destacados y el catálogo organizado por categorías (tema Mercado Libre, color `#ffe600`).
+. El usuario puede buscar productos escribiendo en el campo de búsqueda; el sistema envía `GET /api/productos?s=termino` al backend.
+. El usuario selecciona un producto y lo agrega al carrito de compras gestionado en la sesión del frontend.
+. El usuario visualiza el carrito en `/Carrito` con el desglose de artículos y el total calculado.
+
+*Flujos Alternos:*
+
+* *FA-01: Búsqueda sin resultados.* El backend retorna un arreglo vacío `[]` con `200 OK`. El frontend muestra el mensaje "No se encontraron productos".
+* *FA-02: Error de conectividad con el backend.* El frontend captura la excepción de `HttpClient` y muestra un mensaje de error genérico sin exponer detalles técnicos.
+
+*Postcondición:* El usuario visualizó el catálogo. Si agregó productos al carrito, la selección persiste en la sesión del navegador hasta que cierre la sesión o limpie el carrito.
+
+---
+
+==== CU-05: Asociar y Desasociar Categorías a Productos
+
+[cols="1,3", options="header"]
+|===
+| Campo | Descripción
+| **Actor Principal** | Administrador
+| **Sistema Participante** | `ProductosController.cs` (Frontend) — `productos.controller.js` (Backend)
+| **Precondición** | Existen productos y categorías no protegidas registrados en el sistema.
+| **Disparador** | El Administrador hace clic en "Gestionar Categorías" en la vista de detalle de un producto.
+|===
+
+*Flujo Principal (Asociar):*
+
+. El sistema muestra la lista de categorías disponibles y las categorías ya asignadas al producto.
+. El Administrador selecciona una categoría a agregar y confirma.
+. El sistema verifica que tanto el producto como la categoría existan en base de datos.
+. El sistema inserta la tupla en la tabla pivote `categoriaproducto` mediante el método `item.addCategoria(itemToAssign)`.
+. Registra `productocategoria.agregar` en bitácora con el par `productoId:categoriaId`.
+. Responde `204 No Content`. El frontend actualiza la vista.
+
+*Flujo Principal (Desasociar):*
+
+. El Administrador selecciona la categoría a remover del producto.
+. El sistema verifica la existencia de ambos recursos y elimina la tupla de la tabla pivote con `item.removeCategoria(itemToRemove)`.
+. Registra `productocategoria.remover` en bitácora.
+
+*Flujos Alternos:*
+
+* *FA-01: Producto o categoría no encontrada.* Responde `404 Not Found` con el recurso faltante especificado.
+* *FA-02: Sin `categoriaid` en el cuerpo de la petición.* Responde `400 Bad Request` indicando el campo obligatorio.
+
+*Postcondición:* La relación entre el producto y la(s) categoría(s) queda actualizada en la tabla `categoriaproducto`.
+
+---
+
+==== CU-06: Subir y Descargar Archivos Multimedia
+
+[cols="1,3", options="header"]
+|===
+| Campo | Descripción
+| **Actor Principal** | Usuario / Administrador
+| **Sistema Participante** | `ArchivosController.cs` (Frontend) — `archivos.controller.js` + `upload.middleware.js` (Backend)
+| **Precondición** | El actor tiene una sesión activa. El archivo a subir es una imagen JPEG válida.
+| **Disparador** | El Administrador navega a la vista `/Archivos/Crear` o hace clic en "Subir Imagen" al crear/editar un producto.
+|===
+
+*Flujo Principal (Subida):*
+
+. El usuario selecciona un archivo de imagen desde su equipo en el formulario Razor.
+. El modelo `Upload.cs` en C# valida en cliente: tamaño ≤ 100 KB (validación frontend), `ContentType == "image/jpeg"`.
+. El frontend construye un `MultipartFormDataContent` y lo envía vía `POST /api/archivos` con la cabecera `Authorization: Bearer <jwt>`.
+. El middleware Multer en Node.js verifica la cuota de 2 MB. Si excede, rechaza con error `MulterError`.
+. Multer valida el tipo MIME (`image/jpeg`) y extensión (`.jpg`/`.jpeg`). Si falla, rechaza con `400 Bad Request`.
+. Multer genera el nombre criptográfico de disco: `crypto.randomUUID() + '.jpg'`. Escribe el archivo en `/uploads`.
+. El controlador evalúa `FILES_IN_BD`:
+** Si `true`: lee el buffer con `fs.readFileSync`, elimina el archivo físico con `fs.unlinkSync` y persiste el binario en la columna `LONGBLOB` de MySQL (`indb = true`).
+** Si `false`: mantiene el archivo en disco (`indb = false`, `datos = null`).
+. Registra `archivos.crear` en bitácora. Responde `201 Created` con metadatos del archivo (`id`, `mime`, `nombre`, `indb`).
+. El frontend muestra la vista de detalle del archivo con la imagen renderizada.
+
+*Flujo Principal (Descarga/Visualización):*
+
+. Se realiza `GET /api/archivos/:id` al backend.
+. Si `indb = true`, el backend retorna el binario de la columna `LONGBLOB` con el `Content-Type` del MIME original.
+. Si `indb = false`, el backend localiza el archivo en `/uploads` y lo sirve con `res.contentType(data.mime).send(binario)`.
+
+*Flujos Alternos:*
+
+* *FA-01: Archivo excede 2 MB.* Multer interrumpe y el ErrorHandler retorna `400 Bad Request` con descripción del límite excedido.
+* *FA-02: Formato distinto a JPEG.* El filtro de Multer rechaza el archivo con `400 Bad Request`.
+* *FA-03: Archivo no encontrado en disco.* Si `indb = false` y el archivo físico fue borrado externamente, el backend retorna `404 Not Found`.
+* *FA-04: Intento de actualizar un archivo inexistente.* El backend retorna `404 Not Found` y elimina el archivo recién subido para no dejar archivos huérfanos.
+
+*Postcondición:* El archivo multimedia queda persistido en el sistema (filesystem o MySQL). Su `id` puede asociarse a un producto mediante `archivoid`. El evento queda registrado en bitácora.
+
+---
+
+==== CU-07: Consultar la Bitácora de Auditoría
+
+[cols="1,3", options="header"]
+|===
+| Campo | Descripción
+| **Actor Principal** | Administrador
+| **Sistema Participante** | `BitacoraController.cs` (Frontend) — `bitacora.controller.js` (Backend)
+| **Precondición** | El Administrador tiene una sesión activa con rol `Administrador`.
+| **Disparador** | El Administrador navega a la sección `/Bitacora`.
+|===
+
+*Flujo Principal:*
+
+. El frontend emite `GET /api/bitacora` con el token Bearer.
+. El backend valida el rol `Administrador`. Si falla, responde `403 Forbidden`.
+. El backend consulta toda la tabla `bitacora` con Sequelize y retorna la lista ordenada por fecha descendente.
+. El frontend renderiza la vista `Bitacora/Index.cshtml` con una tabla que muestra: acción ejecutada, identificador del elemento afectado, IP de origen, usuario responsable y fecha/hora en formato `es-MX`.
+
+*Flujos Alternos:*
+
+* *FA-01: Rol insuficiente.* El backend retorna `403 Forbidden`. El frontend muestra "Acceso no autorizado."
+* *FA-02: Bitácora vacía.* El backend retorna `[]` con `200 OK`. El frontend muestra "No hay eventos registrados."
+
+*Postcondición:* El Administrador visualizó el registro inmutable de todos los eventos del sistema.
+
+---
+
+==== CU-08: Gestionar Usuarios del Sistema
+
+[cols="1,3", options="header"]
+|===
+| Campo | Descripción
+| **Actor Principal** | Administrador
+| **Sistema Participante** | `UsuariosController.cs` (Frontend) — `usuarios.controller.js` + `roles.controller.js` (Backend)
+| **Precondición** | El Administrador tiene una sesión activa con rol `Administrador`.
+| **Disparador** | El Administrador navega a la sección `/Usuarios`.
+|===
+
+*Flujo Principal (Consultar):*
+
+. El sistema emite `GET /api/usuarios` con el Bearer Token.
+. El backend valida el rol `Administrador`. Si falla, responde `403 Forbidden`.
+. Retorna la lista de usuarios registrados en MySQL.
+. El frontend renderiza la vista `Usuarios/Index.cshtml` con tabla que muestra: nombre, correo, rol y si es protegido.
+
+*Flujo Principal (Crear):*
+
+. El Administrador completa el formulario en `Usuarios/Crear.cshtml` con los campos: nombre, correo, contraseña y rol.
+. Para obtener los roles disponibles, el frontend emite `GET /api/roles` y puebla la lista desplegable.
+. DataAnnotations validan en cliente: `[Required]`, `[EmailAddress]`, `[MinLength(6)]`.
+. El frontend envía `POST /api/usuarios` con los datos al backend.
+. El backend verifica que el correo no exista (`409 Conflict` si ya existe) y deriva el hash bcrypt de la contraseña.
+. Persiste el nuevo usuario con `protegido = false` por defecto y registra `usuarios.crear` en bitácora.
+. Responde `201 Created` con los metadatos del usuario (sin `passwordhash`).
+
+*Flujo Principal (Editar):*
+
+. El Administrador navega a `Usuarios/Editar/:email` y modifica los campos permitidos.
+. El backend aplica Whitelist DTO: solo acepta `nombre`, `email`, `password` y `rolid`. Si `password` está presente, lo re-hashea con `bcrypt(10)`.
+. Registra `usuarios.editar` en bitácora. Responde `200 OK` con los datos actualizados.
+
+*Flujo Principal (Eliminar):*
+
+. El Administrador confirma la eliminación de un usuario en la vista de confirmación.
+. El sistema recupera el usuario por correo y evalúa el flag `protegido`.
+. Si `protegido = true`, responde `403 Forbidden` y aborta la eliminación.
+. Si `protegido = false`, elimina el registro y registra `usuarios.eliminar` en bitácora.
+
+*Flujos Alternos:*
+
+* *FA-01: Correo ya registrado al crear.* El backend retorna `409 Conflict`. El frontend muestra "Ya existe una cuenta con ese correo electrónico."
+* *FA-02: Intento de eliminar usuario protegido.* El backend retorna `403 Forbidden`. El frontend muestra el error sin detalles adicionales.
+* *FA-03: Usuario no encontrado en edición o eliminación.* El backend retorna `404 Not Found`.
+* *FA-04: Rol no existente al crear o editar.* El backend verifica la existencia del rol con `rol.findOne()`; si no existe, responde `400 Bad Request`.
+* *FA-05: Rol insuficiente para acceder al módulo.* El backend retorna `403 Forbidden`. El atributo `[Authorize(Roles = "Administrador")]` del controlador .NET redirige al inicio.
+
+*Postcondición:* El directorio de usuarios del sistema refleja el estado actualizado. El evento queda registrado en la tabla `bitacora`.
+
+---
+
+=== Prototipos de Interfaz de Usuario
+
+Los prototipos corresponden a las vistas Razor (`.cshtml`) implementadas en la aplicación ASP.NET Core 8.0 MVC del cliente frontend. El sistema de diseño emplea **Bootstrap 5.3.3** con el tema corporativo de Mercado Libre (color primario `#ffe600`, fondo oscuro `#1a1a2e` en modo oscuro) y soporte de tema claro/oscuro mediante `cambio_tema.js`.
+
+==== Prototipo 1: Portada Principal (Home)
+
+[source,text]
+----
+┌─────────────────────────────────────────────────────────────┐
+│  🛒 MercadoLibreNode         [Iniciar Sesión] [Carrito 🛒]  │ ← Navbar Bootstrap
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │        CARRUSEL DE PRODUCTOS DESTACADOS (#ffe600)     │  │
+│  │   ← [Imagen Producto 1 / Producto 2 / Producto 3] →  │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│  🔍  [Buscar producto...                        ] [Buscar]  │
+│                                                             │
+│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐  │
+│  │  [Imagen] │ │  [Imagen] │ │  [Imagen] │ │  [Imagen] │  │ ← Cards Bootstrap
+│  │ Televisor │ │  Celular  │ │  Laptop   │ │ Refriger. │  │
+│  │  $12,999  │ │  $8,499   │ │ $15,999   │ │  $9,799   │  │
+│  │[Agregar🛒]│ │[Agregar🛒]│ │[Agregar🛒]│ │[Agregar🛒]│  │
+│  └───────────┘ └───────────┘ └───────────┘ └───────────┘  │
+└─────────────────────────────────────────────────────────────┘
+----
+
+==== Prototipo 2: Pantalla de Autenticación (Login)
+
+[source,text]
+----
+┌─────────────────────────────────────────────────────────────┐
+│                    🔐  Iniciar Sesión                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│         ┌─────────────────────────────────────────┐        │
+│         │        TARJETA DE LOGIN Bootstrap        │        │
+│         │                                          │        │
+│         │  Correo Electrónico                      │        │
+│         │  ┌────────────────────────────────────┐  │        │
+│         │  │ usuario@ejemplo.com                │  │        │
+│         │  └────────────────────────────────────┘  │        │
+│         │  [Required] [EmailAddress]                │        │ ← DataAnnotations
+│         │                                          │        │
+│         │  Contraseña                              │        │
+│         │  ┌────────────────────────────────────┐  │        │
+│         │  │ ••••••••••                         │  │        │
+│         │  └────────────────────────────────────┘  │        │
+│         │  [Required] [MinLength(6)]                │        │
+│         │                                          │        │
+│         │     [ Iniciar Sesión (#ffe600) ]          │        │
+│         │                                          │        │
+│         │  ⚠️ Usuario o contraseña incorrectos.     │        │ ← Mensaje FA-02/FA-03
+│         └─────────────────────────────────────────┘        │
+└─────────────────────────────────────────────────────────────┘
+----
+
+==== Prototipo 3: Administración de Productos
+
+[source,text]
+----
+┌─────────────────────────────────────────────────────────────┐
+│ 📦 Gestión de Productos — Panel Administrador               │
+├─────────────────────────────────────────────────────────────┤
+│  [+ Nuevo Producto]                 🔍 [Buscar...] [Buscar] │
+│                                                             │
+│  ┌──────┬──────────────┬──────────────┬─────────┬─────────┐ │
+│  │ Img  │    Título    │  Categorías  │ Precio  │Acciones │ │
+│  ├──────┼──────────────┼──────────────┼─────────┼─────────┤ │
+│  │[IMG] │ Televisor 4K │ Electronica, │$12,999  │✏️ 🗑️ 🏷 │ │ ← Editar, Eliminar, Categorías
+│  │[IMG] │ Celular Pro  │ Celulares    │ $8,499  │✏️ 🗑️ 🏷 │ │
+│  │[IMG] │ Laptop Ultra │ Cómputo      │$15,999  │✏️ 🗑️ 🏷 │ │
+│  └──────┴──────────────┴──────────────┴─────────┴─────────┘ │
+└─────────────────────────────────────────────────────────────┘
+
+Formulario Crear/Editar:
+┌─────────────────────────────────────────────────────────────┐
+│  Título: [___________________________] [Required, Max 255]  │
+│  Descripción: [______________________] [Required]           │
+│  Precio: [__________] [Required, Decimal válido]            │
+│  Imagen: Seleccionar archivo → ID del archivo en BD         │
+│  [ Guardar ]   [ Cancelar ]                                 │
+└─────────────────────────────────────────────────────────────┘
+----
+
+==== Prototipo 4: Gestión de Archivos Multimedia
+
+[source,text]
+----
+┌─────────────────────────────────────────────────────────────┐
+│ 🖼️  Gestión de Archivos Multimedia                          │
+├─────────────────────────────────────────────────────────────┤
+│  [+ Subir Archivo]                                          │
+│                                                             │
+│  ┌──────┬────────────────────────────┬──────────┬─────────┐ │
+│  │  ID  │        Nombre en Disco     │   MIME   │ Tamaño  │ │
+│  ├──────┼────────────────────────────┼──────────┼─────────┤ │
+│  │   1  │ 3a4b-uuid-....jpg          │image/jpeg│  142 KB │ │
+│  │   2  │ 9f2c-uuid-....jpg          │image/jpeg│   87 KB │ │
+│  └──────┴────────────────────────────┴──────────┴─────────┘ │
+│                                                             │
+│ Vista previa al seleccionar un archivo:                     │
+│  ┌──────────────────────────────┐                           │
+│  │         [Imagen JPEG]        │ ← Servida desde           │
+│  │      (GET /api/archivos/1)   │   el backend Node.js      │
+│  └──────────────────────────────┘                           │
+│  Formulario Subida: [Seleccionar archivo .jpg ≤ 2MB]        │
+└─────────────────────────────────────────────────────────────┘
+----
+
+==== Prototipo 5: Bitácora de Auditoría
+
+[source,text]
+----
+┌─────────────────────────────────────────────────────────────┐
+│ 📋  Bitácora de Auditoría — Solo Administradores            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌────────────────────┬───────────┬───────────────┬───────┐ │
+│  │      Acción        │ Elemento  │  Usuario / IP │ Fecha │ │
+│  ├────────────────────┼───────────┼───────────────┼───────┤ │
+│  │ usuario.login      │ admin@... │ admin@... /   │ 26 oct│ │
+│  │                    │           │ 192.168.1.10  │ 20:01 │ │
+│  │ producto.crear     │    7      │ admin@... /   │ 26 oct│ │
+│  │                    │           │ 192.168.1.10  │ 20:03 │ │
+│  │ categoria.eliminar │    3      │ admin@... /   │ 26 oct│ │
+│  │                    │           │ 192.168.1.10  │ 20:05 │ │
+│  └────────────────────┴───────────┴───────────────┴───────┘ │
+│                  Formato fecha: es-MX                       │
+└─────────────────────────────────────────────────────────────┘
+----
+
+=== Validaciones en Dos Capas (Defense in Depth)
+
+La estrategia de validación se aplica en dos niveles independientes para garantizar que ninguna entrada maliciosa o incorrecta alcance la capa de persistencia.
+
+[cols="1,3,3", options="header"]
+|===
+| Campo / Recurso | Capa 1 — Frontend C# (DataAnnotations) | Capa 2 — Backend Node.js (express-validator / Multer)
+| **email (login)** | `[Required]`, `[EmailAddress]` — Validado con `jquery.validate.unobtrusive.js` antes del submit. | Comprobación de `email` y `password` presentes en `req.body`; si faltan: `400 Bad Request`.
+| **password (login)** | `[Required]`, `[MinLength(6)]` | `bcrypt.compare` contra hash almacenado; tiempo de respuesta constante anti-timing (CWE-208).
+| **titulo (producto)** | `[Required]`, `[MaxLength(255)]` | `body('titulo').trim().notEmpty().isLength({ max: 255 })` → rechazo con `400 Bad Request`.
+| **precio (producto)** | `[Required]`, `[RegularExpression(@"^\d+(\.\d{1,2})?$")]` | `body('precio').isDecimal()` → rechazo con `400 Bad Request`.
+| **archivo (upload)** | `IFormFile`: verifica `ContentType == "image/jpeg"` y `Length ≤ 102400` (100 KB) en C#. | Multer: `limits: { fileSize: 2097152 }` y `fileFilter` → MIME + extensión; nombre aleatorio UUID (CWE-22).
+| **rol (usuario)** | `[Required]`, lista desplegable controlada con opciones válidas del catálogo. | `rol.findOne({ where: { nombre: req.body.rol } })`; si no existe: `400 Bad Request` (evita Null Pointer - CWE-703).
+| **email (usuario)** | `[Required]`, `[EmailAddress]` | `usuario.findOne({ where: { email } })`; si ya existe: `409 Conflict`.
+|===
+
+=== Requisitos No Funcionales
+
+[cols="1,2,4", options="header"]
+|===
+| ID | Nombre | Descripción con Parámetros Medibles
+| **RNF-01** | Autenticación Stateless y Efímera | El backend emite JWTs con algoritmo HMAC SHA-256 (`HS256`), secreto de 35 bytes de alta entropía y vigencia máxima de **20 minutos**. El servidor no almacena estado de sesión. El frontend almacena el JWT dentro de una **cookie cifrada** (`.frontendnet`) con expiración deslizante de 20 minutos, protegiendo el token del acceso directo por scripts del DOM (mitigación de XSS).
+| **RNF-02** | Renovación Continua de Sesión (Rolling Tokens) | El middleware `auth.middleware.js` detecta automáticamente si el tiempo de vida restante del token es menor a **5 minutos**. En ese caso, emite un nuevo JWT (20 min) en la cabecera `Set-Authorization`. El `RefrescaTokenDelegatingHandler.cs` del frontend intercepta esta cabecera y renueva la cookie del usuario de forma transparente sin interrumpir su sesión.
+| **RNF-03** | Control de Acceso Basado en Roles (RBAC) | La API implementa el principio `Deny by Default`: todos los endpoints de mutación requieren autenticación y el rol específico. La normalización con `.map(r => r.trim())` garantiza que los roles declarados en los endpoints (`'Usuario, Administrador'`) se comparen sin errores de espaciado. El frontend aplica `[Authorize(Roles = "Administrador")]` en los controladores de administración.
+| **RNF-04** | Rendimiento | Las consultas al catálogo de productos y categorías deben responder en menos de **200 ms** bajo condiciones normales. El ORM Sequelize utiliza un pool de conexiones MySQL y las búsquedas por `LIKE` operan sobre campos indexados. El Event Loop de Node.js gestiona la concurrencia sin bloqueo de I/O.
+| **RNF-05** | Portabilidad y Disponibilidad | La capa de API y base de datos está contenerizada con Docker Compose. La imagen base es `node:20-alpine` (mínima superficie de ataque). La aplicación Node.js se ejecuta bajo el usuario sin privilegios `USER node` (mitigación de escalada de privilegios - CWE-250). El contenedor `ecommerce_db` cuenta con un `healthcheck` activo que garantiza que la API solo arranque cuando MySQL esté listo.
+|===
+
+=== Reglas de Negocio del Dominio
+
+Las siguientes reglas constituyen **invariantes del sistema** que no pueden ser violadas bajo ninguna circunstancia, independientemente del actor o del endpoint invocado.
+
+[cols="1,2,4,2", options="header"]
+|===
+| ID | Nombre | Descripción | Enforcement
+| **RN-01** | Protección de Registros del Sistema | Las categorías con `protegida = true` y los usuarios con `protegido = true` son registros de sistema inicializados por seeders y **no pueden ser eliminados**. Intentar eliminarlos devuelve `400 Bad Request` (categorías) o `403 Forbidden` (usuarios). | `categorias.controller.js` y `usuarios.controller.js`
+| **RN-02** | Unicidad de Identidad de Usuario | No se permite registrar dos cuentas con el mismo correo electrónico. El sistema verifica la existencia previa con `usuario.findOne({ where: { email } })` y retorna `409 Conflict` si el correo ya está registrado. | `usuarios.controller.js`
+| **RN-03** | Cuota Máxima de Archivo Multimedia | Los archivos multimedia subidos no pueden exceder **2 MB** (2,097,152 bytes). Esta cuota es verificada por Multer en el backend y también validada de forma inicial en el cliente frontend C# (100 KB) para mejorar la experiencia de usuario. | `upload.middleware.js`, `Upload.cs`
+| **RN-04** | Restricción de Formato de Archivo | Solo se admiten archivos con extensión `.jpg` o `.jpeg` cuyo tipo MIME binario corresponda a `image/jpeg`. La verificación es doble: extensión mediante `path.extname()` y tipo MIME reportado por el cliente. Los nombres de archivo en disco se generan criptográficamente para eliminar la dependencia del nombre original del cliente. | `upload.middleware.js`
+|===
+
+=== Matriz de Riesgos de Seguridad Identificados
+
+[cols="1,2,3,1,3", options="header"]
+|===
+| ID | Vulnerabilidad / Riesgo | Descripción del Vector de Ataque | Nivel CWE / OWASP | Mitigación Arquitectónica Implementada
+| **RS-01** | Inyección SQL | Un atacante manipula parámetros de entrada (búsqueda, identificadores) insertando sentencias SQL que alteren el comportamiento de las consultas a la base de datos. | CWE-89 / OWASP A03:2021 | Sequelize ORM con consultas parametrizadas en 100% de las operaciones. Ninguna sentencia SQL se construye por concatenación de cadenas. La búsqueda `?s=` usa `Op.like` con valores enlazados.
+| **RS-02** | Fuerza Bruta y Ataques de Temporización | Medición del tiempo de respuesta del endpoint de login para deducir si un correo electrónico existe en la base de datos, o intentos repetidos de adivinar contraseñas. | CWE-208 / CWE-307 | Si el usuario no existe, el sistema ejecuta `bcrypt.compare(password, DUMMY_HASH)` manteniendo el tiempo de respuesta constante (~100 ms). El endpoint de login dispone de Rate Limiting para bloquear ráfagas de intentos fallidos.
+| **RS-03** | Asignación Masiva (Mass Assignment) | Un atacante inyecta campos extra en `req.body` (como `protegido: false` o `passwordhash: "hash_malicioso"`) que el ORM escribe directamente en la base de datos si no hay filtrado. | CWE-915 / OWASP API3:2023 | Los controladores de mutación (`usuarios`, `productos`, `categorias`) construyen manualmente el objeto de actualización con solo los campos permitidos (Whitelist DTO). `req.body` nunca se pasa íntegro al ORM.
+| **RS-04** | Path Traversal (Salto de Directorio) | Un atacante nombra su archivo como `../../etc/passwd` o `../../index.js` esperando que el servidor lo escriba fuera del directorio `/uploads`. | CWE-22 / OWASP A01:2021 | El middleware Multer genera nombres de archivo con `crypto.randomUUID() + '.jpg'`, desvinculando completamente el nombre del archivo en disco del nombre original enviado por el cliente. Las rutas de destino se resuelven con `path.resolve(__dirname, '../uploads')`.
+| **RS-05** | Agotamiento de Recursos / DoS por Archivos | Un atacante sube archivos de gran tamaño (gigabytes) repetidamente hasta agotar el espacio en disco o la memoria del servidor. | CWE-400 / OWASP API4:2023 | Multer aplica `limits: { fileSize: 2 * 1024 * 1024 }` (2 MB). Si el archivo excede este límite, el stream se interrumpe antes de completar la escritura. El frontend aplica una validación adicional de 100 KB para mejorar la UX.
+|===
