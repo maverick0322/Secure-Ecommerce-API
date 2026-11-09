@@ -3,7 +3,6 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
-
 const app = express();
 
 // 1. Cargar variables de entorno desde el archivo .env
@@ -14,15 +13,14 @@ app.disable('x-powered-by');
 
 // 3. Procesamiento de cuerpos de petición (JSON y URL-encoded)
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({
+  extended: false
+}));
 
 // 4. Configuración de CORS con lista blanca dinámica y exposición de cabeceras de renovación
 const defaultOrigins = ['http://localhost:8080', 'http://localhost:8081'];
-const envOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean)
-  : [];
+const envOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean) : [];
 const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
-
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
@@ -47,26 +45,28 @@ if (fs.existsSync(swaggerFilePath)) {
   // Manejo resiliente: si aún no se ha ejecutado 'npm run swagger', no derribar la aplicación
   app.get('/swagger', (req, res) => {
     res.status(503).json({
-      mensaje: 'La especificación Swagger aún no ha sido generada. Ejecute: npm run swagger'
+      message: 'La especificación Swagger aún no ha sido generada. Ejecute: npm run swagger'
     });
   });
 }
 
 // 6. Middleware global de bitácora y auditoría
-app.use(require('./middlewares/bitacora.middleware'));
+app.use(require("./middlewares/audit-logs.middleware"));
 
 // 7. Enrutamiento de recursos de la API
-app.use('/api/categorias', require('./routes/categorias.routes'));
-app.use('/api/productos', require('./routes/productos.routes'));
-app.use('/api/usuarios', require('./routes/usuarios.routes'));
+app.use("/api/categories", require("./routes/categories.routes"));
+app.use("/api/products", require("./routes/products.routes"));
+app.use("/api/users", require("./routes/users.routes"));
 app.use('/api/roles', require('./routes/roles.routes'));
 app.use('/api/auth', require('./routes/auth.routes'));
-app.use('/api/archivos', require('./routes/archivos.routes'));
-app.use('/api/bitacora', require('./routes/bitacora.routes'));
+app.use("/api/files", require("./routes/files.routes"));
+app.use("/api/audit-logs", require("./routes/audit-logs.routes"));
 
 // 8. Manejo de recursos no encontrados (404) para todos los verbos HTTP
 app.use((req, res) => {
-  res.status(404).json({ mensaje: 'Recurso no encontrado' });
+  res.status(404).json({
+    message: 'Recurso no encontrado'
+  });
 });
 
 // 9. Middleware centralizado de manejo y registro de errores
@@ -82,6 +82,4 @@ if (require.main === module) {
     console.log(`Documentación disponible en: http://localhost:${PORT}/swagger`);
   });
 }
-
 module.exports = app;
-

@@ -4,9 +4,9 @@
 -- Base de Datos: mercadolibrenode
 -- =====================================================================
 
--- 1. Eliminar y crear la base de datos con soporte completo para UTF-8 (emojis, acentos, ñ)
-DROP DATABASE IF EXISTS mercadolibrenode; 
-CREATE DATABASE mercadolibrenode CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- 1. Crear la base si falta, preservando los registros existentes.
+-- Las tablas y columnas se administran con npm run migrate, incluido el renombrado al inglés.
+CREATE DATABASE IF NOT EXISTS mercadolibrenode CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE mercadolibrenode; 
 
 -- 2. Crear usuario de aplicación para conexión desde Node.js (local y remota/red LAN/Docker)

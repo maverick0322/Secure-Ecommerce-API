@@ -15,7 +15,7 @@ API RESTful segura para una plataforma de E-Commerce desarrollada siguiendo el p
 Uno de los pilares arquitectónicos centrales del proyecto es la **eliminación de consultas SQL manuales** mediante la adopción integral de **Sequelize ORM**:
 * **Prevención de Inyección SQL (CWE-89):** Al utilizar el ORM, todas las consultas a la base de datos MySQL son parametrizadas de forma transparente y nativa, neutralizando el vector de ataque más crítico en aplicaciones web (OWASP Top 10 A03: Injection).
 * **Control de Esquema mediante Migraciones:** Se elimina la ejecución de scripts DDL descontrolados en producción; cada cambio estructural está versionado cronológicamente en la carpeta `migrations/`.
-* **Aislamiento de Atributos:** Permite abstraer y proteger campos sensibles en reposo (como `passwordhash` y el flag `protegido`).
+* **Aislamiento de Atributos:** Permite abstraer y proteger campos sensibles en reposo (como `passwordHash` y el flag `protected`).
 * **Principio de Menor Privilegio en Contenedores:** Imagen Docker basada en `node:20-alpine` ejecutada con usuario sin privilegios `USER node` (no-root).
 
 Para más detalles sobre los requerimientos arquitectónicos y las justificaciones defensivas, consulte los documentos en `docs/`:
@@ -35,7 +35,7 @@ backendnode/
 ├── middlewares/        # Middlewares de seguridad (JWT, RBAC, bitácora, upload, errores)
 ├── migrations/         # Migraciones estructuradas de base de datos
 ├── models/             # Modelos Sequelize y definiciones relacionales
-├── restclient/         # Pruebas HTTP para extensión REST Client de VS Code
+├── examples/           # Ejemplos HTTP sin tokens ni credenciales reales
 ├── routes/             # Enrutamiento de endpoints con guardas de autorización
 ├── seeders/            # Datos iniciales de catálogos y usuarios de prueba
 ├── services/           # Lógica reutilizable de generación y validación de tokens
@@ -52,6 +52,27 @@ backendnode/
 ```
 
 ---
+
+
+## Normalización de nombres del backend
+
+El backend usa rutas y campos en inglés y mantiene los mensajes en español. El cambio de contrato requiere adaptar el frontend por separado: no se ofrecen alias de las rutas antiguas. Consulte el [mapa de renombres, despliegue y resultados](docs/backend-english-names.md) y los [ejemplos HTTP](examples/api.http).
+
+Para una base existente, detenga la API, respalde sus datos y ejecute `npm run migrate` antes de iniciar esta versión. Las siete migraciones históricas se conservan intactas y la migración incremental renombra tablas y columnas sin reiniciar la base. No borre entradas de SequelizeMeta. Los seeders completan registros faltantes y preservan las contraseñas existentes.
+
+Cambie `FILES_IN_BD` por `FILES_IN_DB` en su archivo de entorno antes de arrancar; conserva los valores `true` y `false`. Los nombres de bases y cuentas MySQL existentes permanecen compatibles. `bd.sql` crea la base solo si falta; el esquema final se obtiene mediante las migraciones.
+
+Para revertir únicamente el último cambio, detenga la API y ejecute `npm run migrate:undo:last` mientras la migración de normalización sea la última aplicada. Después use el código de la versión anterior. El comando histórico `migrate:undo` revierte todas las migraciones y no debe usarse para esta actualización. La reversión automática de seeders se bloquea para preservar datos existentes.
+
+Para ejecutar las pruebas reales sobre un servidor MySQL 8 de pruebas, proporcione una conexión sin nombre de base. La cuenta necesita permisos para crear y eliminar bases temporales de prueba:
+
+```powershell
+$env:TEST_MYSQL_URL='mysql://usuario:contraseña@127.0.0.1:3306'
+npm run test:database
+Remove-Item Env:TEST_MYSQL_URL
+```
+
+En Windows puede usar `npm.cmd` si PowerShell bloquea `npm.ps1`. Las pruebas generales se ejecutan con `npm test`; sin `TEST_MYSQL_URL` se omiten explícitamente las pruebas de MySQL real.
 
 ## 🛠️ Prerrequisitos
 
@@ -162,7 +183,7 @@ Arquitectura distribuida en 3 capas físicas/virtuales conectadas a la misma red
 4. Ejecutar las migraciones y seeders para estructurar la base de datos remota del Equipo 1:
    * **Con Node.js nativo:**
      ```bash
-     npm install
+     npm ci
      npm run migrate
      npm run seed
      npm run swagger
@@ -194,9 +215,9 @@ Arquitectura distribuida en 3 capas físicas/virtuales conectadas a la misma red
    http://192.168.1.20:3000/api
    ```
 3. Si se utiliza la extensión **REST Client** de VS Code o **Postman**, realizar las peticiones a los endpoints del servidor:
-   * `POST http://192.168.1.20:3000/api/auth/login`
-   * `GET http://192.168.1.20:3000/api/productos`
-   * `GET http://192.168.1.20:3000/api/categorias`
+   * `POST http://192.168.1.20:3000/api/auth`
+   * `GET http://192.168.1.20:3000/api/products`
+   * `GET http://192.168.1.20:3000/api/categories`
 
 ---
 
@@ -220,7 +241,7 @@ Arquitectura distribuida en 3 capas físicas/virtuales conectadas a la misma red
 
 3. **Instalación de Dependencias:**
    ```bash
-   npm install
+   npm ci
    ```
 
 4. **Ejecución de Migraciones y Seeders:**
@@ -239,7 +260,7 @@ Arquitectura distribuida en 3 capas físicas/virtuales conectadas a la misma red
 
 ## 🧪 Pruebas Automatizadas y Auditoría de Seguridad
 
-El proyecto cuenta con una cobertura integral del **92.6%** con **121 casos de prueba** (unitarias y de integración) distribuidos en 13 suites:
+Las pruebas unitarias y de integración verifican el contrato en inglés. Las pruebas opcionales con MySQL 8 crean bases temporales propias y comprueban migraciones, reversión, seeders y contratos HTTP reales. Consulte [el reporte de normalización](docs/backend-english-names.md) para los resultados de esta revisión.
 
 ```bash
 # Ejecutar todas las pruebas (Unitarias e Integración)
@@ -248,7 +269,7 @@ npm test
 # Ejecutar con reporte de cobertura
 npm run test:coverage
 
-# Comprobar auditoría de seguridad de dependencias (0 vulnerabilidades)
+# Comprobar dependencias con umbral de severidad alta
 npm audit
 ```
 
@@ -268,7 +289,7 @@ Para clonar y publicar cambios del equipo:
 git clone <URL_REPOSITORIO>
 cd backendnode
 cp .env.example .env
-npm install
+npm ci
 ```
 
 ---
@@ -279,7 +300,7 @@ El repositorio cuenta con dos flujos de trabajo automatizados en GitHub Actions 
 
 1. **`test.yml` (Suite de Pruebas & Auditoría):**
    * Se ejecuta automáticamente ante cada `push` directo o `pull_request` a las ramas `main` y `develop`.
-   * Instala dependencias limpias (`npm ci`), ejecuta `npm audit` y corre los 121 casos de prueba con reporte de cobertura.
+   * Instala dependencias limpias (`npm ci`), ejecuta `npm audit` y ejecuta las pruebas disponibles con reporte de cobertura.
 2. **`sonar.yml` (Análisis Estático con SonarQube Cloud):**
    * Genera el reporte LCOV (`coverage/lcov.info`) y ejecuta el escáner de SonarQube Cloud.
    * Evalúa mantenibilidad, confiabilidad, seguridad (vulnerabilidades/hotspots) y cobertura mediante [sonar-project.properties](sonar-project.properties).

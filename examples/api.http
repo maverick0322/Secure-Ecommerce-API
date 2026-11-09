@@ -1,0 +1,67 @@
+@baseUrl = http://localhost:3000/api
+@token = PEGAR_JWT_AQUI
+
+### Iniciar sesión con un usuario de demostración
+POST {{baseUrl}}/auth
+Content-Type: application/json
+
+{"email":"gvera@uv.mx","password":"patito"}
+
+### Consultar el tiempo restante de sesión
+GET {{baseUrl}}/auth/time
+Authorization: Bearer {{token}}
+
+### Consultar el catálogo
+GET {{baseUrl}}/products?s=TV
+Authorization: Bearer {{token}}
+
+### Crear una categoría
+POST {{baseUrl}}/categories
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"name":"Accesorios"}
+
+### Crear un producto
+POST {{baseUrl}}/products
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"title":"Teclado","description":"Teclado mecánico","price":950,"fileId":null}
+
+### Asignar una categoría al producto
+POST {{baseUrl}}/products/1/categories
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"categoryId":1}
+
+### Retirar una categoría del producto
+DELETE {{baseUrl}}/products/1/categories/1
+Authorization: Bearer {{token}}
+
+### Consultar metadatos de un archivo
+GET {{baseUrl}}/files/1/details
+Authorization: Bearer {{token}}
+
+### Descargar una imagen pública
+GET {{baseUrl}}/files/1
+
+### Consultar usuarios
+GET {{baseUrl}}/users
+Authorization: Bearer {{token}}
+
+### Crear un usuario
+POST {{baseUrl}}/users
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"email":"demo@example.com","password":"CambiarAntesDeUsar123","name":"Usuario de ejemplo","role":"Usuario"}
+
+### Consultar roles
+GET {{baseUrl}}/roles
+Authorization: Bearer {{token}}
+
+### Consultar la bitácora
+GET {{baseUrl}}/audit-logs
+Authorization: Bearer {{token}}

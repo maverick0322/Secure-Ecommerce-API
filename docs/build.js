@@ -14,10 +14,10 @@ asciidoctor.convertFile(inputFile, {
   safe: 'unsafe'
 });
 
-// Copiar assets (diagramas SVG, imágenes) a dist/assets para despliegue en GitHub Pages
+// Copiar recursos (diagramas SVG, imágenes) a dist/assets para despliegue en GitHub Pages
 if (fs.existsSync(assetsSource)) {
   fs.cpSync(assetsSource, assetsDest, { recursive: true });
-  console.log(`Assets copiados exitosamente a ${assetsDest}`);
+  console.log(`Recursos copiados exitosamente a ${assetsDest}`);
 }
 
 console.log(`Documentación compilada exitosamente en ${outputDir}/index.html`);
