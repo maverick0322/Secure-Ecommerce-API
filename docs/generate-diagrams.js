@@ -15,7 +15,7 @@ function fetchSvg(pumlContent) {
     const url = `https://www.plantuml.com/plantuml/svg/~h${hex}`;
     https.get(url, (res) => {
       if (res.statusCode !== 200) {
-        return reject(new Error(`PlantUML server responded with status ${res.statusCode}`));
+        return reject(new Error(`El servidor PlantUML respondió con el estado ${res.statusCode}`));
       }
       let data = '';
       res.on('data', (chunk) => { data += chunk; });

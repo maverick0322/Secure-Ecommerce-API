@@ -1,4 +1,6 @@
 const swaggerAutogen = require('swagger-autogen')();
+const fs = require('fs');
+const { completeSpecification } = require('./services/swagger-contract.service');
 
 const doc = {
   info: {
@@ -17,10 +19,21 @@ const doc = {
   }
 };
 
-const outputFile = './swagger-output.json';
 const routes = ['./index.js'];
 
 /* Generar documentación OpenAPI */
-swaggerAutogen(outputFile, routes, doc).then(() => {
-  console.log('Documentación Swagger generada exitosamente en swagger-output.json');
-});
+async function generateDocumentation(outputFile = './swagger-output.json') {
+  const result = await swaggerAutogen(outputFile, routes, doc);
+  if (!result.success) throw new Error('No se pudo generar la documentación Swagger.');
+  fs.writeFileSync(outputFile, JSON.stringify(completeSpecification(result.data), null, 2) + '\n');
+  console.log(`Documentación Swagger generada exitosamente en ${outputFile}`);
+}
+
+if (require.main === module) {
+  generateDocumentation().catch(error => {
+    console.error('Error al generar Swagger:', error.message);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { generateDocumentation };

@@ -42,7 +42,7 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - JWT_SECRET=${JWT_SECRET:-3ca4407f27a00a1b628b9f1416356e6d799b6b6a93f820a6098b560df066f5537a5ccb}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8080,http://localhost:8081}
-      - FILES_IN_BD=${FILES_IN_BD:-false}
+      - FILES_IN_DB=${FILES_IN_DB:-false}
     depends_on:
       db:
         condition: service_healthy

@@ -7,6 +7,7 @@
     "test": "jest --runInBand --detectOpenHandles",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",
+    "test:database": "jest --runInBand --detectOpenHandles --runTestsByPath tests/database/schema.mysql.test.js",
     "start": "node --env-file=.env --watch index.js",
     "dev": "node --env-file=.env --watch index.js",
     "swagger": "node swagger.js",
@@ -14,6 +15,7 @@
     "docs:build": "node docs/build.js",
     "migrate": "sequelize db:migrate",
     "migrate:undo": "sequelize db:migrate:undo:all",
+    "migrate:undo:last": "sequelize db:migrate:undo",
     "seed": "sequelize db:seed:all",
     "seed:undo": "sequelize db:seed:undo:all"
   },
