@@ -13,7 +13,7 @@ services:
       MYSQL_USER: ${DB_USER:-mercadolibre_user}
       MYSQL_PASSWORD: ${DB_PASSWORD:-M3rc@d0}
     ports:
-      - "${DB_PORT:-3306}:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./bd.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
