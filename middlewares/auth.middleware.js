@@ -1,63 +1,47 @@
-const jwt = require('jsonwebtoken');
-const CLAIM_TYPES = require("../config/claim-types");
-const {
-  generateToken
-} = require('../services/jwttoken.service');
-const getJwtSecret = () => process.env.JWT_SECRET || 'secret_fallback_key_35_bytes_hex_secure_default';
+const CLAIM_TYPES = require('../config/claim-types');
+const { generateToken, verifyToken, getJwtSecret } = require('../services/jwttoken.service');
+const { AccountError, respondError, findAccountById, accountType, isActive, serializeAccount } = require('../services/accounts.service');
 
-/**
- * Middleware de Autorización RBAC con renovación continua (renovación continua de token)
- * @param {string} role - Lista de roles permitidos separados por coma (ej: 'Usuario, Administrador')
- */
-const authorize = role => {
+// Existing route declarations keep working while their contracts are adapted.
+const legacyPermissions = { Administrador: 'ADMIN', Usuario: 'BUYER' };
+async function deny(req,res,error,actorId=null){
+  if(req.logAudit) await req.logAudit('access.denied',null,actorId,'DENIED');
+  return respondError(res,error);
+}
+
+function authorize(profiles, { allowUnapprovedSeller = false } = {}) {
+  const allowed = profiles.split(',').map(value => legacyPermissions[value.trim()] || value.trim());
   return async (req, res, next) => {
+    const token = /^Bearer ([^\s]+)$/i.exec(req.get('Authorization') || '')?.[1];
+    if (!token) return deny(req,res, new AccountError(401, 'Se requiere un token Bearer.'));
+
     try {
-      const authHeader = req.header('Authorization');
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        const error401 = new Error('Acceso no autenticado: Se requiere token Bearer en el encabezado Authorization.');
-        error401.statusCode = 401;
-        return next(error401);
+      const secret = getJwtSecret();
+      let decoded;
+      try {
+        decoded = verifyToken(token, secret);
+      } catch {
+        return deny(req,res, new AccountError(401, 'Token inválido o expirado.'));
+      }
+      const account = await findAccountById(decoded.sub);
+      const profile = accountType(account);
+      if (!isActive(account) || !profile || !allowed.includes(profile)) {
+        return deny(req,res, new AccountError(403, 'Acceso prohibido para esta cuenta.'),account?.id);
+      }
+      if (profile === 'SELLER' && !allowUnapprovedSeller && account.seller.status !== 'APPROVED') {
+        return deny(req,res, new AccountError(403, 'La cuenta de vendedor debe estar aprobada.'),account.id);
       }
 
-      // Extracción del token JWT
-      const token = authHeader.split(' ')[1];
-      if (!token) {
-        const error401 = new Error('Acceso no autenticado: Token no proporcionado.');
-        error401.statusCode = 401;
-        return next(error401);
-      }
-
-      // Verificación de integridad y vigencia con algoritmo estricto HS256
-      const decodedToken = jwt.verify(token, getJwtSecret(), {
-        algorithms: ['HS256']
-      });
-
-      // Verificación de Control de Acceso Basado en Roles (RBAC)
-      // CORRECCIÓN CRÍTICA DE SEGURIDAD: normalizar con .trim() para evitar que espacios en blanco bloqueen roles legítimos
-      const allowedRoles = role.split(',').map(r => r.trim());
-      const userRole = decodedToken[CLAIM_TYPES.Role];
-      if (!allowedRoles.includes(userRole)) {
-        const error403 = new Error(`Acceso prohibido: El rol '${userRole}' no tiene privilegios suficientes para este recurso.`);
-        error403.statusCode = 403; // RFC 9110: 403 cuando el usuario está autenticado pero no autorizado
-        return next(error403);
-      }
-
-      // Inyectar datos del usuario autenticado en la petición
-      req.decodedToken = decodedToken;
-
-      // Mecanismo de Renovación Continua (renovación continua de tokens)
-      // Si el tiempo de vida restante es menor a 5 minutos, emitir nuevo token en Set-Authorization
-      const remainingMinutes = (decodedToken.exp - Date.now() / 1000) / 60;
-      if (remainingMinutes > 0 && remainingMinutes < 5) {
-        const newToken = generateToken(decodedToken[CLAIM_TYPES.Name], decodedToken[CLAIM_TYPES.GivenName], decodedToken[CLAIM_TYPES.Role]);
-        res.header('Set-Authorization', newToken);
-      }
-      next();
+      req.account = serializeAccount(account, profile);
+      req.decodedToken = { ...decoded, [CLAIM_TYPES.Name]: account.email, [CLAIM_TYPES.GivenName]: account.name,
+        [CLAIM_TYPES.Role]: profile };
+      const remaining = decoded.exp - Date.now() / 1000;
+      if (remaining > 0 && remaining < 5 * 60) res.set('Set-Authorization', generateToken(req.account));
     } catch (error) {
-      error.statusCode = 401;
-      error.message = 'Acceso no autenticado: Token inválido o expirado.';
-      next(error);
+      return respondError(res, error);
     }
+    return next();
   };
-};
+}
+
 module.exports = authorize;

@@ -1,18 +1,6 @@
-const {
-  AuditLog: auditLog
-} = require('../models');
-const self = {};
-
-// GET: api/audit-logs
-self.getAll = async function (req, res, next) {
-  try {
-    const data = await auditLog.findAll({
-      attributes: [['id', "auditLogId"], "action", "elementId", 'ip', "user", "date"],
-      order: [['id', 'DESC']]
-    });
-    return res.status(200).json(data);
-  } catch (error) {
-    next(error);
-  }
+'use strict';
+const audit=require('../services/audit.service');
+const {respondError}=require('../services/accounts.service');
+module.exports.getAll=async(req,res)=>{
+  try {return res.json(await audit.list(req.query));} catch(error){return respondError(res,error);}
 };
-module.exports = self;

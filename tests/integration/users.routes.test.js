@@ -1,187 +1,67 @@
 const request = require('supertest');
 const app = require('../../index');
-const {
-  User: user,
-  Role: role,
-  AuditLog: auditLog
-} = require('../../models');
-const {
-  generateToken
-} = require('../../services/jwttoken.service');
-describe("Pruebas de Integración: Endpoints de Usuarios (/api/users)", () => {
-  let adminToken;
-  let userToken;
-  beforeAll(() => {
-    adminToken = generateToken('admin@uv.mx', 'Guillermo Vera', 'Administrador');
-    userToken = generateToken('usuario@uv.mx', 'Usuario Normal', 'Usuario');
-  });
-  beforeEach(() => {
-    jest.spyOn(auditLog, 'create').mockResolvedValue({});
-  });
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-  describe("Control de Acceso (RBAC en /api/users)", () => {
-    it('debe responder con 403 Forbidden si un rol Usuario intenta listar los usuarios', async () => {
-      const res = await request(app).get("/api/users").set('Authorization', `Bearer ${userToken}`);
-      expect(res.statusCode).toBe(403);
-    });
-    it('debe responder con 200 OK si un Administrador consulta los usuarios', async () => {
-      jest.spyOn(user, 'findAll').mockResolvedValue([{
-        id: 'uuid-1',
-        email: 'gvera@uv.mx',
-        name: 'Guillermo Vera',
-        role: 'Administrador'
-      }]);
-      const res = await request(app).get("/api/users").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-    });
-  });
-  describe("GET /api/users/:email", () => {
-    it('debe responder con 200 OK y el usuario si existe', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue({
-        id: 'uuid-1',
-        email: 'gvera@uv.mx',
-        name: 'Guillermo Vera',
-        protected: true,
-        role: 'Administrador'
-      });
-      const res = await request(app).get("/api/users/gvera@uv.mx").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(200);
-      expect(res.body.email).toBe('gvera@uv.mx');
-    });
-    it('debe responder con 404 Not Found si el usuario no existe', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue(null);
-      const res = await request(app).get("/api/users/noexiste@uv.mx").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(404);
-      expect(res.body.message).toContain('no encontrado');
-    });
-  });
-  describe("POST /api/users (Creación Defensiva)", () => {
-    it('debe responder con 400 Bad Request si faltan campos obligatorios', async () => {
-      const res = await request(app).post("/api/users").set('Authorization', `Bearer ${adminToken}`).send({
-        email: 'incompleto@uv.mx'
-      });
-      expect(res.statusCode).toBe(400);
-      expect(res.body.message).toContain('obligatorios');
-    });
-    it('CORRECCIÓN DE BUG: debe responder con 400 Bad Request si el rol especificado no existe en la BD', async () => {
-      jest.spyOn(role, 'findOne').mockResolvedValue(null);
-      const res = await request(app).post("/api/users").set('Authorization', `Bearer ${adminToken}`).send({
-        email: 'nuevo@uv.mx',
-        password: 'password123',
-        name: 'Nuevo Usuario',
-        role: 'RolInexistente'
-      });
-      expect(res.statusCode).toBe(400);
-      expect(res.body.message).toContain('no existe');
-    });
-    it('debe responder con 409 Conflict si el correo electrónico ya está registrado', async () => {
-      jest.spyOn(role, 'findOne').mockResolvedValue({
-        id: 1,
-        name: 'Usuario'
-      });
-      jest.spyOn(user, 'findOne').mockResolvedValue({
-        id: 'uuid-existente',
-        email: 'existente@uv.mx'
-      });
-      const res = await request(app).post("/api/users").set('Authorization', `Bearer ${adminToken}`).send({
-        email: 'existente@uv.mx',
-        password: 'password123',
-        name: 'Usuario Existente',
-        role: 'Usuario'
-      });
-      expect(res.statusCode).toBe(409);
-      expect(res.body.message).toContain('ya se encuentra registrado');
-    });
-    it('debe responder con 201 Created al registrar un usuario con datos correctos', async () => {
-      jest.spyOn(role, 'findOne').mockResolvedValue({
-        id: 2,
-        name: 'Usuario'
-      });
-      jest.spyOn(user, 'findOne').mockResolvedValue(null);
-      jest.spyOn(user, 'create').mockResolvedValue({
-        id: 'uuid-nuevo-123',
-        email: 'cmendoza@uv.mx',
-        name: 'Carlos Mendoza',
-        protected: false
-      });
-      const res = await request(app).post("/api/users").set('Authorization', `Bearer ${adminToken}`).send({
-        email: 'cmendoza@uv.mx',
-        password: 'passwordSeguro123',
-        name: 'Carlos Mendoza',
-        role: 'Usuario'
-      });
-      expect(res.statusCode).toBe(201);
-      expect(res.body.email).toBe('cmendoza@uv.mx');
-      expect(res.body.name).toBe('Carlos Mendoza');
-    });
-  });
-  describe("PUT /api/users/:email (Actualización Segura de Datos y Roles)", () => {
-    it('debe responder con 404 si el usuario no existe', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue(null);
-      const res = await request(app).put("/api/users/fantasma@uv.mx").set('Authorization', `Bearer ${adminToken}`).send({
-        name: 'Nuevo Nombre'
-      });
-      expect(res.statusCode).toBe(404);
-    });
-    it('debe responder con 400 si el nuevo rol especificado no existe en el sistema', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue({
-        id: 'uuid-1',
-        email: 'test@uv.mx'
-      });
-      jest.spyOn(role, 'findOne').mockResolvedValue(null);
-      const res = await request(app).put("/api/users/test@uv.mx").set('Authorization', `Bearer ${adminToken}`).send({
-        role: 'SuperRolFalso'
-      });
-      expect(res.statusCode).toBe(400);
-      expect(res.body.message).toContain('no existe');
-    });
-    it('debe responder con 204 No Content al actualizar nombre, rol y contraseña hasheada', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue({
-        id: 'uuid-1',
-        email: 'test@uv.mx'
-      });
-      jest.spyOn(role, 'findOne').mockResolvedValue({
-        id: 1,
-        name: 'Administrador'
-      });
-      jest.spyOn(user, 'update').mockResolvedValue([1]);
-      const res = await request(app).put("/api/users/test@uv.mx").set('Authorization', `Bearer ${adminToken}`).send({
-        name: 'Nombre Modificado',
-        role: 'Administrador',
-        password: 'nuevaPassword123'
-      });
-      expect(res.statusCode).toBe(204);
-    });
-  });
-  describe("DELETE /api/users/:email (Prevención de Null Pointer y Eliminación de Protegidos)", () => {
-    it('CORRECCIÓN DE BUG: debe responder con 404 Not Found si el usuario no existe (evita Null Pointer DoS)', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue(null);
-      const res = await request(app).delete("/api/users/fantasma@uv.mx").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(404);
-      expect(res.body.message).toContain('no encontrado');
-    });
-    it('debe responder con 403 Forbidden al intentar eliminar un usuario con campo protected=true', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue({
-        id: 'uuid-admin-root',
-        email: 'gvera@uv.mx',
-        protected: true
-      });
-      const res = await request(app).delete("/api/users/gvera@uv.mx").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(403);
-      expect(res.body.message).toContain('No se pueden eliminar usuarios protegidos');
-    });
-    it('debe responder con 204 No Content al eliminar un usuario no protegido', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue({
-        id: 'uuid-normal',
-        email: 'usuario.temporal@uv.mx',
-        protected: false
-      });
-      jest.spyOn(user, 'destroy').mockResolvedValue(1);
-      const res = await request(app).delete("/api/users/usuario.temporal@uv.mx").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(204);
-    });
-  });
+const { User, Admin, AuditLog, sequelize } = require('../../models');
+const accounts = require('../../services/accounts.service');
+const { generateToken, mockAccountLookups, makeAccount } = require('../support/auth-fixtures');
+
+const admin = generateToken('admin@example.invalid', 'Synthetic admin', 'Administrador');
+const buyer = generateToken('buyer@example.invalid', 'Synthetic buyer', 'Usuario');
+const tx={LOCK:{UPDATE:'UPDATE'}};
+
+beforeEach(() => {
+  mockAccountLookups();
+  jest.spyOn(AuditLog, 'create').mockResolvedValue({});
+  jest.spyOn(sequelize,'transaction').mockImplementation(work=>work(tx));
+  jest.spyOn(Admin,'findByPk').mockImplementation(async id=>id===require('../../services/jwttoken.service').verifyToken(admin).sub ? {} : null);
+});
+afterEach(() => jest.restoreAllMocks());
+
+it('allows administrators to list and read accounts without exposing stored hashes', async () => {
+  const account = makeAccount('BUYER', { passwordHash: 'synthetic-hash' });
+  jest.spyOn(User, 'findAll').mockResolvedValue([account]);
+  jest.spyOn(User, 'findOne').mockResolvedValue(account);
+  expect((await request(app).get('/api/users').set('Authorization', `Bearer ${buyer}`)).status).toBe(403);
+  const result = await request(app).get('/api/users').set('Authorization', `Bearer ${admin}`);
+  expect(result.body).toEqual([{ id: account.id, email: account.email, name: account.name, status: 'ACTIVE', profile: 'BUYER' }]);
+  const individual = await request(app).get(`/api/users/${account.email}`).set('Authorization', `Bearer ${admin}`);
+  expect(individual.body).toEqual(result.body[0]);
+});
+
+it('rejects profile changes and closes accounts through the paranoid model', async () => {
+  const account = makeAccount('BUYER', { update: jest.fn(), destroy: jest.fn() });
+  jest.spyOn(User, 'findOne').mockResolvedValue(account);
+  const path = `/api/users/${account.email}`;
+  expect((await request(app).put(path).set('Authorization', `Bearer ${admin}`).send({ profile: 'ADMIN' })).status).toBe(400);
+  expect(account.update).not.toHaveBeenCalled();
+  expect((await request(app).put(path).set('Authorization', `Bearer ${admin}`).send({ status: 'SUSPENDED' })).status).toBe(204);
+  expect(account.update).toHaveBeenCalledWith({ status: 'SUSPENDED' },{transaction:tx});
+  expect((await request(app).delete(path).set('Authorization', `Bearer ${admin}`)).status).toBe(204);
+  expect(account.destroy).toHaveBeenCalledTimes(1);
+  expect(User.options.paranoid).toBe(true);
+  expect((await request(app).post('/api/users').set('Authorization', `Bearer ${admin}`).send({ profile: 'ADMIN' })).status).toBe(404);
+});
+
+it('suspends only through an ADMIN endpoint with a reason and no mass assignment',async()=>{
+  const seller=makeAccount('SELLER');
+  const suspend=jest.spyOn(accounts,'suspendSeller').mockResolvedValue({userId:seller.id,status:'SUSPENDED'});
+  const path=`/api/users/sellers/${seller.id}/suspend`;
+  expect((await request(app).put(path).send({reason:'Policy violation'})).status).toBe(401);
+  expect((await request(app).put(path).set('Authorization',`Bearer ${buyer}`).send({reason:'Policy violation'})).status).toBe(403);
+  for(const body of [{},[],{reason:'Policy violation',status:'APPROVED'}]){
+    expect((await request(app).put(path).set('Authorization',`Bearer ${admin}`).send(body)).status).toBe(400);
+  }
+  expect(suspend).not.toHaveBeenCalled();
+  expect((await request(app).put(path).set('Authorization',`Bearer ${admin}`).send({reason:'Policy violation'})).status).toBe(200);
+  expect(suspend).toHaveBeenCalledWith(expect.any(String),seller.id,'Policy violation',{ipAddress:expect.any(String)});
+});
+
+it('restricts seller review to ADMIN and requires a reason when rejecting', async () => {
+  const seller = makeAccount('SELLER');
+  const review = jest.spyOn(accounts, 'reviewSeller').mockResolvedValue({ userId: seller.id, status: 'REJECTED' });
+  const path = `/api/users/sellers/${seller.id}/review`;
+  expect((await request(app).put(path).set('Authorization', `Bearer ${buyer}`).send({ status: 'APPROVED' })).status).toBe(403);
+  expect((await request(app).put(path).set('Authorization', `Bearer ${admin}`).send({ status: 'REJECTED' })).status).toBe(400);
+  expect((await request(app).put(path).set('Authorization', `Bearer ${admin}`).send({ status: 'REJECTED', rejectionReason: '  Datos incompletos  ' })).status).toBe(200);
+  expect(review).toHaveBeenCalledTimes(1);
+  expect(review).toHaveBeenCalledWith(expect.any(String), seller.id, 'REJECTED', 'Datos incompletos', expect.any(String));
 });

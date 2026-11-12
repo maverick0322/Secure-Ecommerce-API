@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const requestIp = require('request-ip');
-const CLAIM_TYPES = require("../config/claim-types");
+const {isIP} = require('node:net');
 const logDirectory = path.resolve(__dirname, '../log');
 const logFilePath = path.join(logDirectory, 'log.txt');
 
@@ -16,19 +15,18 @@ const errorHandler = (err, req, res, next) => {
     return next(err);
   }
   let message = 'No se ha podido procesar la petición. Inténtelo nuevamente más tarde.';
-  const statusCode = err.statusCode || 500;
+  const candidate = Number(err.statusCode || err.status);
+  const statusCode = Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : 500;
 
   // Obtener la IP real de la petición resolviendo encabezados de proxy/forwarded
-  const ip = requestIp.getClientIp(req) || 'Desconocida';
+  const ip = isIP(req.ip || '') ? req.ip : 'Desconocida';
 
   // Obtener el correo del usuario a partir del token decodificado
-  let email = 'Anonimo';
-  if (req.decodedToken && req.decodedToken[CLAIM_TYPES.Name]) {
-    email = req.decodedToken[CLAIM_TYPES.Name];
-  }
+  const actor = typeof req.account?.id === 'string' && /^[0-9a-f-]{36}$/i.test(req.account.id) ? req.account.id : 'Anonimo';
+  const kind = /^[A-Za-z.]{1,80}$/.test(err.name || '') ? err.name : 'Error';
 
   // Registro persistente en bitácora física de texto
-  const logLine = `${new Date().toISOString()} - [${statusCode}] - [IP: ${ip}] - [Usuario: ${email}] - ${err.message || message}\n`;
+  const logLine = `${new Date().toISOString()} - [${statusCode}] - [IP: ${ip}] - [Actor: ${actor}] - ${kind}\n`;
   fs.appendFile(logFilePath, logLine, writeErr => {
     if (writeErr) {
       console.error('Error al escribir en log/log.txt:', writeErr);
@@ -39,17 +37,12 @@ const errorHandler = (err, req, res, next) => {
   // - Para errores de cliente (4xx), el mensaje es funcional y seguro de mostrar al usuario.
   // - Para errores de servidor (5xx), en producción se sanitiza para prevenir CWE-200 (fuga de información sensible).
   if (statusCode < 500) {
-    message = err.message || 'Petición inválida';
-  } else if (process.env.NODE_ENV === 'development') {
-    message = err.message || message;
+    message = err.type ? 'Petición inválida.' : (err.message || 'Petición inválida');
   }
   const responseBody = {
     status: statusCode,
     message
   };
-  if (process.env.NODE_ENV === 'development') {
-    responseBody.stack = err.stack;
-  }
   res.status(statusCode).json(responseBody);
 };
 module.exports = errorHandler;

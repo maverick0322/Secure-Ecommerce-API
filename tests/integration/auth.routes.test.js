@@ -1,108 +1,69 @@
 const request = require('supertest');
 const bcrypt = require('bcrypt');
 const app = require('../../index');
-const {
-  User: user,
-  AuditLog: auditLog
-} = require('../../models');
-const {
-  generateToken
-} = require('../../services/jwttoken.service');
-describe('Pruebas de Integración: Endpoints de Autenticación (/api/auth)', () => {
-  let adminPasswordHash;
-  beforeAll(async () => {
-    adminPasswordHash = await bcrypt.hash('patito', 10);
-  });
-  beforeEach(() => {
-    jest.spyOn(auditLog, 'create').mockResolvedValue({});
-  });
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-  describe('POST /api/auth (Inicio de Sesión)', () => {
-    it('debe responder con 400 Bad Request si faltan las credenciales', async () => {
-      const res = await request(app).post('/api/auth').send({
-        email: 'gvera@uv.mx'
-      }); // Sin password
+const { User, AuditLog } = require('../../models');
+const accounts = require('../../services/accounts.service');
+const mailer = require('../../services/registration-email.service');
+const { verifyToken } = require('../../services/jwttoken.service');
+const { makeAccount } = require('../support/auth-fixtures');
 
-      expect(res.statusCode).toBe(400);
-      expect(res.body.message).toContain('requeridos');
-    });
-    it('debe responder con 401 Unauthorized si el usuario no existe', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue(null);
-      const res = await request(app).post('/api/auth').send({
-        email: 'inexistente@uv.mx',
-        password: 'password123'
-      });
-      expect(res.statusCode).toBe(401);
-      expect(res.body.message).toContain('incorrectos');
-    });
-    it('debe responder con 401 Unauthorized si la contraseña es incorrecta', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue({
-        id: 'mock-uuid-admin',
-        email: 'gvera@uv.mx',
-        name: 'Guillermo Vera',
-        passwordHash: adminPasswordHash,
-        role: 'Administrador'
-      });
-      const res = await request(app).post('/api/auth').send({
-        email: 'gvera@uv.mx',
-        password: 'password_equivocada'
-      });
-      expect(res.statusCode).toBe(401);
-      expect(res.body.message).toContain('incorrectos');
-    });
-    it('debe responder con 200 OK y devolver un JWT válido con las credenciales correctas', async () => {
-      jest.spyOn(user, 'findOne').mockResolvedValue({
-        id: 'mock-uuid-admin',
-        email: 'gvera@uv.mx',
-        name: 'Guillermo Vera',
-        passwordHash: adminPasswordHash,
-        role: 'Administrador'
-      });
-      const res = await request(app).post('/api/auth').send({
-        email: 'gvera@uv.mx',
-        password: 'patito'
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.body.email).toBe('gvera@uv.mx');
-      expect(res.body.name).toBe('Guillermo Vera');
-      expect(res.body.role).toBe('Administrador');
-      expect(res.body.jwt).toBeDefined();
-      expect(res.body.jwt.split('.').length).toBe(3);
-    });
-    it('debe responder con 500 si ocurre un fallo en la base de datos al autenticar', async () => {
-      jest.spyOn(user, 'findOne').mockRejectedValue(new Error('Fallo crítico de BD'));
-      const res = await request(app).post('/api/auth').send({
-        email: 'error@uv.mx',
-        password: 'cualquiera'
-      });
-      expect(res.statusCode).toBe(500);
-    });
-  });
-  describe("GET /api/auth/time", () => {
-    it('debe rechazar con 401 si no se envía token de autenticación', async () => {
-      const res = await request(app).get("/api/auth/time");
-      expect(res.statusCode).toBe(401);
-    });
-    it('debe responder con 404 si el servicio no puede determinar el tiempo restante', async () => {
-      const jwt = require('jsonwebtoken');
-      jest.spyOn(jwt, 'verify').mockReturnValueOnce({
-        'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name': 'gvera@uv.mx',
-        'http://schemas.microsoft.com/ws/2008/06/identity/claims/role': 'Administrador'
-      }).mockImplementationOnce(() => {
-        throw new Error('Manipulación de token');
-      });
-      const res = await request(app).get("/api/auth/time").set('Authorization', 'Bearer token_valido_para_authorize');
-      expect(res.statusCode).toBe(404);
-      expect(res.body.message).toContain('No se pudo determinar el tiempo');
-    });
-    it('debe responder con 200 OK y el tiempo restante de sesión con un token válido', async () => {
-      const token = generateToken('gvera@uv.mx', 'Guillermo Vera', 'Administrador');
-      const res = await request(app).get("/api/auth/time").set('Authorization', `Bearer ${token}`);
-      expect(res.statusCode).toBe(200);
-      expect(res.body.remainingTime).toBeDefined();
-      expect(res.body.remainingTime).toMatch(/^00:(19|20):[0-5][0-9]$/);
-    });
-  });
+const secret = 'synthetic-password-123';
+let hash;
+
+beforeAll(async () => { hash = await bcrypt.hash(secret, 4); });
+beforeEach(() => jest.spyOn(AuditLog, 'create').mockResolvedValue({}));
+afterEach(() => jest.restoreAllMocks());
+
+it('validates login and returns a current profile and JWT without the hash', async () => {
+  const account = makeAccount('BUYER', { passwordHash: hash });
+  const findOne = jest.fn().mockResolvedValue(account);
+  jest.spyOn(User, 'unscoped').mockReturnValue({ findOne });
+  expect((await request(app).post('/api/auth').send({ email: account.email })).status).toBe(400);
+  expect((await request(app).post('/api/auth').send({ email: account.email, password: 'bad' })).status).toBe(401);
+  const response = await request(app).post('/api/auth').send({ email: ` ${account.email.toUpperCase()} `, password: secret });
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({ id: account.id, email: account.email, name: account.name, status: 'ACTIVE', profile: 'BUYER', jwt: expect.any(String) });
+  expect(verifyToken(response.body.jwt).sub).toBe(account.id);
+  expect(findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { email: account.email } }));
+  jest.spyOn(User, 'findByPk').mockResolvedValue(account);
+  const time = await request(app).get('/api/auth/time').set('Authorization', `Bearer ${response.body.jwt}`);
+  expect(time.body.remainingTime).toMatch(/^00:(19|20):[0-5]\d$/);
+});
+
+it('rejects absent, suspended, unverified and ambiguous accounts with the same login error', async () => {
+  const findOne = jest.fn();
+  jest.spyOn(User, 'unscoped').mockReturnValue({ findOne });
+  const credentials = { email: 'login@example.invalid', password: secret };
+  for (const row of [null, makeAccount('BUYER', { status: 'SUSPENDED', passwordHash: hash }),
+    makeAccount('BUYER', { emailVerifiedAt: null, passwordHash: hash }),
+    makeAccount('BUYER', { admin: {}, passwordHash: hash })]) {
+    findOne.mockResolvedValue(row);
+    const response = await request(app).post('/api/auth').send(credentials);
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ status: 401, message: 'Usuario o contraseña incorrectos.' });
+  }
+});
+
+it('returns a generic error for a database failure', async () => {
+  jest.spyOn(User, 'unscoped').mockReturnValue({ findOne: jest.fn().mockRejectedValue(new Error('sensitive database details')) });
+  const response = await request(app).post('/api/auth').send({ email: 'login@example.invalid', password: secret });
+  expect(response.status).toBe(500);
+  expect(response.text).not.toContain('sensitive');
+});
+
+it('sends the code privately and creates only once, after validation', async () => {
+  const email = 'register@example.invalid';
+  const send = jest.spyOn(mailer, 'sendVerificationCode').mockResolvedValue();
+  const create = jest.spyOn(accounts, 'createPublicAccount').mockResolvedValue({ email, profile: 'SELLER', sellerStatus: 'PENDING' });
+  const issued = await request(app).post('/api/auth/register').send({ email });
+  expect(issued.status).toBe(202);
+  expect(issued.body).toEqual({ message: expect.any(String) });
+  expect(create).not.toHaveBeenCalled();
+  const code = send.mock.calls[0][1];
+  const payload = { email, code, password: secret, name: 'Synthetic seller', profile: 'SELLER', storeName: 'Synthetic shop' };
+  expect((await request(app).post('/api/auth/register/verify').send({ ...payload, profile: 'ADMIN' })).status).toBe(400);
+  const results = await Promise.all([1, 2].map(() => request(app).post('/api/auth/register/verify').send(payload)));
+  expect(results.map(result => result.status).sort()).toEqual([201, 400]);
+  expect(create).toHaveBeenCalledTimes(1);
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ email, profile: 'SELLER' }),{ipAddress:expect.any(String)});
 });

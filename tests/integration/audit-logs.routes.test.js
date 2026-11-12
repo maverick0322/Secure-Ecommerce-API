@@ -3,9 +3,9 @@ const app = require('../../index');
 const {
   AuditLog: auditLog
 } = require('../../models');
-const {
-  generateToken
-} = require('../../services/jwttoken.service');
+const { generateToken, mockAccountLookups } = require('../support/auth-fixtures');
+
+beforeEach(mockAccountLookups);
 describe("Pruebas de Integración: Endpoints de Bitácora (/api/audit-logs)", () => {
   let adminToken;
   let userToken;

@@ -1,66 +1,40 @@
 const jwt = require('jsonwebtoken');
-const CLAIM_TYPES = require("../../config/claim-types");
-const {
-  generateToken,
-  getRemainingTokenTime
-} = require('../../services/jwttoken.service');
-describe('Pruebas Unitarias: jwttoken.service.js', () => {
-  const mockEmail = 'admin@uv.mx';
-  const mockName = 'Administrador Sistema';
-  const mockRole = 'Administrador';
-  const secretKey = process.env.JWT_SECRET || 'secret_fallback_key_35_bytes_hex_secure_default';
-  describe('Función generateToken', () => {
-    it('debe generar un JWT con estructura válida de 3 partes separadas por puntos', () => {
-      const token = generateToken(mockEmail, mockName, mockRole);
-      expect(typeof token).toBe('string');
-      const parts = token.split('.');
-      expect(parts.length).toBe(3);
-    });
-    it('debe incluir los atributos estándar requeridos en el payload', () => {
-      const token = generateToken(mockEmail, mockName, mockRole);
-      const decoded = jwt.verify(token, secretKey);
-      expect(decoded[CLAIM_TYPES.Name]).toBe(mockEmail);
-      expect(decoded[CLAIM_TYPES.GivenName]).toBe(mockName);
-      expect(decoded[CLAIM_TYPES.Role]).toBe(mockRole);
-      expect(decoded.iss).toBe('ServidorFeiJWT');
-      expect(decoded.aud).toBe('ClientesFeiJWT');
-    });
-    it('debe fijar una ventana de expiración de 20 minutos (1200 segundos)', () => {
-      const token = generateToken(mockEmail, mockName, mockRole);
-      const decoded = jwt.verify(token, secretKey);
-      const durationSeconds = decoded.exp - decoded.iat;
-      expect(durationSeconds).toBe(20 * 60); // 1200 segundos
-    });
-  });
-  describe('Función getRemainingTokenTime', () => {
-    it('debe calcular correctamente el tiempo restante en formato 00:MM:SS', () => {
-      const token = generateToken(mockEmail, mockName, mockRole);
-      const req = {
-        header: jest.fn().mockReturnValue(`Bearer ${token}`)
-      };
-      const time = getRemainingTokenTime(req);
-      expect(time).toMatch(/^00:(19|20):[0-5][0-9]$/);
-    });
-    it('debe retornar null si la cabecera Authorization está ausente', () => {
-      const req = {
-        header: jest.fn().mockReturnValue(undefined)
-      };
-      const time = getRemainingTokenTime(req);
-      expect(time).toBeNull();
-    });
-    it('debe retornar null si la cabecera no utiliza el esquema Bearer', () => {
-      const req = {
-        header: jest.fn().mockReturnValue('Basic dXNlcjpwYXNz')
-      };
-      const time = getRemainingTokenTime(req);
-      expect(time).toBeNull();
-    });
-    it('debe retornar null si el token es inválido o está manipulado', () => {
-      const req = {
-        header: jest.fn().mockReturnValue('Bearer token_falso_invalido_123')
-      };
-      const time = getRemainingTokenTime(req);
-      expect(time).toBeNull();
-    });
-  });
+const claims = require('../../config/claim-types');
+const { generateToken, verifyToken, getRemainingTokenTime } = require('../../services/jwttoken.service');
+const { makeAccount } = require('../support/auth-fixtures');
+
+afterEach(() => jest.restoreAllMocks());
+
+it('signs and verifies the UUID subject, profile, claims and 20-minute lifetime', () => {
+  const account = { ...makeAccount('ADMIN'), profile: 'ADMIN' };
+  const token = generateToken(account);
+  const decoded = verifyToken(token);
+  expect(token.split('.')).toHaveLength(3);
+  expect(decoded).toMatchObject({ sub: account.id, [claims.Name]: account.email, [claims.GivenName]: account.name,
+    [claims.Role]: 'ADMIN', iss: 'ServidorFeiJWT', aud: 'ClientesFeiJWT' });
+  expect(decoded.exp - decoded.iat).toBe(1200);
+  expect(getRemainingTokenTime(decoded)).toMatch(/^00:(19|20):[0-5]\d$/);
+});
+
+it.each(['issuer', 'audience', 'subject', 'algorithm', 'expiry'])('rejects an invalid %s', kind => {
+  const options = { issuer: 'ServidorFeiJWT', audience: 'ClientesFeiJWT', subject: makeAccount('BUYER').id,
+    algorithm: 'HS256', expiresIn: 60 };
+  if (kind === 'algorithm') options.algorithm = 'HS384';
+  else if (kind === 'expiry') options.expiresIn = -1;
+  else options[kind] = 'invalid';
+  const token = jwt.sign({}, process.env.JWT_SECRET, options);
+  expect(() => verifyToken(token)).toThrow();
+});
+
+it.each(['', 'short', 'a'.repeat(64),'human-readable-secret-passphrase-without-randomness'])('refuses to sign with a missing or weak secret', secret => {
+  jest.replaceProperty(process, 'env', { ...process.env, JWT_SECRET: secret });
+  expect(() => generateToken(makeAccount('ADMIN'))).toThrow('JWT_SECRET');
+});
+
+it('accepts CSPRNG keys in canonical hexadecimal or base64url without printing them',()=>{
+  for(const encoding of ['hex','base64url']){
+    jest.replaceProperty(process,'env',{...process.env,JWT_SECRET:(encoding==='base64url'?'base64url:':'')+require('node:crypto').randomBytes(48).toString(encoding)});
+    const account={...makeAccount('BUYER'),profile:'BUYER'};
+    expect(verifyToken(generateToken(account)).sub).toBe(account.id);
+  }
 });

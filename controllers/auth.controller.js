@@ -1,89 +1,65 @@
 const bcrypt = require('bcrypt');
-const {
-  User: user,
-  Role: role,
-  Sequelize
-} = require('../models');
-const {
-  generateToken,
-  getRemainingTokenTime
-} = require('../services/jwttoken.service');
-const self = {};
+const accounts = require('../services/accounts.service');
+const verification = require('../services/email-verification.service');
+const { generateToken, getRemainingTokenTime } = require('../services/jwttoken.service');
 
-// Hash ficticio para mitigar ataques de temporización (CWE-208)
-const DUMMY_HASH = '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012';
+// A synthetic bcrypt hash makes the missing-account comparison comparable in cost.
+const DUMMY_HASH = '$2b$12$yIYsFG/CLkHoQu1IXqg0Ke4Vy3kGCImKQPBR0tcNW5QXxWLnxZH3y';
+const { AccountError, respondError } = accounts;
 
-// POST: api/auth
-self.login = async function (req, res, next) {
-  const {
-    email,
-    password
-  } = req.body;
+async function requestRegistrationCode(req, res) {
   try {
-    if (!email || !password) {
-      return res.status(400).json({
-        message: 'El correo electrónico y la contraseña son requeridos.'
-      });
-    }
-    const data = await user.findOne({
-      where: {
-        email: email
-      },
-      raw: true,
-      attributes: ['id', 'email', "name", "passwordHash", [Sequelize.col("role.name"), "role"]],
-      include: {
-        model: role,
-        as: 'role',
-        attributes: []
-      }
-    });
-
-    // Mitigación de ataques de temporización: si el usuario no existe, ejecutar bcrypt.compare con hash ficticio
-    if (data === null) {
-      await bcrypt.compare(password, DUMMY_HASH);
-      return res.status(401).json({
-        message: 'Usuario o contraseña incorrectos.'
-      });
-    }
-
-    // Comparar la contraseña contra el hash almacenado
-    const passwordMatch = await bcrypt.compare(password, data.passwordHash);
-    if (!passwordMatch) {
-      return res.status(401).json({
-        message: 'Usuario o contraseña incorrectos.'
-      });
-    }
-
-    // Generar token de acceso seguro
-    const token = generateToken(data.email, data.name, data.role);
-
-    // Registrar en bitácora de auditoría pasando el correo del usuario que inicia sesión
-    if (req.logAudit) {
-      await req.logAudit('usuario.login', data.email, data.email);
-    }
-    return res.status(200).json({
-      email: data.email,
-      name: data.name,
-      role: data.role,
-      jwt: token
-    });
+    const email = await accounts.normalizeEmail(req.body?.email);
+    await verification.issue(email);
+    return res.status(202).json({ message: 'Solicitud de verificación recibida.' });
   } catch (error) {
-    next(error);
+    if(req.logAudit && error instanceof AccountError) await req.logAudit('auth.registration.denied',null,null,error.status>=500?'ERROR':'DENIED');
+    return respondError(res, error);
   }
-};
+}
 
-// GET: api/auth/time
-self.time = async function (req, res) {
-  const time = getRemainingTokenTime(req);
-
-  // CORRECCIÓN CRÍTICA: Retorno anticipado para evitar ERR_HTTP_HEADERS_SENT
-  if (time == null) {
-    return res.status(404).json({
-      message: 'No se pudo determinar el tiempo restante de la sesión.'
-    });
+async function register(req, res) {
+  try {
+    const { email: address, code, name: inputName, password: inputPassword, profile, storeName: inputStore } = req.body || {};
+    if (profile !== 'BUYER' && profile !== 'SELLER') throw new AccountError(400, 'Seleccione el perfil BUYER o SELLER.');
+    if (typeof code !== 'string' || !/^\d{6}$/.test(code)) throw new AccountError(400, 'El código es inválido o ha caducado.');
+    const email = await accounts.normalizeEmail(address);
+    const name = accounts.text(inputName, 120, 'El nombre debe tener entre 1 y 120 caracteres.');
+    const password = accounts.newPassword(inputPassword);
+    const storeName = profile === 'SELLER' ? accounts.text(inputStore, 120, 'El nombre comercial debe tener entre 1 y 120 caracteres.') : undefined;
+    const account = await verification.verify(email, code, () => accounts.createPublicAccount(
+      { email, name, password, profile, storeName }, { ipAddress: req.ip }));
+    return res.status(201).json(account);
+  } catch (error) {
+    if(req.logAudit && error instanceof AccountError) await req.logAudit('auth.verification.denied',null,null,error.status>=500?'ERROR':'DENIED');
+    return respondError(res, error);
   }
-  return res.status(200).json({
-    remainingTime: time
-  });
-};
-module.exports = self;
+}
+
+async function login(req, res) {
+  try {
+    const { email: address, password } = req.body || {};
+    const email = await accounts.normalizeEmail(address);
+    if (!accounts.validPassword(password)) throw new AccountError(400, 'La contraseña no es válida.');
+    const account = await accounts.findAccountByEmail(email, true);
+    const match = await bcrypt.compare(password, account?.passwordHash || DUMMY_HASH);
+    const profile = accounts.accountType(account);
+    if (!account || !match || !accounts.isActive(account) || !profile) {
+      throw new AccountError(401, 'Usuario o contraseña incorrectos.');
+    }
+    const result = accounts.serializeAccount(account, profile);
+    await require('../services/audit.service').write({ actorUserId: account.id, action: 'usuario.login',
+      targetType: 'user', targetId: account.id, ipAddress: req.ip });
+    const jwt = generateToken(result);
+    return res.status(200).json({ ...result, jwt });
+  } catch (error) {
+    if(req.logAudit && error instanceof AccountError) await req.logAudit('auth.login.denied',null,null,error.status>=500?'ERROR':'DENIED');
+    return respondError(res, error);
+  }
+}
+
+function time(req, res) {
+  return res.status(200).json({ remainingTime: getRemainingTokenTime(req.decodedToken) });
+}
+
+module.exports = { login, time, requestRegistrationCode, register };
