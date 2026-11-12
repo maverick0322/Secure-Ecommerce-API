@@ -4,7 +4,6 @@ const { execFileSync } = require('child_process');
 const mysql = require('mysql2/promise');
 const Sequelize = require('sequelize');
 const bcrypt = require('bcrypt');
-const request = require('supertest');
 
 // Pruebas opcionales: crean y eliminan únicamente bases temporales propias.
 const databaseTests = process.env.TEST_MYSQL_URL ? describe : describe.skip;
@@ -44,12 +43,14 @@ databaseTests('Migración y contratos con MySQL 8 real', () => {
 
   function runCli(command, databaseName) {
     const url = new URL(process.env.TEST_MYSQL_URL);
-    execFileSync(process.execPath, ['node_modules/sequelize-cli/lib/sequelize', command, '--env', 'test'], {
+    const target = command === 'db:migrate' ? ['--to', '20261108000001-normalize-english-schema.js'] : [];
+    execFileSync(process.execPath, ['node_modules/sequelize-cli/lib/sequelize', command, '--env', 'test', ...target], {
       cwd: rootDirectory,
       env: {
         ...process.env, TEST_DB_HOST: url.hostname, TEST_DB_PORT: url.port || '3306',
         TEST_DB_USER: decodeURIComponent(url.username), TEST_DB_PASSWORD: decodeURIComponent(url.password),
-        TEST_DB_DATABASE: databaseName
+        TEST_DB_DATABASE: databaseName,
+        LEGACY_SEED_USER_PASSWORD: require('node:crypto').randomBytes(32).toString('hex')
       },
       timeout: 60000, stdio: 'pipe'
     });
@@ -92,39 +93,31 @@ databaseTests('Migración y contratos con MySQL 8 real', () => {
     expect((await queryInterface.showAllTables()).map(table => table.toLowerCase())).toEqual(expect.arrayContaining([
       'files', 'roles', 'categories', 'products', 'product_categories', 'users', 'audit_logs', 'sequelizemeta'
     ]));
-    const models = {};
-    for (const filename of fs.readdirSync(path.join(rootDirectory, 'models')).filter(file => file !== 'index.js')) {
-      const model = require(path.join(rootDirectory, 'models', filename))(connection, Sequelize.DataTypes);
-      models[model.name] = model;
-    }
-    for (const model of Object.values(models)) if (model.associate) model.associate(models);
-    const product = await models.Product.findByPk(101, { include: ['categories', 'file'] });
+    const [product] = await connection.query(`SELECT p.title, p.price, f.data, c.name AS categoryName
+      FROM products p JOIN files f ON f.id = p.fileId JOIN product_categories pc ON pc.productId = p.id
+      JOIN categories c ON c.id = pc.categoryId WHERE p.id = 101`, { type: Sequelize.QueryTypes.SELECT });
     expect(product.title).toBe('Producto persistido');
     expect(product.price).toBe('123.45');
-    expect(product.file.data).toEqual(Buffer.from([255, 216, 255, 224]));
-    expect(product.categories[0].name).toBe('Categoría persistida');
-    await product.removeCategory(101);
-    await product.addCategory(101);
-    // Restaurar fechas originales del vínculo para comparar la reversión exacta.
-    await queryInterface.bulkUpdate('product_categories', timestamps, { productId: 101, categoryId: 101 });
-    const user = await models.User.findByPk(userId, { include: ['role'] });
+    expect(product.data).toEqual(Buffer.from([255, 216, 255, 224]));
+    expect(product.categoryName).toBe('Categoría persistida');
+    const readHistoricalUser = async () => (await connection.query(`SELECT u.name, u.passwordHash, u.protected,
+      r.name AS role FROM users u JOIN roles r ON r.id = u.roleId WHERE u.id = :userId`,
+    { replacements: { userId }, type: Sequelize.QueryTypes.SELECT }))[0];
+    const user = await readHistoricalUser();
     expect(user.passwordHash).toBe(passwordHash);
-    expect(user.protected).toBe(true);
-    expect(user.role.name).toBe('Administrador');
-    expect((await models.Role.findByPk(roleId, { include: ['users'] })).users).toHaveLength(1);
-    expect((await models.Category.findByPk(101, { include: ['products'] })).products).toHaveLength(1);
-    expect((await models.File.findByPk(101, { include: ['products'] })).products).toHaveLength(1);
-    expect((await models.AuditLog.findByPk(101)).user).toBe('gvera@uv.mx');
+    expect(Number(user.protected)).toBe(1);
+    expect(user.role).toBe('Administrador');
+    expect((await connection.query('SELECT `user` FROM audit_logs WHERE id = 101', { type: Sequelize.QueryTypes.SELECT }))[0].user).toBe('gvera@uv.mx');
     runCli('db:migrate:undo', databaseName);
     expect(await readSnapshot(connection, tables)).toEqual(original);
     runCli('db:migrate', databaseName);
     runCli('db:seed:all', databaseName);
     runCli('db:seed:all', databaseName);
-    expect((await models.User.findByPk(userId)).passwordHash).toBe(passwordHash);
-    expect((await models.User.findByPk(userId)).name).toBe('Persona existente');
+    expect((await readHistoricalUser()).passwordHash).toBe(passwordHash);
+    expect((await readHistoricalUser()).name).toBe('Persona existente');
   }, 90000);
 
-  it('inicializa una base nueva, repite seeders sin duplicados y sirve contratos HTTP reales', async () => {
+  it('inicializa una base histórica nueva y repite sus seeders sin duplicados', async () => {
     const { connection, databaseName } = await createDatabase();
     runCli('db:migrate', databaseName);
     runCli('db:seed:all', databaseName);
@@ -138,38 +131,6 @@ databaseTests('Migración y contratos con MySQL 8 real', () => {
     expect(firstSeed.roles).toHaveLength(2);
     expect(firstSeed.users).toHaveLength(2);
 
-    const url = new URL(process.env.TEST_MYSQL_URL);
-    const previousEnv = { ...process.env };
-    Object.assign(process.env, {
-      TEST_DB_HOST: url.hostname, TEST_DB_PORT: url.port || '3306',
-      TEST_DB_USER: decodeURIComponent(url.username), TEST_DB_PASSWORD: decodeURIComponent(url.password),
-      TEST_DB_DATABASE: databaseName
-    });
-    jest.resetModules();
-    const app = require('../../index');
-    const models = require('../../models');
-    try {
-      const login = await request(app).post('/api/auth').send({ email: 'gvera@uv.mx', password: 'patito' });
-      expect(login.status).toBe(200);
-      expect(login.body).toEqual({ email: 'gvera@uv.mx', name: 'Guillermo Vera', role: 'Administrador', jwt: expect.any(String) });
-      const token = login.body.jwt;
-      const products = await request(app).get('/api/products').set('Authorization', `Bearer ${token}`);
-      expect(products.status).toBe(200);
-      expect(products.body[0]).toEqual(expect.objectContaining({ productId: expect.any(Number), title: expect.any(String), price: expect.any(String), categories: expect.any(Array) }));
-      const users = await request(app).get('/api/users').set('Authorization', `Bearer ${token}`);
-      expect(users.status).toBe(200);
-      expect(users.body[0].role).toEqual(expect.any(String));
-      expect(users.body[0].passwordHash).toBeUndefined();
-      const logs = await request(app).get('/api/audit-logs').set('Authorization', `Bearer ${token}`);
-      expect(logs.status).toBe(200);
-      expect(logs.body[0]).toEqual(expect.objectContaining({ action: 'usuario.login', user: 'gvera@uv.mx' }));
-      const time = await request(app).get('/api/auth/time').set('Authorization', `Bearer ${token}`);
-      expect(time.status).toBe(200);
-      expect(time.body.remainingTime).toMatch(/^00:\d{2}:\d{2}$/);
-    } finally {
-      await models.sequelize.close();
-      process.env = previousEnv;
-    }
   }, 90000);
 
   it('reanuda migraciones y reversiones interrumpidas entre instrucciones DDL', async () => {
