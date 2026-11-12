@@ -1,71 +1,20 @@
-const uploadFile = require('../../middlewares/upload.middleware');
-describe('Pruebas Unitarias: upload.middleware.js (Defensa CWE-434, CWE-22, CWE-400)', () => {
-  it('debe tener configurado un límite estricto de tamaño de 2MB (2097152 bytes)', () => {
-    expect(uploadFile.limits).toBeDefined();
-    expect(uploadFile.limits.fileSize).toBe(2 * 1024 * 1024);
-  });
-  describe('Filtro de archivos (fileFilter)', () => {
-    it('debe aceptar archivos válidos con extensión .jpg y mimetype image/jpeg', done => {
-      const mockFile = {
-        originalname: 'producto_valido.jpg',
-        mimetype: 'image/jpeg'
-      };
-      uploadFile.fileFilter({}, mockFile, (err, accept) => {
-        expect(err).toBeNull();
-        expect(accept).toBe(true);
-        done();
-      });
-    });
-    it('debe aceptar archivos con extensión .jpeg en mayúsculas o minúsculas', done => {
-      const mockFile = {
-        originalname: 'FOTO_PRODUCTO.JPEG',
-        mimetype: 'image/jpeg'
-      };
-      uploadFile.fileFilter({}, mockFile, (err, accept) => {
-        expect(err).toBeNull();
-        expect(accept).toBe(true);
-        done();
-      });
-    });
-    it('CWE-434: debe rechazar archivos ejecutables o scripts aunque tengan extensión .jpg si el mimetype no coincide', done => {
-      const mockFile = {
-        originalname: 'webshell.php.jpg',
-        mimetype: 'application/x-php'
-      };
-      uploadFile.fileFilter({}, mockFile, (err, accept) => {
-        expect(err).toBeInstanceOf(Error);
-        expect(err.statusCode).toBe(400);
-        expect(accept).toBe(false);
-        done();
-      });
-    });
-    it('CWE-434: debe rechazar archivos con tipo MIME falsificado si la extensión es peligrosa (.php, .exe, .sh)', done => {
-      const mockFile = {
-        originalname: 'script_malicioso.php',
-        mimetype: 'image/jpeg'
-      };
-      uploadFile.fileFilter({}, mockFile, (err, accept) => {
-        expect(err).toBeInstanceOf(Error);
-        expect(err.statusCode).toBe(400);
-        expect(accept).toBe(false);
-        done();
-      });
-    });
-  });
-  describe('Generación de Nombres de Archivo (storage.filename)', () => {
-    it('CWE-22: debe sanitizar el nombre generando un identificador criptográfico sin preservar el nombre del cliente', done => {
-      const mockFile = {
-        originalname: '../../../../etc/passwd'
-      };
-      uploadFile.storage.getFilename({}, mockFile, (err, filename) => {
-        expect(err).toBeNull();
-        expect(filename).toBeDefined();
-        // Verificar que no contiene secuencias de escape de directorio ni el nombre original
-        expect(filename).not.toContain('..');
-        expect(filename).not.toContain('passwd');
-        expect(filename).toMatch(/^[0-9]+-[a-f0-9]+\.jpg$/);
-        done();
-      });
-    });
-  });
+const express = require('express');
+const request = require('supertest');
+const { upload, validateImage, uploadErrorHandler, MAX_IMAGE_BYTES } = require('../../middlewares/upload.middleware');
+
+const app = express().put('/image', upload.single('image'), uploadErrorHandler, validateImage, (req, res) => res.json({ size: req.file.buffer.length }));
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
+
+it('accepts an in-memory PNG', async () => {
+  expect((await request(app).put('/image').attach('image', png, 'fixture.png')).body).toEqual({ size: png.length });
+});
+it('rejects spoofed MIME content, unsupported formats and missing files', async () => {
+  expect((await request(app).put('/image').attach('image', Buffer.from('not an image'), 'fixture.png')).status).toBe(400);
+  expect((await request(app).put('/image').attach('image', Buffer.from('<svg/>'), 'fixture.svg')).status).toBe(400);
+  expect((await request(app).put('/image')).status).toBe(400);
+});
+it('rejects oversized or multiple files and unexpected fields', async () => {
+  expect((await request(app).put('/image').attach('image', Buffer.alloc(MAX_IMAGE_BYTES + 1), 'fixture.png')).status).toBe(413);
+  expect((await request(app).put('/image').attach('image', png, 'a.png').attach('image', png, 'b.png')).status).toBe(400);
+  expect((await request(app).put('/image').field('sellerId', 'injected').attach('image', png, 'a.png')).status).toBe(400);
 });

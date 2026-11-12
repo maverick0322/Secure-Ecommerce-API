@@ -1,25 +1,16 @@
 const router = require('express').Router();
-const products = require("../controllers/products.controller");
+const products = require('../controllers/products.controller');
 const authorize = require('../middlewares/auth.middleware');
+const { upload, validateImage, uploadErrorHandler } = require('../middlewares/upload.middleware');
 
-// GET: api/products
-router.get('/', authorize('Usuario, Administrador'), products.getAll);
+router.get('/', authorize('ADMIN, BUYER, SELLER'), products.getAll);
+router.get('/:id', authorize('ADMIN, BUYER, SELLER'), products.get);
+router.post('/', authorize('SELLER'), products.create);
+router.put('/:id', authorize('SELLER'), products.update);
+router.delete('/:id', authorize('SELLER'), products.remove);
+router.post('/:id/categories', authorize('SELLER'), products.assignCategory);
+router.delete('/:id/categories/:categoryId', authorize('SELLER'), products.removeCategory);
+router.put('/:id/image', authorize('SELLER'), products.checkImageOwner, upload.single('image'), uploadErrorHandler, validateImage, products.replaceImage);
+router.delete('/:id/image', authorize('SELLER'), products.removeImage);
 
-// GET: api/products/:id
-router.get('/:id', authorize('Usuario, Administrador'), products.get);
-
-// POST: api/products
-router.post('/', authorize('Administrador'), products.productValidator, products.create);
-
-// PUT: api/products/:id
-router.put('/:id', authorize('Administrador'), products.productValidator, products.update);
-
-// DELETE: api/products/:id
-router.delete('/:id', authorize('Administrador'), products.delete);
-
-// POST: api/products/:id/categories
-router.post("/:id/categories", authorize('Administrador'), products.assignCategory);
-
-// DELETE: api/products/:id/categories/:categoryId
-router.delete("/:id/categories/:categoryId", authorize('Administrador'), products.removeCategory);
 module.exports = router;

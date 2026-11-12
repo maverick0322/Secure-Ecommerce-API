@@ -1,136 +1,43 @@
-const {
-  Category: category
-} = require('../models');
-const {
-  body,
-  validationResult
-} = require('express-validator');
-const self = {};
-self.categoryValidator = [body("name").trim().notEmpty().withMessage("El campo name es obligatorio.").isLength({
-  max: 100
-}).withMessage('El nombre de la categoría no puede exceder 100 caracteres.')];
+const { Category } = require('../models');
+const { AccountError } = require('../services/accounts.service');
+const catalog = require('../services/catalog.service');
 
-// GET: api/categories
-self.getAll = async function (req, res, next) {
+const serialize = category => ({ categoryId: category.id, name: category.name, protected: category.protected });
+
+async function getAll(req, res) {
+  try { return res.json((await Category.findAll({ order: [['name', 'ASC']] })).map(serialize)); }
+  catch (error) { return catalog.catalogError(res, error); }
+}
+
+async function get(req, res) {
   try {
-    const data = await category.findAll({
-      attributes: [['id', "categoryId"], "name", "protected"]
-    });
-    return res.status(200).json(data);
-  } catch (error) {
-    next(error);
-  }
-};
+    const category = await Category.findByPk(catalog.positiveId(req.params.id));
+    if (!category) throw new AccountError(404, 'Categoría no encontrada.');
+    return res.json(serialize(category));
+  } catch (error) { return catalog.catalogError(res, error); }
+}
 
-// GET: api/categories/:id
-self.get = async function (req, res, next) {
+async function create(req, res) {
   try {
-    const id = req.params.id;
-    const data = await category.findByPk(id, {
-      attributes: [['id', "categoryId"], "name", "protected"]
-    });
-    if (data) {
-      return res.status(200).json(data);
-    }
-    return res.status(404).json({
-      message: 'Categoría no encontrada.'
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+    const category = await catalog.mutateCategory(req.account, null, catalog.categoryInput(req.body), false, {ipAddress:req.ip});
+    return res.status(201).json(serialize(category));
+  } catch (error) { return catalog.catalogError(res, error); }
+}
 
-// POST: api/categories
-self.create = async function (req, res, next) {
+async function update(req, res) {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Errores de validación en la solicitud.',
-        errors: errors.array()
-      });
-    }
-    const data = await category.create({
-      name: req.body.name,
-      protected: false
-    });
-    if (req.logAudit) {
-      await req.logAudit('categoria.crear', data.id);
-    }
-    return res.status(201).json(data);
-  } catch (error) {
-    next(error);
-  }
-};
+    const id = catalog.positiveId(req.params.id);
+    await catalog.mutateCategory(req.account, id, catalog.categoryInput(req.body));
+    return res.status(204).end();
+  } catch (error) { return catalog.catalogError(res, error); }
+}
 
-// PUT: api/categories/:id
-self.update = async function (req, res, next) {
+async function remove(req, res) {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Errores de validación en la solicitud.',
-        errors: errors.array()
-      });
-    }
-    const id = req.params.id;
-    const existingCategory = await category.findByPk(id);
-    if (!existingCategory) {
-      return res.status(404).json({
-        message: 'Categoría no encontrada.'
-      });
-    }
+    const id = catalog.positiveId(req.params.id);
+    await catalog.mutateCategory(req.account, id, undefined, true, {ipAddress:req.ip});
+    return res.status(204).end();
+  } catch (error) { return catalog.catalogError(res, error); }
+}
 
-    // Mitigación de asignación masiva (CWE-915): solo permitir actualizar el nombre
-    await category.update({
-      name: req.body.name
-    }, {
-      where: {
-        id: id
-      }
-    });
-    if (req.logAudit) {
-      await req.logAudit('categoria.editar', id);
-    }
-    return res.status(204).send();
-  } catch (error) {
-    next(error);
-  }
-};
-
-// DELETE: api/categories/:id
-self.delete = async function (req, res, next) {
-  try {
-    const id = req.params.id;
-    const data = await category.findByPk(id);
-    if (!data) {
-      return res.status(404).json({
-        message: 'Categoría no encontrada.'
-      });
-    }
-
-    // Prohibir la eliminación de categorías del catálogo inicial protegido
-    if (data.protected) {
-      return res.status(400).json({
-        message: 'No se pueden eliminar categorías protegidas del sistema.'
-      });
-    }
-    const rowsDeleted = await category.destroy({
-      where: {
-        id: id
-      }
-    });
-    if (rowsDeleted === 1) {
-      if (req.logAudit) {
-        await req.logAudit('categoria.eliminar', id);
-      }
-      return res.status(204).send();
-    }
-    return res.status(404).json({
-      message: 'Categoría no encontrada.'
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-module.exports = self;
+module.exports = { getAll, get, create, update, remove };
