@@ -8,17 +8,15 @@ services:
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
-      MYSQL_DATABASE: ${DB_DATABASE:-mercadolibrenode}
-      MYSQL_USER: ${DB_USER:-mercadolibre_user}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-M3rc@d0}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-}
+      MYSQL_ROOT_HOST: localhost
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./bd.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u $$MYSQL_USER -p$$MYSQL_PASSWORD || exit 1"]
+      test: ["CMD", "mysqladmin", "ping", "--host=127.0.0.1", "--user=mysql_healthcheck", "--silent"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,15 +32,23 @@ services:
       - "${SERVER_PORT:-3000}:3000"
     environment:
       - DB_HOST=${DOCKER_DB_HOST:-db}
-      - DB_PORT=${DB_PORT:-3306}
-      - DB_DATABASE=${DB_DATABASE:-mercadolibrenode}
-      - DB_USER=${DB_USER:-mercadolibre_user}
-      - DB_PASSWORD=${DB_PASSWORD:-M3rc@d0}
+      - DB_PORT=${DOCKER_DB_PORT:-3306}
+      - DB_DATABASE=${DB_DATABASE:-secure_ecommerce}
+      - DB_USER=${DB_USER:-ecommerce_app}
+      - DB_PASSWORD=${DB_PASSWORD:-}
+      - DB_EXPECTED_UUID=${DB_EXPECTED_UUID:-}
       - SERVER_PORT=${SERVER_PORT:-3000}
+      - SERVER_HOST=0.0.0.0
       - NODE_ENV=${NODE_ENV:-development}
-      - JWT_SECRET=${JWT_SECRET:-3ca4407f27a00a1b628b9f1416356e6d799b6b6a93f820a6098b560df066f5537a5ccb}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - REGISTRATION_EMAIL_FROM=${REGISTRATION_EMAIL_FROM:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8080,http://localhost:8081}
       - FILES_IN_DB=${FILES_IN_DB:-false}
+    command: ["sh", "-ec", ': "$${JWT_SECRET:?Set JWT_SECRET for the API}"; exec node index.js']
     depends_on:
       db:
         condition: service_healthy

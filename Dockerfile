@@ -7,7 +7,7 @@ WORKDIR /usr/src/app
 # Instalar dependencias del proyecto primero para aprovechar el caché de capas de Docker
 COPY package*.json ./
 
-RUN npm install
+RUN npm ci --ignore-scripts
 
 # Copiar el código fuente del proyecto
 COPY . .
@@ -20,6 +20,7 @@ USER node
 
 # Exponer el puerto de la API REST
 EXPOSE 3000
+ENV SERVER_HOST=0.0.0.0
 
 # Comando de inicio predeterminado
 CMD ["node", "index.js"]
