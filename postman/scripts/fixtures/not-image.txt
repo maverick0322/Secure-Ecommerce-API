@@ -1,0 +1,1 @@
+Synthetic invalid image fixture. No user data.

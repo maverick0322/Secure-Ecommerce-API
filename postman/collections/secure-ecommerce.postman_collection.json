@@ -1,0 +1,3858 @@
+{
+  "info": {
+    "_postman_id": "3872736b-686a-4256-a0ed-1782bf148e51",
+    "name": "Secure Ecommerce - isolated MySQL HTTP suite",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Run only with postman/scripts/run.js or its --serve environment. Real Node/MySQL; email and Cloudinary are local simulations. Never point at the habitual API. Run folders in order; tokens/IDs live only in run-scoped pm.variables."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "(function collectionGuard(){\n  function deny(){\n    pm.test('Isolation barrier accepted the target',function(){pm.expect(false).to.eql(true);});\n    if(pm.execution&&typeof pm.execution.skipRequest==='function')pm.execution.skipRequest();\n    else pm.request.url.update('blocked://isolation.invalid');\n    throw new Error('Isolation barrier rejected the target; no business request authorized.');\n  }\n  const port=Number(pm.environment.get('apiPort'));\n  const base=pm.environment.get('baseUrl');\n  const origin='http://127.0.0.1:'+port;\n  const database=pm.environment.get('expectedDatabase')||'';\n  const uuid=pm.environment.get('expectedServerUuid')||'';\n  const run=pm.environment.get('isolationRunId')||'';\n  const key=pm.environment.get('isolationKey')||'';\n  const resolved=pm.variables.replaceIn(pm.request.url.toString());\n  if(!Number.isInteger(port)||port<3001||port>3099||base!==origin||!resolved.startsWith(origin+'/')||\n    !/^secure_ecommerce_postman_[a-f0-9]{32}$/.test(database)||\n    !/^[a-f0-9-]{36}$/.test(uuid)||uuid==='b68c7b62-dc02-11f1-b706-caca74da477e'||\n    !/^[a-f0-9-]{36}$/.test(run)||!/^[a-f0-9]{64}$/.test(key))return deny();\n  pm.request.headers.upsert({key:'X-Postman-Isolation-Key',value:key});\n  pm.sendRequest({url:origin+'/__postman/isolation',method:'GET',\n    header:{'X-Postman-Isolation-Key':key}},function(error,response){\n    if(error||response.code!==200)return deny();\n    let identity;try{identity=response.json();}catch{return deny();}\n    if(identity.isolated!==true||identity.runId!==run||identity.database!==database||identity.serverUuid!==uuid||identity.storage!=='tmpfs')return deny();\n    pm.test('Isolation barrier accepted the target',function(){pm.expect(true).to.eql(true);});\n  });\n})();"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('No X-Powered-By',()=>pm.expect(pm.response.headers.has('X-Powered-By')).to.eql(false));",
+          "if(pm.response.code!==204&&!pm.request.url.toString().includes('/__postman/mailbox')){pm.test('No stored password fields',()=>{function inspect(v){if(!v||typeof v!=='object')return;for(const key of Object.keys(v)){pm.expect(['passwordHash','password','apiKey','apiSecret'].includes(key)).to.eql(false);inspect(v[key]);}}inspect(pm.response.json());});}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Autenticacion",
+      "item": [
+        {
+          "name": "Identidad de la instancia aislada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/__postman/isolation",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Providers are simulated',()=>{pm.expect(b.email).to.eql('memory');pm.expect(b.cloudinary).to.eql('memory');}); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{adminEmail}}\",\"password\":\"{{adminPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Session without stored hash',()=>{pm.expect(typeof b.jwt).to.eql('string');pm.expect(b).not.to.have.property('passwordHash');});pm.variables.set('adminToken',b.jwt);pm.variables.set('adminId',b.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login buyer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{buyerEmail}}\",\"password\":\"{{buyerPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Session without stored hash',()=>{pm.expect(typeof b.jwt).to.eql('string');pm.expect(b).not.to.have.property('passwordHash');});pm.variables.set('buyerToken',b.jwt);pm.variables.set('buyerId',b.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login buyerOther",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{buyerOtherEmail}}\",\"password\":\"{{buyerOtherPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Session without stored hash',()=>{pm.expect(typeof b.jwt).to.eql('string');pm.expect(b).not.to.have.property('passwordHash');});pm.variables.set('buyerOtherToken',b.jwt);pm.variables.set('buyerOtherId',b.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login seller",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{sellerEmail}}\",\"password\":\"{{sellerPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Session without stored hash',()=>{pm.expect(typeof b.jwt).to.eql('string');pm.expect(b).not.to.have.property('passwordHash');});pm.variables.set('sellerToken',b.jwt);pm.variables.set('sellerId',b.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login sellerOther",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{sellerOtherEmail}}\",\"password\":\"{{sellerOtherPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Session without stored hash',()=>{pm.expect(typeof b.jwt).to.eql('string');pm.expect(b).not.to.have.property('passwordHash');});pm.variables.set('sellerOtherToken',b.jwt);pm.variables.set('sellerOtherId',b.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Password incorrecto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{adminEmail}}\",\"password\":\"{{wrongPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401',function(){pm.expect(pm.response.code).to.eql(401);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===401) { pm.variables.set('loginDeniedMessage',b.message); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cuenta inexistente sin enumeracion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{unknownEmail}}\",\"password\":\"{{wrongPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401',function(){pm.expect(pm.response.code).to.eql(401);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===401) { pm.test('Same denial message',()=>pm.expect(b.message).to.eql(pm.variables.get('loginDeniedMessage'))); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registro ADMIN publico prohibido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register/verify",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"123456\",\"name\":\"Synthetic\",\"password\":\"{{registrationPassword}}\",\"profile\":\"ADMIN\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Solicitar verificacion simulada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 202',function(){pm.expect(pm.response.code).to.eql(202);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===202) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer buzon exclusivamente local",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/__postman/mailbox?email={{registrationEmail}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Six digit test code',()=>pm.expect(/^\\d{6}$/.test(b.code)).to.eql(true));pm.variables.set('verificationCode',b.code);pm.variables.set('wrongCode',b.code==='000000'?'000001':'000000'); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Codigo incorrecto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register/verify",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{wrongCode}}\",\"name\":\"Postman registered BUYER\",\"password\":\"{{registrationPassword}}\",\"profile\":\"BUYER\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Password comun rechazado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register/verify",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{verificationCode}}\",\"name\":\"Postman registered BUYER\",\"password\":\"Password123456!\",\"profile\":\"BUYER\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Limite bcrypt sin truncamiento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register/verify",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{verificationCode}}\",\"name\":\"Postman registered BUYER\",\"password\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"profile\":\"BUYER\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar comprador con verificacion real del codigo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register/verify",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{verificationCode}}\",\"name\":\"Postman registered BUYER\",\"password\":\"{{registrationPassword}}\",\"profile\":\"BUYER\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201',function(){pm.expect(pm.response.code).to.eql(201);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===201) { pm.test('BUYER created',()=>pm.expect(b.profile).to.eql('BUYER'));pm.variables.set('registeredBuyerId',b.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Codigo consumido no reutilizable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register/verify",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{verificationCode}}\",\"name\":\"Postman registered BUYER\",\"password\":\"{{registrationPassword}}\",\"profile\":\"BUYER\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar JWT vigente",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/time",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Session time present',()=>pm.expect(typeof b.remainingTime).to.eql('string')); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Usuarios",
+      "item": [
+        {
+          "name": "ADMIN lista cuentas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Synthetic profiles persisted',()=>pm.expect(b.length>=6).to.eql(true)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "BUYER no administra usuarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar cuenta",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/{{buyerEmail}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Buyer profile',()=>pm.expect(b.profile).to.eql('BUYER')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar nombre permitido",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/{{buyerEmail}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Postman buyer updated\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No asignar perfil masivamente",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/{{buyerEmail}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"profile\":\"ADMIN\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Vendedores",
+      "item": [
+        {
+          "name": "PENDING no publica",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Forbidden\",\"price\":\"1.00\",\"stock\":1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "BUYER no aprueba vendedores",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/sellers/{{sellerId}}/review",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"APPROVED\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rechazo exige motivo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/sellers/{{sellerOtherId}}/review",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"REJECTED\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aprobar seller",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/sellers/{{sellerId}}/review",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"APPROVED\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Reviewed and approved',()=>{pm.expect(b.status).to.eql('APPROVED');pm.expect(b.reviewedByUserId).to.eql(pm.variables.get('adminId'));}); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aprobar sellerOther",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/sellers/{{sellerOtherId}}/review",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"APPROVED\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Reviewed and approved',()=>{pm.expect(b.status).to.eql('APPROVED');pm.expect(b.reviewedByUserId).to.eql(pm.variables.get('adminId'));}); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revision no se confirma dos veces",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/sellers/{{sellerId}}/review",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"APPROVED\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409',function(){pm.expect(pm.response.code).to.eql(409);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===409) {  }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Categorias",
+      "item": [
+        {
+          "name": "BUYER no crea categorias",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Forbidden\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nombre vacio rechazado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear categoria",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Postman {{isolationRunId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201',function(){pm.expect(pm.response.code).to.eql(201);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===201) { pm.variables.set('categoryId',b.categoryId); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nombre duplicado rechazado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Postman {{isolationRunId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409',function(){pm.expect(pm.response.code).to.eql(409);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===409) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Categoria protegida conservada",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories/1",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Catalogo de categorias",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Categories are an array',()=>pm.expect(Array.isArray(b)).to.eql(true)); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Productos e imagenes simuladas",
+      "item": [
+        {
+          "name": "Crear Postman primary",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Postman primary\",\"price\":\"10.00\",\"stock\":10}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201',function(){pm.expect(pm.response.code).to.eql(201);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===201) { pm.variables.set('productId',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear Postman secondary",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerOtherToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Postman secondary\",\"price\":\"5.50\",\"stock\":20}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201',function(){pm.expect(pm.response.code).to.eql(201);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===201) { pm.variables.set('otherProductId',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "BUYER no publica",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Forbidden\",\"price\":\"1.00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SELLER ajeno no modifica",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerOtherToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Foreign\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Precio negativo rechazado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Invalid\",\"price\":\"-1.00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inventario negativo rechazado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Invalid\",\"price\":\"1.00\",\"stock\":-1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Propietario no asignable por cliente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Invalid\",\"price\":\"1.00\",\"sellerId\":\"{{buyerId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Asociar categoria",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"categoryId\":\"{{categoryId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Desasociar logicamente",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}/categories/{{categoryId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reactivar asociacion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"categoryId\":\"{{categoryId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Subir PNG a Cloudinary simulado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}/image",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "scripts/fixtures/product.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Only public image reference',()=>pm.expect(typeof b.imagePublicId).to.eql('string'));pm.variables.set('imagePublicId',b.imagePublicId); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Contenido de imagen invalido",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}/image",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "scripts/fixtures/not-image.txt"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar productos activos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Both approved sellers visible',()=>pm.expect(b.length).to.eql(2)); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 Direcciones",
+      "item": [
+        {
+          "name": "Crear direccion propia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/addresses",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"recipientName\":\"Persona ficticia\",\"street\":\"Calle de pruebas\",\"exteriorNumber\":\"1\",\"neighborhood\":\"Distrito ficticio\",\"city\":\"Ciudad ficticia\",\"state\":\"Estado ficticio\",\"postalCode\":\"01000\",\"country\":\"MX\",\"isDefault\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201',function(){pm.expect(pm.response.code).to.eql(201);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===201) { pm.variables.set('addressId',b.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear nueva predeterminada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/addresses",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"recipientName\":\"Persona ficticia\",\"street\":\"Calle de pruebas\",\"exteriorNumber\":\"1\",\"neighborhood\":\"Distrito ficticio\",\"city\":\"Ciudad ficticia\",\"state\":\"Estado ficticio\",\"postalCode\":\"01000\",\"country\":\"MX\",\"isDefault\":true,\"label\":\"Second\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201',function(){pm.expect(pm.response.code).to.eql(201);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===201) { pm.variables.set('secondAddressId',b.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Una sola predeterminada activa",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/addresses",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Exactly one default',()=>pm.expect(b.filter(a=>a.isDefault).length).to.eql(1)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Modificar direccion propia",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/addresses/{{addressId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"city\":\"Antes del checkout\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No editar direccion ajena",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerOtherToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/addresses/{{addressId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"city\":\"Foreign\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No eliminar direccion ajena",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerOtherToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/addresses/{{addressId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No asignar buyerId",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/addresses",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"recipientName\":\"Persona ficticia\",\"street\":\"Calle de pruebas\",\"exteriorNumber\":\"1\",\"neighborhood\":\"Distrito ficticio\",\"city\":\"Ciudad ficticia\",\"state\":\"Estado ficticio\",\"postalCode\":\"01000\",\"country\":\"MX\",\"isDefault\":true,\"buyerId\":\"{{buyerOtherId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Validar campos requeridos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/addresses",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"city\":\"Incomplete\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Elegir predeterminada",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/addresses/{{addressId}}/default",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 Carrito",
+      "item": [
+        {
+          "name": "Obtener carrito propio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Empty initial cart',()=>pm.expect(b.items.length).to.eql(0)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Agregar producto principal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart/items",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"productId\":\"{{productId}}\",\"quantity\":2}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Server subtotal',()=>pm.expect(b.subtotal).to.eql('20.00')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Agregar segundo vendedor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart/items",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"productId\":\"{{otherProductId}}\",\"quantity\":1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Combined subtotal',()=>pm.expect(b.subtotal).to.eql('25.50')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cantidad invalida 0",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart/items/{{productId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"quantity\":0}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cantidad invalida -1",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart/items/{{productId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"quantity\":-1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Producto inexistente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart/items",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"productId\":2147483647,\"quantity\":1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Precio no aceptado del cliente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart/items",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"productId\":\"{{productId}}\",\"quantity\":1,\"price\":\"0.01\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No modificar carrito ajeno",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerOtherToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart/items/{{productId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"quantity\":1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retirar logicamente",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart/items/{{productId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reactivar sin duplicar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart/items",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"productId\":\"{{productId}}\",\"quantity\":2}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Two unique lines',()=>pm.expect(b.items.length).to.eql(2)); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 Cotizacion y checkout",
+      "item": [
+        {
+          "name": "Direccion ajena no cotizable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerOtherToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/checkout/quote",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"addressId\":\"{{addressId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cotizar precios actuales",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/checkout/quote",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"addressId\":\"{{addressId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.variables.set('oldQuote',b.quote);pm.test('Two sellers',()=>pm.expect(b.orders.length).to.eql(2)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambio de precio posterior",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"price\":\"11.00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Exigir reconfirmacion del precio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/checkout",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"quote\":\"{{oldQuote}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409',function(){pm.expect(pm.response.code).to.eql(409);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===409) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cotizar de nuevo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/checkout/quote",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"addressId\":\"{{addressId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.variables.set('quote',b.quote);pm.variables.set('addressSnapshot',JSON.stringify(b.address)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar pedidos por vendedor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/checkout",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"quote\":\"{{quote}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201',function(){pm.expect(pm.response.code).to.eql(201);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===201) { pm.test('One order per seller',()=>pm.expect(b.orders.length).to.eql(2));pm.test('Not a replay',()=>pm.expect(b.replayed).to.eql(false));pm.variables.set('orderIds',JSON.stringify(b.orders.map(o=>o.id).sort()));pm.variables.set('orderId',b.orders.find(o=>o.sellerId===pm.variables.get('sellerId')).id);pm.variables.set('otherOrderId',b.orders.find(o=>o.sellerId===pm.variables.get('sellerOtherId')).id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reintento idempotente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/checkout",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"quote\":\"{{quote}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Same persisted orders',()=>{pm.expect(b.replayed).to.eql(true);pm.expect(JSON.stringify(b.orders.map(o=>o.id).sort())).to.eql(pm.variables.get('orderIds'));}); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cotizacion ligada al comprador",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerOtherToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/checkout",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"quote\":\"{{quote}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Firma alterada rechazada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/checkout",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"quote\":\"{{quote}}tampered\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Carrito vaciado tras confirmar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/checkout/quote",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"addressId\":\"{{addressId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409',function(){pm.expect(pm.response.code).to.eql(409);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===409) {  }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "09 Pedidos e historial",
+      "item": [
+        {
+          "name": "Listar pedidos propios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Exactly two orders',()=>pm.expect(b.length).to.eql(2)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprador ajeno no consulta",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerOtherToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders/{{orderId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Vendedor ajeno no consulta",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerOtherToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders/{{orderId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprador no prepara",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders/{{orderId}}/status",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"PREPARING\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No omitir estados",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders/{{orderId}}/status",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"DELIVERED\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409',function(){pm.expect(pm.response.code).to.eql(409);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===409) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transicion PREPARING",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders/{{orderId}}/status",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"PREPARING\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Persisted state',()=>pm.expect(b.status).to.eql('PREPARING')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transicion SHIPPED",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders/{{orderId}}/status",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"SHIPPED\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Persisted state',()=>pm.expect(b.status).to.eql('SHIPPED')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transicion DELIVERED",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders/{{orderId}}/status",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"DELIVERED\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Persisted state',()=>pm.expect(b.status).to.eql('DELIVERED')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelacion exige motivo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders/{{otherOrderId}}/status",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"CANCELED\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar segundo pedido",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders/{{otherOrderId}}/status",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"CANCELED\",\"reason\":\"Cancelacion ficticia controlada\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar catalogo tras compra",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Changed after checkout\",\"price\":\"12.00\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar direccion tras compra",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/addresses/{{addressId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"city\":\"Despues del checkout\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Snapshots e historial inmutables",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/orders/{{orderId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Immutable product snapshot',()=>{pm.expect(b.items[0].productTitle).to.eql('Postman primary');pm.expect(b.items[0].unitPrice).to.eql('11.00');pm.expect(b.total).to.eql('22.00');});pm.test('Immutable address',()=>pm.expect(b.deliveryAddressSnapshot).to.eql(JSON.parse(pm.variables.get('addressSnapshot'))));pm.test('Complete history',()=>pm.expect(b.history.map(h=>h.newStatus)).to.eql(['PENDING','PREPARING','SHIPPED','DELIVERED'])); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10 Seguridad y suspension",
+      "item": [
+        {
+          "name": "Sin JWT",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401',function(){pm.expect(pm.response.code).to.eql(401);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===401) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "JWT invalido",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid.synthetic.token"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401',function(){pm.expect(pm.response.code).to.eql(401);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===401) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CORS no autorizado sin diagnosticos internos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "https://untrusted.example.invalid"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 500',function(){pm.expect(pm.response.code).to.eql(500);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===500) { pm.test('No stack or SQL diagnostics',()=>{pm.expect(b).not.to.have.property('stack');pm.expect(b).not.to.have.property('sql');}); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ruta roles retirada",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/roles",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 410',function(){pm.expect(pm.response.code).to.eql(410);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===410) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ruta files retirada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/files/1",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 410',function(){pm.expect(pm.response.code).to.eql(410);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===410) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Suspension sin motivo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/sellers/{{sellerId}}/suspend",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ADMIN suspende vendedor aprobado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/sellers/{{sellerId}}/suspend",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"Incumplimiento ficticio controlado\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Suspended',()=>pm.expect(b.status).to.eql('SUSPENDED')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Suspension duplicada no confirmada",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/sellers/{{sellerId}}/suspend",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"Duplicated\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409',function(){pm.expect(pm.response.code).to.eql(409);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===409) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "JWT anterior ya no publica",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"stock\":100}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Producto suspendido oculto",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Producto suspendido no comprable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cart/items",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"productId\":\"{{productId}}\",\"quantity\":1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409',function(){pm.expect(pm.response.code).to.eql(409);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===409) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Suspender cuenta compradora auxiliar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/{{buyerOtherEmail}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\":\"SUSPENDED\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "JWT de cuenta suspendida bloqueado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerOtherToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/time",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "11 Auditoria",
+      "item": [
+        {
+          "name": "Lectura ADMIN con permiso solo en fixture",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/audit-logs?limit=100",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Relevant audit events',()=>{pm.expect(b.length>0).to.eql(true);pm.expect(b.some(e=>e.action==='seller.suspended')).to.eql(true);});pm.test('No private details',()=>pm.expect(b.some(e=>Object.prototype.hasOwnProperty.call(e,'details'))).to.eql(false)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Auditoria no accesible por BUYER",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/audit-logs",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paginacion invalida",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/audit-logs?limit=101",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No hay eliminacion HTTP de auditoria",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/audit-logs/1",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
