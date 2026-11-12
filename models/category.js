@@ -1,38 +1,18 @@
 'use strict';
 
-const {
-  Model
-} = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-  class Category extends Model {
-    static associate(models) {
-      Category.belongsToMany(models.Product, {
-        as: 'products',
-        through: models.ProductCategory,
-        foreignKey: "categoryId",
-        otherKey: "productId"
-      });
-    }
-  }
-  Category.init({
-    id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
-      primaryKey: true
-    },
-    name: {
-      type: DataTypes.STRING,
-      allowNull: false
-    },
-    protected: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false
-    }
-  }, {
-    sequelize,
-    freezeTableName: true,
-    modelName: 'Category',
-    tableName: 'categories'
-  });
+  const Category = sequelize.define('Category', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true, allowNull: false },
+    name: { type: DataTypes.STRING(120), allowNull: false, unique: true },
+    protected: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    createdAt: { type: DataTypes.DATE(3), allowNull: false },
+    updatedAt: { type: DataTypes.DATE(3), allowNull: false },
+    deletedAt: { type: DataTypes.DATE(3), allowNull: true }
+  }, { tableName: 'categories', paranoid: true });
+
+  Category.associate = ({ Product, ProductCategory }) => {
+    Category.belongsToMany(Product, { as: 'products', through: { model: ProductCategory, unique: false },
+      foreignKey: 'categoryId', otherKey: 'productId', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
+  };
   return Category;
 };

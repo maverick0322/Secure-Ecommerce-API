@@ -1,19 +1,16 @@
 'use strict';
 
-const { Model } = require('sequelize');
-
 module.exports = (sequelize, DataTypes) => {
-  class ProductCategory extends Model {}
+  const ProductCategory = sequelize.define('ProductCategory', {
+    productId: { type: DataTypes.INTEGER, primaryKey: true, allowNull: false },
+    categoryId: { type: DataTypes.INTEGER, primaryKey: true, allowNull: false },
+    createdAt: { type: DataTypes.DATE(3), allowNull: false },
+    deletedAt: { type: DataTypes.DATE(3), allowNull: true }
+  }, { tableName: 'product_categories', paranoid: true, updatedAt: false });
 
-  ProductCategory.init({
-    categoryId: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true },
-    productId: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true }
-  }, {
-    sequelize,
-    modelName: 'ProductCategory',
-    tableName: 'product_categories',
-    freezeTableName: true
-  });
-
+  ProductCategory.associate = ({ Product, Category }) => {
+    ProductCategory.belongsTo(Product, { as: 'product', foreignKey: 'productId', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
+    ProductCategory.belongsTo(Category, { as: 'category', foreignKey: 'categoryId', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
+  };
   return ProductCategory;
 };

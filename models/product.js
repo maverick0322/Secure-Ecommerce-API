@@ -1,52 +1,23 @@
 'use strict';
 
-const {
-  Model
-} = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-  class Product extends Model {
-    static associate(models) {
-      // Relación muchos a muchos con categoría a través de product_categories
-      Product.belongsToMany(models.Category, {
-        as: "categories",
-        through: models.ProductCategory,
-        foreignKey: "productId",
-        otherKey: "categoryId"
-      });
-      // Relación de pertenencia con archivo para la imagen
-      Product.belongsTo(models.File, {
-        as: 'file',
-        foreignKey: "fileId"
-      });
-    }
-  }
-  Product.init({
-    id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
-      primaryKey: true
-    },
-    title: {
-      type: DataTypes.STRING,
-      defaultValue: 'Sin titulo'
-    },
-    description: {
-      type: DataTypes.TEXT,
-      defaultValue: 'Sin descripcion'
-    },
-    price: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false
-    },
-    fileId: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    }
-  }, {
-    sequelize,
-    freezeTableName: true,
-    modelName: 'Product',
-    tableName: 'products'
-  });
+  const Product = sequelize.define('Product', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true, allowNull: false },
+    sellerId: { type: DataTypes.UUID, allowNull: false },
+    title: { type: DataTypes.STRING(255), allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: true },
+    price: { type: DataTypes.DECIMAL(12, 2), allowNull: false, validate: { min: 0 } },
+    stock: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0, validate: { min: 0 } },
+    imagePublicId: { type: DataTypes.STRING(255), allowNull: true },
+    createdAt: { type: DataTypes.DATE(3), allowNull: false },
+    updatedAt: { type: DataTypes.DATE(3), allowNull: false },
+    deletedAt: { type: DataTypes.DATE(3), allowNull: true }
+  }, { tableName: 'products', paranoid: true });
+
+  Product.associate = ({ Seller, Category, ProductCategory }) => {
+    Product.belongsTo(Seller, { as: 'seller', foreignKey: 'sellerId', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
+    Product.belongsToMany(Category, { as: 'categories', through: { model: ProductCategory, unique: false },
+      foreignKey: 'productId', otherKey: 'categoryId', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
+  };
   return Product;
 };
