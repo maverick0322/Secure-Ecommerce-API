@@ -1,5 +1,17 @@
 # E-Commerce Backend API en Node.js 🛡️
 
+> Etapa 5: el backend ya utiliza `secure_ecommerce` con `ecommerce_app`. Direcciones, carrito, cotizaciones, checkout, pedidos y auditoría disponen de pruebas HTTP/MySQL aisladas. La lectura administrativa de auditoría requiere el SELECT limitado documentado en el [reporte de implementación](docs/implementation/implementation-report.md); todavía no se ha concedido en la base habitual. Las instrucciones antiguas de instalación, migraciones y seeders conservadas más abajo son históricas: no deben ejecutarse sobre el destino definitivo.
+
+Direcciones del comprador: `GET/POST /api/addresses`, `PUT/DELETE /api/addresses/:id` y `PUT /api/addresses/:id/default`. Requieren JWT de BUYER activo y verificado; la propiedad se deriva del usuario autenticado. Los identificadores BIGINT se envían como texto decimal. El cuerpo admite únicamente los campos de dirección documentados en Swagger, sin `buyerId`.
+
+Carrito: `GET /api/cart`, `POST /api/cart/items`, `PUT/DELETE /api/cart/items/:productId`. Cotización: `POST /api/checkout/quote` con `addressId` como texto; confirme el precio y dirección mostrados al comprador y envíe únicamente `quote` a `POST /api/checkout`. Un 409 por cambios exige nueva cotización y reconfirmación. La cotización dura diez minutos; un reintento de una compra ya confirmada devuelve el mismo resultado sin descontar nuevamente stock. Pedidos: `GET /api/orders`, `GET /api/orders/:id`, `PUT /api/orders/:id/status`. La cancelación requiere motivo y no repone automáticamente inventario.
+
+Pruebas reales del esquema final: `RUN_STAGE5_MYSQL=1 npm run test:coverage` en Linux, con Docker disponible. En PowerShell configure `$env:RUN_STAGE5_MYSQL='1'`. El ensayo crea su propio servidor tmpfs en `127.0.0.1:13308`, ejecuta además las regresiones de cuentas/catálogo y retira exclusivamente ese contenedor al terminar. `node scripts/database/stage5-historical-tests.js` ejecuta las pruebas históricas de migraciones e integridad en otro servidor tmpfs, puerto 13307. Ninguno utiliza el puerto habitual 3307.
+
+PlantUML queda excluido de esta etapa. La validación del backend en Node 20/Linux puede reproducirse con `node scripts/database/verify-node20.js`; su contexto excluye secretos y almacenamiento histórico y no ejecuta generación de diagramas.
+
+ADMIN inicial: prepare la cuenta MySQL independiente `ecommerce_admin_bootstrap` según el reporte y cargue su secreto en `.env.admin-bootstrap.local`, ignorado por Git. `node scripts/database/bootstrap-admin.js` solicita correo, nombre, contraseña oculta y código de correo; exige proveedor de correo configurado, verifica servidor/UUID y crea usuario, perfil y auditoría en una transacción. No hay registro ADMIN público. Todavía no se ha creado una cuenta real.
+
 **Materia:** Programación Segura  
 **Institución:** Facultad de Estadística e Informática — Universidad Veracruzana  
 **Tecnologías:** Node.js (v20+), Express.js, Sequelize ORM, MySQL 8.0, Docker, Docker Compose, JWT, Bcrypt, Multer, Swagger (OpenAPI).
@@ -44,7 +56,7 @@ backendnode/
 ├── .env.example        # Plantilla pública de variables de entorno
 ├── .gitignore          # Reglas estrictas de exclusión para Git
 ├── .sequelizerc        # Enrutador de rutas para la CLI de Sequelize
-├── bd.sql              # Script DDL inicial de MySQL (permisos locales y de red)
+├── bd.sql              # Creación inicial del esquema anterior en MySQL
 ├── Dockerfile          # Imagen contenerizada de la API en Node.js (Alpine, no-root)
 ├── docker-compose.yml  # Orquestador multiservicio (API + MySQL 8.0)
 ├── package.json        # Manifiesto de dependencias y scripts NPM
@@ -56,11 +68,15 @@ backendnode/
 
 ## Normalización de nombres del backend
 
+En `feature/secure-ecommerce-db` consulte el [reporte de implementación de `secure_ecommerce`](docs/implementation/implementation-report.md) antes de usar comandos históricos de instalación. La API utiliza exclusivamente el esquema definitivo `secure_ecommerce` con `ecommerce_app`; no ejecute migraciones ni seeders históricos en ese destino.
+
+El código de cuentas y catálogo requiere las 14 tablas definitivas. El catálogo usa Cloudinary y las variables `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` y `CLOUDINARY_API_SECRET`. El directorio persistente `log/cloudinary` conserva las limpiezas de imágenes pendientes. Las nuevas cargas se realizan en `PUT /api/products/:id/image` con una sola imagen JPEG, PNG o WebP de hasta 2 MB.
+
 El backend usa rutas y campos en inglés y mantiene los mensajes en español. El cambio de contrato requiere adaptar el frontend por separado: no se ofrecen alias de las rutas antiguas. Consulte el [mapa de renombres, despliegue y resultados](docs/backend-english-names.md) y los [ejemplos HTTP](examples/api.http).
 
-Para una base existente, detenga la API, respalde sus datos y ejecute `npm run migrate` antes de iniciar esta versión. Las siete migraciones históricas se conservan intactas y la migración incremental renombra tablas y columnas sin reiniciar la base. No borre entradas de SequelizeMeta. Los seeders completan registros faltantes y preservan las contraseñas existentes.
+Para normalizar el esquema anterior en una instalación independiente, detenga la API, respalde sus datos y use `npm run migrate -- --to 20261108000001-normalize-english-schema.js`. Las siete migraciones históricas se conservan intactas y la normalización renombra tablas y columnas sin reiniciar la base. Conserve las entradas de `SequelizeMeta`. Los seeders anteriores completan registros faltantes y preservan las contraseñas existentes.
 
-Cambie `FILES_IN_BD` por `FILES_IN_DB` en su archivo de entorno antes de arrancar; conserva los valores `true` y `false`. Los nombres de bases y cuentas MySQL existentes permanecen compatibles. `bd.sql` crea la base solo si falta; el esquema final se obtiene mediante las migraciones.
+Cambie `FILES_IN_BD` por `FILES_IN_DB` en su archivo de entorno antes de arrancar. La variable admite `true` y `false`. Los nombres de bases y cuentas MySQL existentes permanecen compatibles. `bd.sql` crea `mercadolibrenode` si falta. Un administrador provisiona las cuentas de MySQL por separado.
 
 Para revertir únicamente el último cambio, detenga la API y ejecute `npm run migrate:undo:last` mientras la migración de normalización sea la última aplicada. Después use el código de la versión anterior. El comando histórico `migrate:undo` revierte todas las migraciones y no debe usarse para esta actualización. La reversión automática de seeders se bloquea para preservar datos existentes.
 
@@ -108,23 +124,23 @@ Esta modalidad levanta de forma automática la base de datos MySQL 8.0 y la API 
    ```
    *(En PowerShell: `Copy-Item .env.example .env`)*.
 
-2. **Levantar los servicios con Docker Compose:**
+2. **Completar `.env` con las credenciales vigentes y `JWT_SECRET`.** Para un volumen nuevo, defina `DB_ROOT_PASSWORD` en la sesión de Compose y siga el [aprovisionamiento del esquema anterior](docs/database/etapa-1-secure-ecommerce.md#esquema-anterior).
+
+3. **Levantar los servicios con Docker Compose:**
    ```bash
    docker compose up -d --build
    ```
 
-3. **Ejecutar migraciones y datos iniciales en el contenedor:**
+4. **Generar Swagger en el contenedor:**
    ```bash
-   docker compose exec app npm run migrate
-   docker compose exec app npm run seed
    docker compose exec app npm run swagger
    ```
 
-4. **Acceder a la aplicación:**
+5. **Acceder a la aplicación:**
    * **API REST:** `http://localhost:3000`
    * **Documentación Swagger UI:** `http://localhost:3000/swagger`
 
-5. **Para detener los contenedores:**
+6. **Para detener los contenedores:**
    ```bash
    docker compose down
    ```
@@ -139,7 +155,7 @@ Arquitectura distribuida en 3 capas físicas/virtuales conectadas a la misma red
 ┌────────────────────────┐      ┌────────────────────────┐      ┌────────────────────────┐
 │       EQUIPO 1         │      │        EQUIPO 2        │      │        EQUIPO 3        │
 │  Servidor de MySQL 8   │◄────►│  Servidor API Node.js  │◄────►│ Cliente Web / Swagger  │
-│  IP: 192.168.1.10:3306 │      │  IP: 192.168.1.20:3000 │      │ IP: 192.168.1.30       │
+│  IP: 192.168.1.10:3307 │      │  IP: 192.168.1.20:3000 │      │ IP: 192.168.1.30       │
 └────────────────────────┘      └────────────────────────┘      └────────────────────────┘
 ```
 
@@ -149,13 +165,13 @@ Arquitectura distribuida en 3 capas físicas/virtuales conectadas a la misma red
    ```bash
    docker compose up -d db
    ```
-   *(El script `bd.sql` se ejecuta automáticamente al primer inicio creando la base de datos y el usuario con permisos remotos `'mercadolibre_user'@'%'`)*.
+   En un volumen nuevo, defina antes `DB_ROOT_PASSWORD` en la sesión de Compose. `bd.sql` crea la base anterior en el primer arranque. El [aprovisionamiento de la cuenta](docs/database/etapa-1-secure-ecommerce.md#esquema-anterior) es un paso administrativo separado.
 3. Obtener la dirección IP local de este equipo:
    * En Windows PowerShell: `ipconfig` (buscar dirección IPv4, ej: `192.168.1.10`).
    * En Linux/Mac: `ip a` o `ifconfig`.
-4. **Habilitar el puerto 3306 en el Firewall de Windows del Equipo 1:**
+4. **Permitir el puerto publicado `3307` desde el Equipo 2 en el Firewall de Windows del Equipo 1:**
    ```powershell
-   New-NetFirewallRule -DisplayName "MySQL 3306" -Direction Inbound -Protocol TCP -LocalPort 3306 -Action Allow
+   New-NetFirewallRule -DisplayName "MySQL 3307" -Direction Inbound -Protocol TCP -LocalPort 3307 -RemoteAddress 192.168.1.20 -Action Allow
    ```
 
 ---
@@ -171,29 +187,26 @@ Arquitectura distribuida en 3 capas físicas/virtuales conectadas a la misma red
    # Apuntar al Equipo 1 (Base de Datos)
    DB_HOST=192.168.1.10
    DOCKER_DB_HOST=192.168.1.10
-   DB_PORT=3306
+   DB_PORT=3307
+   DOCKER_DB_PORT=3307
    DB_DATABASE=mercadolibrenode
    DB_USER=mercadolibre_user
-   DB_PASSWORD=M3rc@d0
+   DB_PASSWORD=
 
    # Configurar puerto y CORS para admitir al cliente (Equipo 3)
    SERVER_PORT=3000
    CORS_ORIGIN=http://192.168.1.30:8080,http://localhost:8080
    ```
-4. Ejecutar las migraciones y seeders para estructurar la base de datos remota del Equipo 1:
+4. Completar `DB_PASSWORD` y `JWT_SECRET`. Arrancar la API con el esquema anterior ya preparado:
    * **Con Node.js nativo:**
      ```bash
      npm ci
-     npm run migrate
-     npm run seed
      npm run swagger
      npm start
      ```
    * **O con Docker en el Equipo 2:**
      ```bash
      docker compose up -d --no-deps --build app
-     docker compose exec app npm run migrate
-     docker compose exec app npm run seed
      docker compose exec app npm run swagger
      ```
 5. Obtener la IP local del Equipo 2 (ej: `192.168.1.20`).
@@ -237,18 +250,14 @@ Arquitectura distribuida en 3 capas físicas/virtuales conectadas a la misma red
    ```bash
    cp .env.example .env
    ```
-   Configure las credenciales correspondientes a su servidor MySQL local.
+   Configure las credenciales correspondientes a su servidor MySQL local, `JWT_SECRET` y `DB_PORT` según el puerto de ese servidor, habitualmente `3306` para una instalación directa.
 
 3. **Instalación de Dependencias:**
    ```bash
    npm ci
    ```
 
-4. **Ejecución de Migraciones y Seeders:**
-   ```bash
-   npm run migrate
-   npm run seed
-   ```
+4. **Preparación de la base anterior:** siga el [procedimiento administrativo](docs/database/etapa-1-secure-ecommerce.md#esquema-anterior) si necesita inicializar un servidor independiente.
 
 5. **Generación de Swagger y Arranque:**
    ```bash

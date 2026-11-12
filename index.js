@@ -20,10 +20,11 @@ app.use(express.urlencoded({
 // 4. Configuración de CORS con lista blanca dinámica y exposición de cabeceras de renovación
 const defaultOrigins = ['http://localhost:8080', 'http://localhost:8081'];
 const envOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean) : [];
+if(envOrigins.includes('*')) throw new Error('Configure explicit CORS origins; wildcard access is forbidden.');
 const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     return callback(new Error(`Origen no permitido por política CORS: ${origin}`));
@@ -61,6 +62,10 @@ app.use('/api/roles', require('./routes/roles.routes'));
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use("/api/files", require("./routes/files.routes"));
 app.use("/api/audit-logs", require("./routes/audit-logs.routes"));
+app.use('/api/addresses', require('./routes/addresses.routes'));
+app.use('/api/cart', require('./routes/cart.routes'));
+app.use('/api/checkout', require('./routes/checkout.routes'));
+app.use('/api/orders', require('./routes/orders.routes'));
 
 // 8. Manejo de recursos no encontrados (404) para todos los verbos HTTP
 app.use((req, res) => {
@@ -76,10 +81,14 @@ app.use(errorHandler);
 // 10. Inicialización del servidor HTTP solo en ejecución directa
 const PORT = process.env.SERVER_PORT || 3000;
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Aplicación E-Commerce escuchando en el puerto ${PORT}`);
-    console.log(`Entorno actual: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Documentación disponible en: http://localhost:${PORT}/swagger`);
+  Promise.resolve().then(async()=>{
+    require('./services/jwttoken.service').getJwtSecret();
+    await require('./services/database.service').verifyConnection(require('./models').sequelize);
+    require('./services/product-images.service').startRecovery();
+    app.listen(PORT,process.env.SERVER_HOST||'127.0.0.1',()=>console.log(`API conectada a secure_ecommerce; puerto ${PORT}.`));
+  }).catch(async()=>{
+    console.error('No se pudo verificar la conexión segura. La API no se inició.');
+    await require('./models').sequelize.close();process.exitCode=1;
   });
 }
 module.exports = app;

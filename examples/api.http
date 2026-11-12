@@ -1,11 +1,40 @@
 @baseUrl = http://localhost:3000/api
 @token = PEGAR_JWT_AQUI
+@email = demo@example.invalid
+@password = REEMPLAZAR_CON_CONTRASENA_DE_PRUEBA
+@verificationCode = PEGAR_CODIGO_RECIBIDO
+@sellerId = PEGAR_UUID_DEL_VENDEDOR
+@quote = PEGAR_COTIZACION_FIRMADA
+@orderId = 1
 
-### Iniciar sesión con un usuario de demostración
+# Contraseñas: variables privadas, nunca credenciales reales guardadas en Git.
+# Altas y cambios: mínimo 15 caracteres Unicode y máximo 72 bytes UTF-8.
+# Se rechazan candidatos comunes y repetitivos localmente, sin consultar terceros.
+
+### Solicitar verificación de correo
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{"email":"{{email}}"}
+
+### Suspender un vendedor APPROVED (solo JWT de ADMIN; conserva pedidos)
+PUT {{baseUrl}}/users/sellers/{{sellerId}}/suspend
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"reason":"Incumplimiento de las condiciones de venta"}
+
+### Verificar el código y registrar un vendedor
+POST {{baseUrl}}/auth/register/verify
+Content-Type: application/json
+
+{"email":"{{email}}","code":"{{verificationCode}}","password":"{{password}}","name":"Cuenta de ejemplo","profile":"SELLER","storeName":"Tienda de ejemplo"}
+
+### Iniciar sesión con una cuenta verificada
 POST {{baseUrl}}/auth
 Content-Type: application/json
 
-{"email":"gvera@uv.mx","password":"patito"}
+{"email":"{{email}}","password":"{{password}}"}
 
 ### Consultar el tiempo restante de sesión
 GET {{baseUrl}}/auth/time
@@ -22,12 +51,24 @@ Content-Type: application/json
 
 {"name":"Accesorios"}
 
-### Crear un producto
+### Crear un producto con un JWT de vendedor aprobado
 POST {{baseUrl}}/products
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{"title":"Teclado","description":"Teclado mecánico","price":950,"fileId":null}
+{"title":"Teclado","description":"Teclado mecánico","price":"950.00","stock":10}
+
+### Cargar o reemplazar la imagen de un producto propio
+PUT {{baseUrl}}/products/1/image
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=product-image
+
+--product-image
+Content-Disposition: form-data; name="image"; filename="producto.png"
+Content-Type: image/png
+
+< ./producto.png
+--product-image--
 
 ### Asignar una categoría al producto
 POST {{baseUrl}}/products/1/categories
@@ -40,7 +81,7 @@ Content-Type: application/json
 DELETE {{baseUrl}}/products/1/categories/1
 Authorization: Bearer {{token}}
 
-### Consultar metadatos de un archivo
+### Consultar metadatos de un archivo histórico con un JWT de ADMIN
 GET {{baseUrl}}/files/1/details
 Authorization: Bearer {{token}}
 
@@ -51,17 +92,81 @@ GET {{baseUrl}}/files/1
 GET {{baseUrl}}/users
 Authorization: Bearer {{token}}
 
-### Crear un usuario
-POST {{baseUrl}}/users
+### Aprobar una solicitud de vendedor con un JWT de ADMIN
+PUT {{baseUrl}}/users/sellers/{{sellerId}}/review
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{"email":"demo@example.com","password":"CambiarAntesDeUsar123","name":"Usuario de ejemplo","role":"Usuario"}
+{"status":"APPROVED"}
 
-### Consultar roles
+### Recurso de roles retirado: responde 410 para ADMIN
 GET {{baseUrl}}/roles
 Authorization: Bearer {{token}}
 
 ### Consultar la bitácora
 GET {{baseUrl}}/audit-logs
 Authorization: Bearer {{token}}
+### Direcciones del comprador (JWT BUYER verificado)
+GET {{baseUrl}}/addresses
+Authorization: Bearer {{token}}
+
+### Crear dirección propia; buyerId se deriva del JWT
+POST {{baseUrl}}/addresses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "recipientName": "Persona de ejemplo",
+  "street": "Calle de ejemplo",
+  "exteriorNumber": "1",
+  "neighborhood": "Centro",
+  "city": "Xalapa",
+  "state": "Veracruz",
+  "postalCode": "91000",
+  "country": "MX",
+  "isDefault": true
+}
+
+### Elegir dirección predeterminada propia
+PUT {{baseUrl}}/addresses/1/default
+Authorization: Bearer {{token}}
+
+### Carrito propio con precios actuales
+GET {{baseUrl}}/cart
+Authorization: Bearer {{token}}
+
+### Agregar producto al carrito (sin precio ni propietario)
+POST {{baseUrl}}/cart/items
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"productId":1,"quantity":2}
+
+### Cotizar: mostrar precios y dirección al comprador antes de confirmar
+POST {{baseUrl}}/checkout/quote
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"addressId":"1"}
+
+### Confirmar la cotización sin enviar totales calculados por el cliente
+POST {{baseUrl}}/checkout
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"quote":"{{quote}}"}
+
+### Pedidos autorizados del usuario actual
+GET {{baseUrl}}/orders
+Authorization: Bearer {{token}}
+
+### Pedido con snapshots e historial
+GET {{baseUrl}}/orders/{{orderId}}
+Authorization: Bearer {{token}}
+
+### Cancelar un pedido autorizado con motivo obligatorio
+PUT {{baseUrl}}/orders/{{orderId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"status":"CANCELED","reason":"Cancelación solicitada por el comprador"}
