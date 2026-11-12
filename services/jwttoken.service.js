@@ -1,9 +1,9 @@
 const jwt = require('jsonwebtoken');
 const CLAIM_TYPES = require('../config/claim-types');
+const { isUuid } = require('../validators/uuid');
 
 const issuer = 'ServidorFeiJWT';
 const audience = 'ClientesFeiJWT';
-const isUuid = value => typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;

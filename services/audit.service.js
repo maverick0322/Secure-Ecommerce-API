@@ -1,7 +1,7 @@
 'use strict';
 const {isIP}=require('node:net');
 const {AuditLog,Sequelize}=require('../models');
-const {isUuid}=require('./jwttoken.service');
+const {isUuid}=require('../validators/uuid');
 const {AccountError}=require('./accounts.service');
 const fields=['id','actorUserId','action','targetType','targetId','ipAddress','outcome','occurredAt'];
 function sanitize(details) {

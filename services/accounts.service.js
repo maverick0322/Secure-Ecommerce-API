@@ -3,6 +3,7 @@ const { isIP } = require('node:net');
 const bcrypt = require('bcrypt');
 const validator = require('express-validator').body;
 const passwords = require('./password-policy.service');
+const { isUuid } = require('../validators/uuid');
 const { User, Admin, Seller, Buyer, sequelize, Sequelize } = require('../models');
 
 const profiles = [['ADMIN', 'admin'], ['SELLER', 'seller'], ['BUYER', 'buyer']];
@@ -136,7 +137,7 @@ async function withAdmin(actorId, work) {
 }
 
 function suspendSeller(actorId, userId, reason, context = {}) {
-  if (!require('./jwttoken.service').isUuid(userId) || typeof reason !== 'string' ||
+  if (!isUuid(userId) || typeof reason !== 'string' ||
       !reason.trim() || [...reason.trim()].length > 255 || /[\u0000-\u001f\u007f]/.test(reason)) {
     throw new AccountError(400, 'La suspensión requiere un vendedor y un motivo de hasta 255 caracteres.');
   }

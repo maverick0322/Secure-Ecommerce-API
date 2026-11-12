@@ -1,5 +1,5 @@
 const accounts = require('../services/accounts.service');
-const { isUuid } = require('../services/jwttoken.service');
+const { isUuid } = require('../validators/uuid');
 const { AccountError, respondError, serializeAccount } = accounts;
 
 async function getAll(req, res) {
