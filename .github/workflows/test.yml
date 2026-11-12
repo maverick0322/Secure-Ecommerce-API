@@ -33,7 +33,12 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Run Test Suite with Coverage
+        env:
+          RUN_STAGE5_MYSQL: '1'
         run: npm run test:coverage
+
+      - name: Verify historical migrations on isolated MySQL
+        run: node scripts/database/stage5-historical-tests.js
 
       - name: Upload Test Coverage Artifact
         if: always()
