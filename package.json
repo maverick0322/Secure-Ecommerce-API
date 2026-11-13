@@ -18,7 +18,10 @@
     "migrate:undo": "sequelize db:migrate:undo:all",
     "migrate:undo:last": "sequelize db:migrate:undo",
     "seed": "sequelize db:seed:all",
-    "seed:undo": "sequelize db:seed:undo:all"
+    "seed:undo": "sequelize db:seed:undo:all",
+    "gmail:authorize": "node scripts/gmail/cli.js authorize",
+    "gmail:check": "node scripts/gmail/cli.js check",
+    "gmail:send-test": "node scripts/gmail/cli.js send-test"
   },
   "keywords": [
     "nodejs",
@@ -38,6 +41,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "express-validator": "^7.2.1",
+    "googleapis": "171.4.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.1",
     "mysql2": "^3.11.3",
@@ -60,6 +64,7 @@
     "braces": "^3.0.3",
     "chokidar": "^3.6.0",
     "argparse": "^2.0.1",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "gaxios": "7.3.1"
   }
 }

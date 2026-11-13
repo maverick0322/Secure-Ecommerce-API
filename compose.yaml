@@ -41,8 +41,10 @@ services:
       - SERVER_HOST=0.0.0.0
       - NODE_ENV=${NODE_ENV:-development}
       - JWT_SECRET=${JWT_SECRET:-}
-      - REGISTRATION_EMAIL_FROM=${REGISTRATION_EMAIL_FROM:-}
-      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - GMAIL_CLIENT_PATH=/run/secrets/gmail_client
+      - GMAIL_TOKEN_PATH=/run/secrets/gmail_token
+      - GMAIL_SENDER_EMAIL=${GMAIL_SENDER_EMAIL:-}
+      - GMAIL_REDIRECT_URI=http://localhost:3001/oauth2/callback
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
@@ -90,6 +92,8 @@ services:
       - access_private_key
       - access_public_manifest
       - auth_credential_key
+      - gmail_client
+      - gmail_token
     networks:
       - default
       - redis_private
@@ -137,6 +141,10 @@ networks:
       com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"
 
 secrets:
+  gmail_client:
+    file: ./.secrets/gmail/client.json
+  gmail_token:
+    file: ./.secrets/gmail/token.json
   access_private_key:
     file: ./.secrets/auth/access-private.pem
   access_public_manifest:

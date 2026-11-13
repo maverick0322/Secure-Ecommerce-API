@@ -4,6 +4,8 @@ Redis 8.2 y `compose.yaml`: [preparación manual, TLS y secretos](docs/security/
 
 Configuración portable Windows/Linux: [rutas protegidas, manifiesto `access-v1` y CA Redis](docs/security/portable-config.md). Diagnóstico sin secretos ni conexión Redis: `node scripts/auth/check-config.js`.
 
+Correo de registro: [Gmail API + OAuth Testing](docs/security/gmail-oauth.md), con el cliente Google existente y permiso exclusivo `gmail.send`. `npm run gmail:check` comprueba archivos sin red; `npm run gmail:authorize` prepara el consentimiento manual. No se han autorizado envíos reales en esta implementación.
+
 > Etapa 5: el backend ya utiliza `secure_ecommerce` con `ecommerce_app`. Direcciones, carrito, cotizaciones, checkout, pedidos y auditoría disponen de pruebas HTTP/MySQL aisladas. La lectura administrativa de auditoría requiere el SELECT limitado documentado en el [reporte de implementación](docs/implementation/implementation-report.md); todavía no se ha concedido en la base habitual. Las instrucciones antiguas de instalación, migraciones y seeders conservadas más abajo son históricas: no deben ejecutarse sobre el destino definitivo.
 
 Direcciones del comprador: `GET/POST /api/addresses`, `PUT/DELETE /api/addresses/:id` y `PUT /api/addresses/:id/default`. Requieren JWT de BUYER activo y verificado; la propiedad se deriva del usuario autenticado. Los identificadores BIGINT se envían como texto decimal. El cuerpo admite únicamente los campos de dirección documentados en Swagger, sin `buyerId`.

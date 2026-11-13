@@ -1015,3 +1015,80 @@ La guía [Configuración portable](../security/portable-config.md) documenta el
 aprovisionamiento inicial para compañeros y las diferencias Docker/host.
 No se modificaron servidores ni sesiones Redis habituales, permisos o credenciales.
 No se inició la API habitual, ni se hicieron commits o push.
+
+### Gmail API + OAuth 2.0 Testing — 13 de noviembre de 2026
+
+Se revisaron los servicios actuales de correo/OTP, dependencias y configuración,
+y las clases GmailConfig, GmailCredentialsProvider y EmailSenderServiceImpl de
+Tap2Eat. La referencia usa Java; aquí se implementó el patrón en JavaScript:
+consentimiento offline, persistencia protegida del refresh y MIME/base64url. No
+se copiaron sus logs de destinatarios ni sus excepciones con datos del proveedor.
+
+`registration-email.service.js` sustituye Resend por `gmail.service.js` sin cambiar
+las rutas, respuestas ni `email-verification.service.js`. Se conserva el mensaje
+de seis dígitos con diez minutos, cinco intentos, cooldown y consumo único. Los
+fallos siguen siendo el 503 genérico y no se registran OTP, secretos ni tokens.
+Las referencias activas a RESEND_API_KEY/REGISTRATION_EMAIL_FROM se retiraron de
+servicios y Compose; las menciones anteriores del reporte conservan su contexto
+histórico. No se modificó el `.env` local ni se inventaron credenciales Gmail.
+
+El nuevo adaptador solicita exclusivamente gmail.send, carga el JSON existente
+desde `.secrets/gmail/client.json` y un token vinculado al cliente/remitente desde
+`token.json`. No se usa SMTP, lectura de perfil ni permisos Gmail más amplios.
+El SDK renueva access tokens en memoria. invalid_grant bloquea ese runtime hasta
+reautorizar y emite únicamente el comando seguro `npm run gmail:authorize`.
+Las solicitudes tienen timeout y no reintentan entregas inciertas automáticamente.
+
+`scripts/gmail/authorize.js` implementa callback temporal loopback con redirect
+fijo `http://localhost:3001/oauth2/callback`, state, PKCE S256, consentimiento
+offline, exclusión de callbacks concurrentes y timeout. Abre el navegador solo
+cuando el usuario ejecuta el comando. Rechaza scopes adicionales y no guarda
+access tokens. El refresh se escribe atómicamente con permisos privados bajo
+`.secrets/gmail/`, sin poder sobrescribir cliente ni secretos RS256 de otros
+directorios. Un fallo conserva el token previo. Este flujo real no se ejecutó.
+
+`scripts/gmail/cli.js` prepara `gmail:check` sin red, `gmail:authorize` para renovar
+consentimiento y `gmail:send-test`, que exige `--to` y `--allow-send`. El envío de
+prueba no genera OTP de registro. `.env.example` documenta cuatro variables Gmail
+y Compose prepara secretos en lectura solo para app. MySQL/Redis y sus puertos,
+volúmenes y configuraciones permanecen sin cambios. `.secrets/` ya estaba excluido
+de Git/Docker y se conservaron esas exclusiones.
+
+Se agregó `googleapis@171.4.0`, compatible con Node 20; la versión más reciente
+consultada exige Node 22. Se fijó gaxios 7.3.1 de la misma versión mayor para
+retirar el aviso transitivo detectado en 7.1.3/rimraf, sin audit fix force. La
+instalación limpia Node 20 y sus pruebas confirmaron la compatibilidad.
+
+Resultados reales de esta ejecución:
+
+- **42 pruebas específicas aprobadas**: SDK simulado, MIME/OTP, renovación de
+  access y caché, concurrencia, invalid_grant, scopes mínimos, state, PKCE,
+  callback ocupado/timeout/respuesta tardía, guardas de archivos y envío explícito.
+- Regresión con cobertura Windows/Node 24: **489 aprobadas, 45 omitidas**;
+  44 suites aprobadas y siete omitidas (51 totales), salida 0. Las integraciones
+  MySQL/Redis optativas omitidas no se ejecutaron para este cambio. El primer
+  ensayo específico encontró un await incompleto de la respuesta del callback
+  en el test; se corrigió el test y la repetición aprobó.
+- Cobertura: Gmail 96,66 % líneas / 83,82 % ramas; fachada de registro 100/100;
+  script de autorización 89,23 % líneas / 75,86 % ramas; CLI 72,72/62,96.
+  Global sin integraciones reales: 79,40 % líneas / 73,46 % ramas. No se cambiaron
+  exclusiones ni umbrales para ocultar fallos y no se certificó Quality Gate remoto.
+- Node 20/Linux: instalación limpia, misma regresión 489/45, auditoría, Swagger
+  y build documental aprobados. No se ejecutó generación de diagramas.
+- Auditoría final: cero altos/críticos, 19 moderados y cuatro bajos existentes.
+- Compose validado sin iniciar servicios. `npm run gmail:check` local indicó
+  cliente INVALID y token NOT_READY, con networkAttempted=false/emailSent=false:
+  falta configurar el cliente descargado, remitente y consentimiento real. No
+  se declara que Gmail esté autorizado ni que haya entregado mensajes.
+
+En Testing externo, los refresh con scopes Gmail normalmente caducan a los siete
+días. Reautorizar mediante el mismo comando y recrear solo app para remapear el
+token si usa bind/secrets Docker. La guía [Gmail OAuth](../security/gmail-oauth.md)
+explica los pasos y el despliegue `docker compose up -d --no-deps --build
+--force-recreate app`, que queda preparado pero no ejecutado.
+
+Archivos: servicio Gmail y fachada, scripts Gmail, package/lock, `.env.example`,
+Compose, pruebas Gmail/registro, fixture sintético, README y documentación. No se
+modificaron RS256, JWT, sesiones, OTP ni sus controles. No hubo cambios en bases,
+datos, credenciales o contenedores habituales; no se enviaron correos reales,
+no se abrió navegador real ni se ejecutó autorización. Sin commits, push o PR.
