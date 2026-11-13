@@ -1,5 +1,8 @@
 # Etapa 2: sesiones Redis implementadas en JavaScript
 
+Esta sección conserva el alcance original de la Etapa 2. La integración HTTP
+posterior se documenta en [Etapa 3 de autenticación](auth-stage3.md).
+
 Servicios internos aislados: **no se conectan a login, middleware ni endpoints**.
 No activan RS256 ni modifican el contrato HTTP, JWT actual, checkout, MySQL,
 migraciones, permisos o contenedores habituales. `JWT_SECRET` se conserva.

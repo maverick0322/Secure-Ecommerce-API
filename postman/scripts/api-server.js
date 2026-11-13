@@ -3,12 +3,13 @@
 const path=require('node:path');
 const crypto=require('node:crypto');
 const {ensure,assertIdentity,identitySql,protectedUuid}=require('./isolation');
-let models,server,closing=false;
+let models,server,isolatedAuth,closing=false;
 function fail(){if(process.send)process.send({type:'failed',code:'ISOLATED_API_FAILURE'});void close(1);}
 async function close(code=0){
   if(closing)return;closing=true;
   const timeout=setTimeout(()=>process.exit(1),6000);timeout.unref();
   if(server)await new Promise(resolve=>{server.close(resolve);server.closeAllConnections?.();});
+  if(isolatedAuth)try{await isolatedAuth.close();}catch{code=1;}
   if(models)try{await models.sequelize.close();}catch{}
   process.exit(code);
 }
@@ -79,6 +80,7 @@ async function main(){
     if(typeof req.query.email!=='string'||!req.query.email.endsWith('@example.invalid'))return res.status(400).json({message:'Synthetic address required.'});
     const code=mailbox.get(req.query.email);return code?res.json({code}):res.status(404).json({message:'No test message.'});
   });
+  isolatedAuth=await require('../../tests/support/isolated-auth').start({applicationRoot:workspace});
   app.use(require(path.join(workspace,'index.js')));
   require(path.join(workspace,'services/product-images.service')).startRecovery();
   server=app.listen(port,'127.0.0.1',()=>process.send({type:'ready',accounts:ids}));

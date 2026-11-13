@@ -1,7 +1,9 @@
 # Redis 8.2 en Compose: preparación y reinicios controlados
 
-Estado: configuración preparada; **Redis habitual no iniciado**. La infraestructura
-de sesiones sigue separada de login, middleware, JWT HTTP y checkout. No se cambia
+Estado original de esta preparación: Redis aún no iniciado en esa etapa. El usuario
+reporta posteriormente Redis healthy y conexión TLS verificada. La integración
+HTTP actual, todavía sin activación de la API habitual en esta tarea, se detalla
+en [Etapa 3 de autenticación](auth-stage3.md). Checkout conserva su firma independiente. No se cambia
 MySQL, sus cuentas, datos o volumen. `compose.yaml` sustituye el archivo anterior;
 Compose lo descubre automáticamente y conserva el nombre de proyecto derivado
 del mismo directorio. No usar otro `--project-name` ni mover el proyecto al operar

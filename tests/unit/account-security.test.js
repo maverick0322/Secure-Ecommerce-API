@@ -66,7 +66,7 @@ it('rejects edits or deletion of other administrators and hides missing targets'
   await expect(accounts.removeAccount(actor,'missing@example.invalid')).rejects.toMatchObject({status:404});
 });
 it('allows a safe self edit but refuses to suspend the administrator itself',async()=>{
-  fixture();const row={id:actor,update:jest.fn()};jest.spyOn(db.User,'findOne').mockResolvedValue(row);
+  fixture();const row={id:actor,status:'ACTIVE',update:jest.fn()};jest.spyOn(db.User,'findOne').mockResolvedValue(row);
   await accounts.updateAccount(actor,'admin@example.invalid',{name:'Updated admin',status:'ACTIVE'});
   expect(row.update).toHaveBeenCalledWith({name:'Updated admin',status:'ACTIVE'},{transaction:tx});
   await expect(accounts.updateAccount(actor,'admin@example.invalid',{status:'DISABLED'})).rejects.toMatchObject({status:403});

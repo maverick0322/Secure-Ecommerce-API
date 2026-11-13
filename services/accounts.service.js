@@ -21,6 +21,12 @@ class AccountError extends Error {
 }
 
 function respondError(res, error) {
+  if (['SESSION_STORE_UNAVAILABLE', 'AUTH_REDIS_CONFIGURATION_INVALID', 'RS256_CONFIGURATION_INVALID', 'SESSION_CONFLICT'].includes(error?.code)) {
+    return res.status(503).json({ status: 503, message: 'El servicio de autenticación no está disponible.' });
+  }
+  if (error?.name === 'AuthSessionError' || error?.code === 'INVALID_ACCESS_TOKEN') {
+    return res.status(401).json({ status: 401, message: 'Sesión inválida o expirada.' });
+  }
   const status = error instanceof AccountError ? error.status : 500;
   const message = status === 500 ? 'No se ha podido procesar la petición.' : error.message;
   return res.status(status).json({ status, message });
@@ -65,7 +71,8 @@ function serializeAccount(account, profile = accountType(account), sellerStatus 
 }
 
 function findAccountById(id, options = {}) {
-  return User.findByPk(id, { ...options, include });
+  const { withPassword = false, ...query } = options;
+  return (withPassword ? User.unscoped() : User).findByPk(id, { ...query, include });
 }
 
 function findAccountByEmail(email, withPassword = false) {
@@ -178,6 +185,16 @@ async function updateAccount(actorId, email, body, context = {}) {
     if (admin && (actorId !== account.id || (changes.status !== undefined && changes.status !== 'ACTIVE'))) {
       throw new AccountError(403, 'La administración de esta cuenta ADMIN está restringida.');
     }
+    // Also revoke on reactivation: a login racing with suspension, or a
+    // pre-existing suspended account, must not resurrect an older session.
+    const changesAccountState = changes.status !== undefined &&
+      (changes.status !== 'ACTIVE' || account.status !== 'ACTIVE');
+    if (changes.passwordHash || changesAccountState) {
+      // SQL cannot atomically commit Redis. Revoke first while holding the user
+      // row lock. On SQL rollback sessions remain revoked, never resurrected.
+      const { sessions } = await require('./auth-runtime.service').getRuntime();
+      await sessions.revokeAll({ userId: account.id });
+    }
     await account.update(changes,{transaction});
     await require('./audit.service').business(actorId,'usuarios.editar','user',account.id,transaction,context);
   });
@@ -187,6 +204,8 @@ function removeAccount(actorId, email, context = {}) {
   return withAdmin(actorId, async transaction => {
     const { account, admin } = await lockedTarget(email, transaction);
     if (admin) throw new AccountError(403,'El cierre de una cuenta ADMIN está restringido.');
+    const { sessions } = await require('./auth-runtime.service').getRuntime();
+    await sessions.revokeAll({ userId: account.id });
     await account.destroy({transaction});
     await require('./audit.service').business(actorId,'usuarios.eliminar','user',account.id,transaction,context);
   });

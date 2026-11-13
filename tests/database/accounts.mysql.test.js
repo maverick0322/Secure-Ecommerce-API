@@ -9,6 +9,7 @@ const adminId = '00000000-0000-4000-8000-000000000003';
 
 isolated('Stage 3A isolated MySQL account workflows', () => {
   let db;
+  let isolatedAuth;
   let app;
   let models;
   let accounts;
@@ -29,12 +30,14 @@ isolated('Stage 3A isolated MySQL account workflows', () => {
     app = require('../../index');
     models = require('../../models');
     accounts = require('../../services/accounts.service');
+    isolatedAuth = await require('../support/isolated-auth').start();
     mailer = require('../../services/registration-email.service');
     commerce = express().get('/commerce', require('../../middlewares/auth.middleware')('SELLER'), (req, res) => res.status(204).end());
   });
 
   afterEach(() => jest.restoreAllMocks());
   afterAll(async () => {
+    if (isolatedAuth) await isolatedAuth.close();
     if (models) await models.sequelize.close();
     if (db) await db.end();
   });

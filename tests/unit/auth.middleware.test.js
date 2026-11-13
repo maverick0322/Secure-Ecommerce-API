@@ -1,8 +1,8 @@
 const jwt = require('jsonwebtoken');
 const { User } = require('../../models');
 const authorize = require('../../middlewares/auth.middleware');
-const claims = require('../../config/claim-types');
-const { generateToken, verifyToken } = require('../../services/jwttoken.service');
+const { issueToken: generateToken } = require('../support/auth-fixtures');
+beforeEach(() => jest.spyOn(User, 'unscoped').mockReturnValue(User));
 const { makeAccount } = require('../support/auth-fixtures');
 
 afterEach(() => jest.restoreAllMocks());
@@ -56,13 +56,18 @@ it('checks seller approval for commerce and allows a pending seller to check ses
   expect(next).toHaveBeenCalledTimes(2);
 });
 
-it('renews near expiry using the current profile and identity', async () => {
+it('rejects legacy HS256 access tokens without renewal or account lookup', async () => {
   const account = makeAccount('BUYER');
-  const token = jwt.sign({ [claims.Role]: 'ADMIN', [claims.Name]: 'old@example.invalid' }, process.env.JWT_SECRET,
-    { issuer: 'ServidorFeiJWT', audience: 'ClientesFeiJWT', subject: account.id, expiresIn: 180 });
-  jest.spyOn(User, 'findByPk').mockResolvedValue(account);
+  const token = jwt.sign({}, process.env.JWT_SECRET, { issuer: 'ServidorFeiJWT', audience: 'ClientesFeiJWT', subject: account.id, expiresIn: 180 });
+  const lookup = jest.spyOn(User, 'findByPk');
   const { req, res, next } = requestWith(token);
   await authorize('Usuario')(req, res, next);
-  expect(next).toHaveBeenCalledTimes(1);
-  expect(verifyToken(res.set.mock.calls[0][1])).toMatchObject({ sub: account.id, [claims.Role]: 'BUYER', [claims.Name]: account.email });
+  expect(res.status).toHaveBeenCalledWith(401); expect(lookup).not.toHaveBeenCalled();
+  expect(res.set).not.toHaveBeenCalled(); expect(next).not.toHaveBeenCalled();
+});
+it('does not emit automatic renewal headers for an accepted RS256 access token', async () => {
+  const account = makeAccount('BUYER'); jest.spyOn(User, 'findByPk').mockResolvedValue(account);
+  const { req, res, next } = requestWith(generateToken(account));
+  await authorize('BUYER')(req, res, next);
+  expect(next).toHaveBeenCalledTimes(1); expect(res.set).not.toHaveBeenCalled();
 });

@@ -48,7 +48,13 @@ services:
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8080,http://localhost:8081}
       - FILES_IN_DB=${FILES_IN_DB:-false}
-      # Prepared only: the session services are not connected to HTTP yet.
+      # RS256/session infrastructure; provision protected files before activating this API.
+      - JWT_RS256_ISSUER=${JWT_RS256_ISSUER:-secure-ecommerce-api/access-v2}
+      - JWT_RS256_AUDIENCE=${JWT_RS256_AUDIENCE:-secure-ecommerce-clients/access-v2}
+      - JWT_RS256_ACTIVE_KID=${JWT_RS256_ACTIVE_KID:-access-v2-current}
+      - JWT_RS256_PRIVATE_KEY_PATH=/run/secrets/access_private_key
+      - JWT_RS256_PUBLIC_KEYS_PATH=/run/secrets/access_public_manifest
+      - AUTH_CREDENTIAL_VERSION_KEY_PATH=/run/secrets/auth_credential_key
       - AUTH_REDIS_HOST=redis
       - AUTH_REDIS_PORT=6379
       - AUTH_REDIS_TLS=true
@@ -66,6 +72,12 @@ services:
       - ./uploads:/usr/src/app/uploads
       - ./log:/usr/src/app/log
       - type: bind
+        source: ./.secrets/auth/public-keys
+        target: /run/auth/public-keys
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
         source: ./.secrets/redis/state
         target: /run/redis-state
         read_only: true
@@ -74,6 +86,9 @@ services:
     secrets:
       - redis_app_password
       - redis_ca
+      - access_private_key
+      - access_public_manifest
+      - auth_credential_key
     networks:
       - default
       - redis_private
@@ -121,6 +136,12 @@ networks:
       com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"
 
 secrets:
+  access_private_key:
+    file: ./.secrets/auth/access-private.pem
+  access_public_manifest:
+    file: ./.secrets/auth/public-keys.docker.json
+  auth_credential_key:
+    file: ./.secrets/auth/credential-version.key
   redis_acl:
     file: ./.secrets/redis/users.acl
   redis_app_password:

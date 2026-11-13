@@ -1,9 +1,5 @@
-const jwt = require('jsonwebtoken');
-const CLAIM_TYPES = require('../config/claim-types');
+const runtime = require('./auth-runtime.service');
 const { isUuid } = require('../validators/uuid');
-
-const issuer = 'ServidorFeiJWT';
-const audience = 'ClientesFeiJWT';
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -24,16 +20,9 @@ function getJwtSecret() {
   return secret;
 }
 
-function generateToken({ id, email, name, profile }) {
-  return jwt.sign({ [CLAIM_TYPES.Name]: email, [CLAIM_TYPES.GivenName]: name, [CLAIM_TYPES.Role]: profile },
-    getJwtSecret(), { algorithm: 'HS256', expiresIn: '20m', issuer, audience, subject: id });
-}
-
-function verifyToken(token, secret = getJwtSecret()) {
-  const decoded = jwt.verify(token, secret, { algorithms: ['HS256'], issuer, audience });
-  if (!isUuid(decoded.sub) || !Number.isInteger(decoded.exp)) throw new jwt.JsonWebTokenError('Invalid account token');
-  return decoded;
-}
+// Access tokens are exclusively RS256; session creation belongs to authentication.service.
+function generateToken({ id, sessionId }) { return runtime.getTokens().sign({ sub: id, sid: sessionId }); }
+function verifyToken(token) { return runtime.getTokens().verify(token); }
 
 function getRemainingTokenTime(decoded) {
   const seconds = Math.max(0, Math.floor(decoded.exp - Date.now() / 1000));

@@ -6,14 +6,14 @@ const request=require('supertest');
 const accounts=require('../../services/accounts.service');
 const audit=require('../../services/audit.service');
 
-module.exports=async function securityChecks({root,models,app,admin,adminHeader,buyerId,buyerHeader}) {
+module.exports=async function securityChecks({root,models,app,admin,adminHeader,buyerId,buyerHeader,isolatedAuth}) {
   const auth=req=>req.set('Authorization',adminHeader);
   const buyer=req=>req.set('Authorization',buyerHeader);
   const secret=crypto.randomBytes(32).toString('hex');
   const seller=await accounts.createPublicAccount({email:`${crypto.randomUUID()}@example.invalid`,
     name:'Synthetic security seller',password:secret,profile:'SELLER',storeName:'Isolated shop'});
   await accounts.reviewSeller(admin,seller.id,'APPROVED',null,'127.0.0.1');
-  const token=require('../../services/jwttoken.service').generateToken({...seller,profile:'SELLER'});
+  let token=await isolatedAuth.issue(seller);
   const merchant=req=>req.set('Authorization',`Bearer ${token}`);
   const productResponse=await merchant(request(app).post('/api/products')).send({title:'Security fixture',price:'8.25',stock:20});
   assert.equal(productResponse.status,201);const productId=productResponse.body.productId;
@@ -70,6 +70,8 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
     'SELECT name FROM users WHERE id=?',[seller.id]);
   await rollback('usuarios.eliminar',()=>auth(request(app).delete(`/api/users/${seller.email}`)),
     'SELECT deletedAt FROM users WHERE id=?',[seller.id]);
+  assert.equal((await merchant(request(app).get('/api/auth/time'))).status,401,'Deletion rollback must not resurrect sessions');
+  token=await isolatedAuth.issue(seller);
 
   // A provider upload can succeed while the atomic SQL/audit commit fails.
   const cloud=require('../../services/cloudinary.service');
@@ -101,19 +103,42 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
     for(const file of await fs.readdir(directory))await fs.unlink(path.join(directory,file));await fs.rmdir(directory);
   }
 
-  // Password changes are atomic too; compare hashes as booleans, never print them.
+  // SQL password/audit remains atomic; Redis revocation is never rolled back.
+  // Compare hashes as booleans, never print them.
   const [[beforeHash]]=await root.query('SELECT passwordHash FROM users WHERE id=?',[seller.id]);
   await fault('usuarios.editar',async()=>{
     assert.equal((await auth(request(app).put(`/api/users/${seller.email}`)).send({password:crypto.randomBytes(24).toString('base64')})).status,500);
   });
   const [[afterHash]]=await root.query('SELECT passwordHash FROM users WHERE id=?',[seller.id]);
   assert.equal(beforeHash.passwordHash===afterHash.passwordHash,true);
+  assert.equal((await merchant(request(app).get('/api/auth/time'))).status,401,'SQL rollback must not restore revoked sessions');
   assert.equal((await auth(request(app).put(`/api/users/${seller.email}`)).send({password:'Password123456!'})).status,400);
   const changed=crypto.randomBytes(24).toString('base64');
   assert.equal((await auth(request(app).put(`/api/users/${seller.email}`)).send({password:changed})).status,204);
   const [[stored]]=await root.query('SELECT passwordHash FROM users WHERE id=?',[seller.id]);
   assert.equal(require('bcrypt').getRounds(stored.passwordHash),12);
   assert.equal(await require('bcrypt').compare(changed,stored.passwordHash),true);
+  const loginResponse=await request(app).post('/api/auth').send({email:seller.email,password:changed});
+  assert.equal(loginResponse.status,200,'New credentials must allow a fresh session');
+  token=loginResponse.body.jwt;
+  const refreshed=await request(app).post('/api/auth/refresh').send({refreshToken:loginResponse.body.refreshToken});
+  assert.equal(refreshed.status,200,'Real Redis refresh must rotate');
+  const replay=await request(app).post('/api/auth/refresh').send({refreshToken:loginResponse.body.refreshToken});
+  assert.equal(replay.status,401,'Consumed refresh must revoke the session');
+  assert.equal((await merchant(request(app).get('/api/auth/time'))).status,401,'Reuse revokes access immediately');
+  const signedIn=await request(app).post('/api/auth').send({email:seller.email,password:changed});
+  assert.equal(signedIn.status,200);
+  const closed=await request(app).post('/api/auth/logout').set('Authorization',`Bearer ${signedIn.body.jwt}`);
+  assert.equal(closed.status,204,'Real Redis logout must succeed');
+  assert.equal((await request(app).get('/api/auth/time').set('Authorization',`Bearer ${signedIn.body.jwt}`)).status,401);
+  const replacement=await request(app).post('/api/auth').send({email:seller.email,password:changed});
+  assert.equal(replacement.status,200);token=replacement.body.jwt;
+  const simultaneous=await Promise.all([1,2].map(()=>request(app).post('/api/auth/refresh').send({refreshToken:replacement.body.refreshToken})));
+  assert(simultaneous.every(r=>[200,401].includes(r.status)),'Concurrent refresh must fail closed');
+  assert(simultaneous.filter(r=>r.status===200).length<=1,'No two refresh successors may be returned');
+  assert.equal((await merchant(request(app).get('/api/auth/time'))).status,401,'Concurrent reuse must revoke the family');
+  const finalLogin=await request(app).post('/api/auth').send({email:seller.email,password:changed});
+  assert.equal(finalLogin.status,200);token=finalLogin.body.jwt;
 
   const mail=require('../../services/registration-email.service');const originalMail=mail.sendVerificationCode;let code;
   mail.sendVerificationCode=async(email,value)=>{code=value;};

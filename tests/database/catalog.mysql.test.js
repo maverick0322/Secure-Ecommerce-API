@@ -14,6 +14,7 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
   let cloud;
   let images;
   let db;
+  let isolatedAuth;
   let directory;
   let remote;
   let seller;
@@ -44,11 +45,11 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     cloud = require('../../services/cloudinary.service');
     images = require('../../services/product-images.service');
     const accounts = require('../../services/accounts.service');
-    const jwt = require('../../services/jwttoken.service');
+    isolatedAuth = await require('../support/isolated-auth').start();
     async function account(label, profile, status = 'APPROVED') {
       const row = await accounts.createPublicAccount({ email: `${label}@example.invalid`, name: label, password, profile, storeName: 'Synthetic shop' });
       if (profile === 'SELLER') await models.Seller.update({ status }, { where: { userId: row.id } });
-      return { ...row, token: jwt.generateToken(row) };
+      return { ...row, token: await isolatedAuth.issue(row) };
     }
     seller = await account('seller', 'SELLER');
     other = await account('other', 'SELLER');
@@ -57,7 +58,7 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     await models.User.update({ status: 'SUSPENDED' }, { where: { id: suspended.id } });
     buyer = await account('buyer', 'BUYER');
     admin = await accounts.findAccountByEmail('admin@example.invalid');
-    admin = { id: admin.id, token: jwt.generateToken(accounts.serializeAccount(admin)) };
+    admin = { id: admin.id, token: await isolatedAuth.issue(admin) };
     remote = new Map();
   }, 30000);
 
@@ -72,6 +73,7 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
   });
   afterEach(() => jest.restoreAllMocks());
   afterAll(async () => {
+    if (isolatedAuth) await isolatedAuth.close();
     if (models) await models.sequelize.close();
     if (db) await db.end();
     if (directory) {

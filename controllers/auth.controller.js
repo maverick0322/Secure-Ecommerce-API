@@ -1,10 +1,8 @@
-const bcrypt = require('bcrypt');
 const accounts = require('../services/accounts.service');
 const verification = require('../services/email-verification.service');
-const { generateToken, getRemainingTokenTime } = require('../services/jwttoken.service');
+const { getRemainingTokenTime } = require('../services/jwttoken.service');
 
-// A synthetic bcrypt hash makes the missing-account comparison comparable in cost.
-const DUMMY_HASH = '$2b$12$yIYsFG/CLkHoQu1IXqg0Ke4Vy3kGCImKQPBR0tcNW5QXxWLnxZH3y';
+const authentication = require('../services/authentication.service');
 const { AccountError, respondError } = accounts;
 
 async function requestRegistrationCode(req, res) {
@@ -38,28 +36,36 @@ async function register(req, res) {
 
 async function login(req, res) {
   try {
-    const { email: address, password } = req.body || {};
-    const email = await accounts.normalizeEmail(address);
-    if (!accounts.validPassword(password)) throw new AccountError(400, 'La contraseña no es válida.');
-    const account = await accounts.findAccountByEmail(email, true);
-    const match = await bcrypt.compare(password, account?.passwordHash || DUMMY_HASH);
-    const profile = accounts.accountType(account);
-    if (!account || !match || !accounts.isActive(account) || !profile) {
-      throw new AccountError(401, 'Usuario o contraseña incorrectos.');
-    }
-    const result = accounts.serializeAccount(account, profile);
-    await require('../services/audit.service').write({ actorUserId: account.id, action: 'usuario.login',
-      targetType: 'user', targetId: account.id, ipAddress: req.ip });
-    const jwt = generateToken(result);
-    return res.status(200).json({ ...result, jwt });
+    const result = await authentication.login(req.body, { ipAddress: req.ip });
+    res.set('Cache-Control', 'no-store'); res.set('Pragma', 'no-cache');
+    return res.status(200).json(result);
   } catch (error) {
-    if(req.logAudit && error instanceof AccountError) await req.logAudit('auth.login.denied',null,null,error.status>=500?'ERROR':'DENIED');
+    if (req.logAudit && error instanceof AccountError) await req.logAudit('auth.login.denied', null, null, 'DENIED');
     return respondError(res, error);
   }
+}
+async function refresh(req, res) {
+  try {
+    const result = await authentication.refresh(req.body, { ipAddress: req.ip });
+    res.set('Cache-Control', 'no-store'); res.set('Pragma', 'no-cache');
+    return res.status(200).json(result);
+  } catch (error) {
+    if (req.logAudit && error?.name === 'AuthSessionError') await req.logAudit('auth.refresh.denied', null, null, 'DENIED');
+    return respondError(res, error);
+  }
+}
+async function logout(req, res) {
+  try {
+    if (req.body && (typeof req.body !== 'object' || Array.isArray(req.body) || Object.keys(req.body).length)) {
+      throw new AccountError(400, 'El cierre de sesión no admite campos.');
+    }
+    await authentication.logout(req.account, req.decodedToken, { ipAddress: req.ip });
+    res.set('Cache-Control', 'no-store'); return res.status(204).end();
+  } catch (error) { return respondError(res, error); }
 }
 
 function time(req, res) {
   return res.status(200).json({ remainingTime: getRemainingTokenTime(req.decodedToken) });
 }
 
-module.exports = { login, time, requestRegistrationCode, register };
+module.exports = { login, refresh, logout, time, requestRegistrationCode, register };

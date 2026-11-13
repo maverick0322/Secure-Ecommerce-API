@@ -17,17 +17,17 @@ afterEach(() => jest.restoreAllMocks());
 it('validates login and returns a current profile and JWT without the hash', async () => {
   const account = makeAccount('BUYER', { passwordHash: hash });
   const findOne = jest.fn().mockResolvedValue(account);
-  jest.spyOn(User, 'unscoped').mockReturnValue({ findOne });
+  jest.spyOn(User, 'unscoped').mockReturnValue({ findOne, findByPk: async () => account });
   expect((await request(app).post('/api/auth').send({ email: account.email })).status).toBe(400);
   expect((await request(app).post('/api/auth').send({ email: account.email, password: 'bad' })).status).toBe(401);
   const response = await request(app).post('/api/auth').send({ email: ` ${account.email.toUpperCase()} `, password: secret });
   expect(response.status).toBe(200);
-  expect(response.body).toEqual({ id: account.id, email: account.email, name: account.name, status: 'ACTIVE', profile: 'BUYER', jwt: expect.any(String) });
+  expect(response.body).toEqual({ id: account.id, email: account.email, name: account.name, status: 'ACTIVE', profile: 'BUYER', jwt: expect.any(String), refreshToken: expect.any(String), expiresIn: 300, tokenType: 'Bearer' });
   expect(verifyToken(response.body.jwt).sub).toBe(account.id);
   expect(findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { email: account.email } }));
   jest.spyOn(User, 'findByPk').mockResolvedValue(account);
   const time = await request(app).get('/api/auth/time').set('Authorization', `Bearer ${response.body.jwt}`);
-  expect(time.body.remainingTime).toMatch(/^00:(19|20):[0-5]\d$/);
+  expect(time.body.remainingTime).toMatch(/^00:0[45]:[0-5]\d$/);
 });
 
 it('rejects absent, suspended, unverified and ambiguous accounts with the same login error', async () => {

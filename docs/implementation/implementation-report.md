@@ -808,3 +808,155 @@ regresi?n completa porque no cambi? l?gica de aplicaci?n; persiste el aviso
 previo de Jest por workspaces Postman duplicados. No se ejecutaron servicios,
 recuperaciones reales, operaciones SQL, commits ni push. Redis contin?a sin
 integraci?n con endpoints; las verificaciones reales de TLS/arranque siguen pendientes.
+
+## Seguridad JWT — Etapa 3: integración RS256 y sesiones Redis
+
+Esta sección actualiza el estado descrito en las etapas anteriores: el código
+HTTP ya integra los servicios criptográficos y de sesión; **la API habitual no
+se reinició ni activó con esta versión**. El usuario reportó Redis habitual healthy
+y conexión TLS exitosa. Esta ejecución no modificó ni recuperó ese servidor,
+no cambió credenciales/ACL, no operó MySQL habitual ni alteró sus 14 tablas.
+
+### Implementación y contratos
+
+- `services/authentication.service.js` coordina login, refresh y logout;
+  `auth-runtime.service.js` carga RSA/HMAC y comparte el pool Redis sin fallback
+  ni reconexión automática. El arranque exige el runtime antes de escuchar.
+- Login conserva datos públicos y campo `jwt`; ahora emite RS256 de cinco minutos
+  y añade `refreshToken`, `expiresIn:300`, `tokenType:Bearer`. JWT HS256 antiguos
+  quedan rechazados. El refresh opaco de 32 bytes solo se persiste mediante SHA-256.
+- `POST /api/auth/refresh` rota cada uso sin exigir access vigente;
+  `POST /api/auth/logout` revoca solo la sesión del Bearer vigente y devuelve 204.
+  Errores de sesión/autenticación: 401; cuerpo inválido: 400; permisos: 403;
+  Redis/configuración indisponible o conflictos agotados: 503. No se filtran causas.
+- Middleware verifica firma, sesión y credenciales actuales en cada petición,
+  conservando roles, estados y aprobación. Ya no emite `Set-Authorization` ni
+  lo expone CORS. Las respuestas con tokens tienen no-store/no-cache.
+- `auth-session.service.js` añade generación por usuario para revocación total
+  serializada con WATCH/MULTI/EXEC. Cambiar contraseña revoca todas sus sesiones
+  antes del commit SQL. Un rollback SQL posterior no restaura sesiones: se probó
+  ese comportamiento y la posibilidad de volver a iniciar sesión. La comprobación
+  del HMAC actual complementa la revocación frente a carreras con credenciales.
+  Inactividad de 30 minutos y máximo absoluto de ocho horas permanecen intactos.
+- `checkout-quote.service.js` no se modificó. Mantiene HMAC separado derivado de
+  `JWT_SECRET`. No se borró ni rotó ese secreto: cambiarlo rompería cotizaciones
+  y reintentos históricos; requiere diseño de compatibilidad independiente.
+
+También se adaptaron controladores/rutas, `accounts.service.js`, `jwttoken.service.js`,
+`index.js`, Swagger y `examples/api.http`; fixtures unitarios RS256, HTTP de sesiones,
+runtime y regresiones SQL. Los runners reutilizan el Redis temporal existente;
+las claves RSA son efímeras en memoria. La colección Postman tiene 114 peticiones
+y su API aislada usa Redis propio. `.env.example` y documentación describen los
+requisitos de activación. El verificador Node 20 excluye explícitamente `.secrets`
+del archivo fuente y de su validación, para no enviar credenciales al build.
+No se modificaron dependencias ni umbrales de cobertura. `test.yml` y `sonar.yml`
+preparan explícitamente la imagen Redis 8.2 antes de la integración aislada,
+porque el runner rechaza descargas implícitas. Se conservan las verificaciones;
+no se modificó `docs.yml`.
+
+### Resultados comprobados
+
+1. `npm run test:coverage` en Node 24/Windows: **411 aprobadas, 40 omitidas**;
+   41 suites aprobadas y seis omitidas, salida 0. Las omitidas son 39 MySQL y una
+   Redis optativas. No se presentan como aprobadas. Cobertura global sin estas
+   integraciones: **78,21 % líneas / 72,94 % ramas**. Runtime nuevo: 100/100;
+   autenticación nueva: 95,65 % líneas / 83,33 % ramas; middleware: 100/100.
+2. Redis 8.2 real temporal: **seis grupos aprobados**, con cleanup=true.
+3. `node scripts/database/stage5-addresses-test.js`: aprobado con MySQL 8 y Redis
+   temporales. Comprueba HTTP, firma/checkout, inventario, idempotencia, snapshots,
+   auditoría, propiedad, refresh/logout reales, contraseña y rollback. La carrera
+   HTTP de refresh produce como máximo una respuesta exitosa y revoca la familia.
+   Incluye **27 pruebas MySQL históricas aprobadas** en esquemas finales aislados.
+   La primera ejecución detectó una expectativa antigua 403 tras contraseña:
+   se corrigió para comprobar 401 por revocación y reautenticar antes de continuar.
+4. Node 20/Linux: `verify-node20.js` aprobado; instalación limpia con ignore-scripts,
+   auditoría, **411 aprobadas / 40 omitidas**, Swagger y build documental aprobados.
+   No se ejecutó generación de diagramas ni se modificó su infraestructura.
+5. `npm audit --audit-level=high`: salida 0; cero altas/críticas, 19 moderadas y
+   cuatro bajas existentes. Sin actualizaciones automáticas ni audit fix.
+6. `npm run swagger`: aprobado; contrato de cobertura de todas las rutas aprobado.
+   El primer intento local no pudo escribir el archivo ignorado por permisos del
+   sandbox; la ejecución autorizada resolvió la escritura sin cambiar el generador.
+7. Postman `2c660fd3-d2c1-47b4-86d2-2d3b463299e1`: **NO APROBADO**. Faltó
+   `docs/Propuesta_BD_Secure_Ecommerce_14_tablas.docx`, necesario para el digest
+   del esquema; se detuvo en provisioning, antes de peticiones. No se retiró esa
+   barrera ni se inventó el documento. Cleanup=true y metadatos habituales intactos.
+   Se solicitó la ruta local del Word; su ejecución queda pendiente.
+
+Redis de pruebas y SQL son reales; correo y Cloudinary permanecen simulados.
+Las pruebas SQL restantes de migraciones históricas no se ejecutaron nuevamente;
+las 27 anteriores sí se ejecutaron por separado. La cobertura indicada es de la
+suite general; los runners externos no se sumaron artificialmente al LCOV.
+No se certifica el Quality Gate remoto. Persiste el aviso previo de Jest por
+workspaces duplicados de Postman; no se ocultó.
+
+### Activación y riesgos pendientes
+
+Verificar con el operador RSA 3072, manifiesto/kid/issuer/audience y permisos de
+archivos, clave HMAC de credenciales estable, TLS/CA/secretos y estado Redis ya
+aprobado. No ejecutar recuperaciones ni cambiar run_id/generación para desplegar
+esta etapa. Compose prepara montajes RSA/HMAC en lectura para la API bajo
+`.secrets/auth/`; no se generaron sus archivos. El manifiesto Docker usa rutas
+internas `/run/auth/public-keys/`; Windows usa otro manifiesto con rutas absolutas
+locales. Servicios MySQL/Redis y sus volúmenes/configuración se preservan. Conservar
+`JWT_SECRET` tal como está. No se generaron ni rotaron credenciales reales.
+
+Coordinar la actualización de la API y del consumidor .NET: JWT antiguos dejan
+de funcionar; refresh debe guardarse privadamente y serializarse por sesión,
+sin reintentos automáticos de resultados inciertos ni lectura de cabeceras de
+renovación. Redis no disponible implica 503 y no acceso. Los marcadores de
+revocación por usuario son persistentes y deben considerarse en el dimensionamiento
+y futura limpieza aprobada de namespaces retirados. La revocación anticipada a
+SQL puede cerrar sesiones aunque finalmente la contraseña no cambie.
+
+Detalles y procedimiento: [Etapa 3 de autenticación](../security/auth-stage3.md).
+No hubo commits, push ni PR; se conserva la rama `feature/secure-ecommerce-db`
+y las marcas previas de documentación ajenas a este trabajo.
+
+### Ajustes finales de seguridad de la Etapa 3
+
+`accounts.service.js` revoca todas las sesiones antes de suspender, deshabilitar
+o eliminar lógicamente una cuenta, además del cambio de contraseña. Al reactivar
+desde un estado no activo también cambia la generación del usuario, evitando
+recuperar sesiones antiguas o las que coincidieran con una suspensión. Se mantiene
+el bloqueo SQL y la secuencia Redis antes de la escritura; un fallo Redis impide
+la mutación y un rollback SQL posterior no restaura sesiones. Un cambio de nombre
+o una reafirmación de ACTIVE sobre una cuenta ya activa no provoca revocación.
+
+`auth.middleware.js` calcula permisos de perfil/aprobación antes de elegir touch.
+Los rechazos 403 de esas comprobaciones validan Redis con touch=false: una sesión
+expirada/revocada devuelve 401 y un almacén no disponible 503, sin ampliar el
+periodo de inactividad. Las peticiones autorizadas siguen registrando actividad.
+
+Se ampliaron `users.routes.test.js` y `session-auth.routes.test.js` para verificar
+orden de revocación, indisponibilidad sin escritura SQL, reactivación, borrado,
+permisos, metadatos inalterados ante 403 y actividad permitida. La nueva suite
+`tests/database/account-session-security.mysql.test.js` prueba los escenarios con
+MySQL y Redis reales temporales. El runner final la incluye y conserva sus guards
+de identidad/puerto/base. El test de rollback de borrado verifica ahora el rechazo
+del token anterior y reautentica antes de continuar. Un fixture unitario previo
+de edición del ADMIN omitía status: se completó con ACTIVE, sin relajar producción.
+
+Resultados comprobados de este ajuste:
+
+- Pruebas específicas con dobles SQL/Redis: **39 aprobadas** en tres suites.
+- Regresión completa: **426 aprobadas, 45 omitidas**, 41 suites aprobadas y siete
+  omitidas (48 totales), salida 0. Las omitidas incluyen las cinco nuevas pruebas
+  MySQL optativas, que sí se ejecutaron por separado en el runner aislado.
+- Integración final HTTP/MySQL 8/Redis 8.2: **32 pruebas SQL aprobadas** en tres
+  suites, incluidas las cinco nuevas. Se comprobó que access y refresh anteriores
+  no funcionan después de reactivar, que un login nuevo funciona y que restaurar
+  deletedAt únicamente en el fixture SQL no revalida las sesiones borradas.
+  Las comparaciones directas de los registros Redis confirman que los rechazos
+  por perfil/aprobación no cambian actividad, vencimiento ni revisión de sesión.
+- `JWT_SECRET` del `.env` local y del entorno efectivo de esa ejecución:
+  **COMPATIBLE** con `getJwtSecret()` actual. Se comprobó en un proceso aislado
+  mediante lectura, sin mostrar valor, hash o longitud y sin escribir el archivo.
+  No se modificó el secreto ni el servicio de cotizaciones/checkout. La comprobación
+  acredita compatibilidad con esa validación, no demuestra el origen aleatorio.
+
+El primer intento de regresión falló por el fixture incompleto indicado; la
+repetición completa aprobó después de corregirlo. No se ejecutaron recuperaciones,
+rotaciones ni operaciones en bases o contenedores habituales. Los runners usaron
+solo fixtures descartables y su material efímero de pruebas; no se generaron ni
+modificaron claves para el entorno habitual. No se hicieron commits ni push.

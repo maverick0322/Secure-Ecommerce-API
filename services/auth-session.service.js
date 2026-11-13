@@ -25,7 +25,7 @@ function parse(value, kind) {
   if (!record || !isAccessUuid(record.sid) || !isAccessUuid(record.user) ||
     !Number.isSafeInteger(record.generation) || record.generation < 0 || !Number.isSafeInteger(record.absolute)) return corrupt();
   if (kind === 'session' && (!validVersion(record.credential) || !validVersion(record.digest) ||
-    !isAccessUuid(record.revision) || !['active', 'revoked'].includes(record.state) ||
+    !isAccessUuid(record.revision) || !(record.epoch === 'initial' || isAccessUuid(record.epoch)) || !['active', 'revoked'].includes(record.state) ||
     ![record.created, record.activity, record.idle].every(Number.isSafeInteger) ||
     record.created <= 0 || record.absolute !== record.created + ABSOLUTE_MS ||
     record.activity < record.created || record.idle !== Math.min(record.activity + IDLE_MS, record.absolute))) return corrupt();
@@ -43,6 +43,13 @@ function createSessionService(connection) {
   const sessionKey = id => connection.prefix + 'session:' + id;
   const aliveKey = id => connection.prefix + 'alive:' + id;
   const refreshKey = hash => connection.prefix + 'refresh:' + hash;
+  const epochKey = id => connection.prefix + 'user-epoch:' + id;
+  async function userEpoch(tx, userId) {
+    const key = epochKey(userId); await tx.watch([key]);
+    const value = await tx.get(key);
+    if (value !== null && !isAccessUuid(value)) return corrupt();
+    return value || 'initial';
+  }
   const index = s => ({ sid: s.sid, user: s.user, generation: s.generation, absolute: s.absolute });
   function matches(i, s) {
     return i && i.sid === s.sid && i.user === s.user && i.generation === s.generation && i.absolute === s.absolute;
@@ -62,6 +69,7 @@ function createSessionService(connection) {
   async function active(tx, s, credentialVersion) {
     const now = await tx.time();
     if (s.state !== 'active') { await tx.commit(); fail('SESSION_REVOKED'); }
+    if (s.epoch !== await userEpoch(tx, s.user)) return revokeRecord(tx, s, 'user-revoked', 'SESSION_REVOKED');
     const alive = await tx.get(aliveKey(s.sid));
     if (now >= s.idle || now >= s.absolute || alive === null) return revokeRecord(tx, s, 'expired', 'SESSION_EXPIRED');
     // Different revisions indicate a partial EXEC failure. Deny, never repair it
@@ -86,9 +94,10 @@ function createSessionService(connection) {
       await tx.watch(keys);
       for (const key of keys) if (await tx.get(key) !== null) { await tx.commit(); fail('SESSION_COLLISION'); }
       const now = await tx.time();
+      const epoch = await userEpoch(tx, userId);
       const s = { sid: sessionId, user: userId, credential: credentialVersion, created: now, activity: now,
         idle: now + IDLE_MS, absolute: now + ABSOLUTE_MS, digest: hash, generation: 0,
-        revision: randomUUID(), state: 'active', reason: '' };
+        revision: randomUUID(), state: 'active', reason: '', epoch };
       await tx.commit([stored(refreshKey(hash), index(s), s.absolute), stored(sessionKey(sessionId), s, s.absolute),
         ['SET', aliveKey(sessionId), s.revision, 'PXAT', String(s.idle)]]);
       return Object.freeze({ ...view(s), refreshToken });
@@ -147,6 +156,16 @@ function createSessionService(connection) {
     if (!isAccessUuid(userId) || !isAccessUuid(sessionId)) reject();
     return connection.transaction(async tx => revokeRecord(tx, await load(tx, sessionId, userId), 'logout'));
   }
-  return Object.freeze({ create, check, rotate, revoke, lookupRefresh });
+  async function revokeAll(input) {
+    const { userId } = fields(input, ['userId']);
+    if (!isAccessUuid(userId)) reject();
+    return connection.transaction(async tx => {
+      await userEpoch(tx, userId);
+      // A persistent, single marker per user avoids scans and cannot expire
+      // before sessions created later. It never authorizes a session by itself.
+      await tx.commit([['SET', epochKey(userId), randomUUID()]]);
+    });
+  }
+  return Object.freeze({ create, check, rotate, revoke, revokeAll, lookupRefresh });
 }
 module.exports = { createSessionService };

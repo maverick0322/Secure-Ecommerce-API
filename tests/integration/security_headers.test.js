@@ -19,10 +19,10 @@ describe('Pruebas de Integración: Cabeceras de Seguridad y Enrutamiento Base', 
       message: 'Recurso no encontrado'
     });
   });
-  it('CORS: debe exponer la cabecera Set-Authorization en peticiones de orígenes permitidos', async () => {
+  it('CORS: no expone cabeceras de renovación automática', async () => {
     const res = await request(app).options("/api/categories").set('Origin', 'http://localhost:8080').set('Access-Control-Request-Method', 'GET');
     expect(res.statusCode).toBe(204);
     expect(res.headers['access-control-allow-origin']).toBe('http://localhost:8080');
-    expect(res.headers['access-control-expose-headers']).toContain('Set-Authorization');
+    expect(res.headers['access-control-expose-headers']).toBeUndefined();
   });
 });

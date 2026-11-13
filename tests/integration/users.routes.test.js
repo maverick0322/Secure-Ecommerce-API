@@ -65,3 +65,36 @@ it('restricts seller review to ADMIN and requires a reason when rejecting', asyn
   expect(review).toHaveBeenCalledTimes(1);
   expect(review).toHaveBeenCalledWith(expect.any(String), seller.id, 'REJECTED', 'Datos incompletos', expect.any(String));
 });
+
+it.each(['SUSPENDED','DISABLED'])('revokes all sessions before changing account state to %s',async status=>{
+  const {sessions}=require('../support/auth-fixtures');sessions.revokeAll.mockClear();
+  const account=makeAccount('BUYER',{update:jest.fn()});
+  jest.spyOn(User,'findOne').mockResolvedValue(account);
+  expect((await request(app).put(`/api/users/${account.email}`).set('Authorization',`Bearer ${admin}`).send({status})).status).toBe(204);
+  expect(sessions.revokeAll).toHaveBeenCalledWith({userId:account.id});
+  expect(sessions.revokeAll.mock.invocationCallOrder.at(-1)).toBeLessThan(account.update.mock.invocationCallOrder[0]);
+});
+it('revokes on reactivation and before soft deletion, but not on a name-only update',async()=>{
+  const {sessions}=require('../support/auth-fixtures');sessions.revokeAll.mockClear();
+  const account=makeAccount('BUYER',{status:'SUSPENDED',update:jest.fn(),destroy:jest.fn()});
+  jest.spyOn(User,'findOne').mockResolvedValue(account);
+  const path=`/api/users/${account.email}`;
+  expect((await request(app).put(path).set('Authorization',`Bearer ${admin}`).send({status:'ACTIVE'})).status).toBe(204);
+  expect(sessions.revokeAll).toHaveBeenCalledWith({userId:account.id});
+  sessions.revokeAll.mockClear();
+  expect((await request(app).put(path).set('Authorization',`Bearer ${admin}`).send({name:'Renamed buyer'})).status).toBe(204);
+  expect(sessions.revokeAll).not.toHaveBeenCalled();
+  expect((await request(app).delete(path).set('Authorization',`Bearer ${admin}`)).status).toBe(204);
+  expect(sessions.revokeAll).toHaveBeenCalledWith({userId:account.id});
+  expect(sessions.revokeAll.mock.invocationCallOrder.at(-1)).toBeLessThan(account.destroy.mock.invocationCallOrder[0]);
+});
+it.each(['SUSPENDED','DISABLED','ACTIVE','delete'])('does not mutate SQL when all-session revocation fails for %s',async operation=>{
+  const {sessions}=require('../support/auth-fixtures');
+  const account=makeAccount('BUYER',{status:'SUSPENDED',update:jest.fn(),destroy:jest.fn()});
+  jest.spyOn(User,'findOne').mockResolvedValue(account);
+  sessions.revokeAll.mockRejectedValueOnce(new (require('../../services/auth-session-errors').SessionStoreUnavailableError)());
+  const path=`/api/users/${account.email}`;
+  const response=operation==='delete'?await request(app).delete(path).set('Authorization',`Bearer ${admin}`):
+    await request(app).put(path).set('Authorization',`Bearer ${admin}`).send({status:operation});
+  expect(response.status).toBe(503);expect(account.update).not.toHaveBeenCalled();expect(account.destroy).not.toHaveBeenCalled();
+});

@@ -32,7 +32,7 @@ function inspectOwned(info, fixture, beforeStart = false) {
 }
 const inspect = fixture => JSON.parse(docker(['inspect', fixture.id]))[0];
 const outcome = async promise => { try { await promise; return 'OK'; } catch (error) { return error.code; } };
-async function main() {
+async function main({ exercise } = {}) {
   const runId = crypto.randomUUID(); const reportDirectory = path.resolve('log/stage5/redis-stage2');
   fs.mkdirSync(reportDirectory, { recursive: true });
   const report = { runId, success: false, status: 'NOT_EXECUTED', checks: [], cleanup: false };
@@ -82,6 +82,12 @@ async function main() {
     report.status = 'RUNNING';
     const config = { host: '127.0.0.1', port: ownedPort(), tls: false, username: 'auth_session_test', password,
       namespace, generation, expectedRunId: run };
+    if (exercise) {
+      await exercise({ config, admin, assertOwned: ownedPort });
+      report.checks.push('isolated authentication integration callback');
+      report.success = true; report.status = 'PASS';
+      return report;
+    }
     const firstConnection = await connect(config); const sessions = createSessionService(firstConnection);
     const userId = crypto.randomUUID(), credentialVersion = crypto.randomBytes(32).toString('hex');
     const create = () => sessions.create({ userId, credentialVersion });
@@ -154,4 +160,4 @@ async function main() {
 }
 if (require.main === module) main().then(report => console.log(`PASS: ${report.checks.length} real Redis scenario groups; cleanup=${report.cleanup}`))
   .catch(() => { console.error('Redis integration NOT PASSED. Docker and a cached redis:8.2 image are required; habitual resources were not used.'); process.exitCode = 1; });
-module.exports = { main, inspectOwned };
+module.exports = { main, inspectOwned, withRedisFixture: exercise => main({ exercise }) };

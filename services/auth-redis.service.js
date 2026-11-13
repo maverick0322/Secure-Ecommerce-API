@@ -118,7 +118,8 @@ function createAuthRedisConnection(configuration, { poolFactory = createClientPo
           if (committed || !Array.isArray(commands) || commands.some(args => !Array.isArray(args) ||
             args.some(v => typeof v !== 'string') || !['SET', 'DEL'].includes(args[0]) || !keyAllowed(args[1]) ||
             (args[0] === 'DEL' && args.length !== 2) ||
-            (args[0] === 'SET' && !(args.length === 5 && args[3] === 'PXAT' && /^\d{13,16}$/.test(args[4]))))) {
+            (args[0] === 'SET' && !(args.length === 5 && args[3] === 'PXAT' && /^\d{13,16}$/.test(args[4])) &&
+              !(args.length === 3 && args[1].startsWith(prefix + 'user-epoch:') && isAccessUuid(args[2]))))) {
             throw new RedisConfigurationError();
           }
           validateIdentity(await send(['INFO', 'server', 'replication']));

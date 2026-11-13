@@ -21,6 +21,17 @@ if(pm.response.code===${status}) { ${tests} }`;
     add(auth,'Login '+role,'POST','/api/auth',200,{body:{email:'{{'+role+'Email}}',password:'{{'+role+'Password}}'},
       tests:`pm.test('Session without stored hash',()=>{pm.expect(typeof b.jwt).to.eql('string');pm.expect(b).not.to.have.property('passwordHash');});pm.variables.set('${role}Token',b.jwt);pm.variables.set('${role}Id',b.id);`});
   }
+  const probeLogin={email:'{{buyerEmail}}',password:'{{buyerPassword}}'};
+  const saveProbe="pm.variables.set('probeToken',b.jwt);pm.variables.set('probeRefresh',b.refreshToken);pm.test('RS256 session lifetime',()=>pm.expect(b.expiresIn).to.eql(300));";
+  add(auth,'Login sesion independiente para rotacion','POST','/api/auth',200,{body:probeLogin,tests:saveProbe});
+  add(auth,'Rotar refresh opaco','POST','/api/auth/refresh',200,{body:{refreshToken:'{{probeRefresh}}'},
+    tests:"pm.variables.set('consumedRefresh',pm.variables.get('probeRefresh'));"+saveProbe});
+  add(auth,'Reutilizacion revoca la sesion','POST','/api/auth/refresh',401,{body:{refreshToken:'{{consumedRefresh}}'}});
+  add(auth,'Access revocado por reutilizacion','GET','/api/auth/time',401,{token:'probeToken'});
+  add(auth,'Login para logout','POST','/api/auth',200,{body:probeLogin,tests:saveProbe});
+  add(auth,'Cerrar solo la sesion actual','POST','/api/auth/logout',204,{token:'probeToken'});
+  add(auth,'Access rechazado tras logout','GET','/api/auth/time',401,{token:'probeToken'});
+  add(auth,'Refresh rechazado tras logout','POST','/api/auth/refresh',401,{body:{refreshToken:'{{probeRefresh}}'}});
   add(auth,'Password incorrecto','POST','/api/auth',401,{body:{email:'{{adminEmail}}',password:'{{wrongPassword}}'},tests:"pm.variables.set('loginDeniedMessage',b.message);"});
   add(auth,'Cuenta inexistente sin enumeracion','POST','/api/auth',401,{body:{email:'{{unknownEmail}}',password:'{{wrongPassword}}'},tests:"pm.test('Same denial message',()=>pm.expect(b.message).to.eql(pm.variables.get('loginDeniedMessage')));"});
   add(auth,'Registro ADMIN publico prohibido','POST','/api/auth/register/verify',400,{body:{email:'{{registrationEmail}}',code:'123456',name:'Synthetic',password:'{{registrationPassword}}',profile:'ADMIN'}});

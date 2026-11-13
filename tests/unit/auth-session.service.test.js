@@ -235,3 +235,19 @@ it('uses exclusive leases with four clients under contention and bounds retry ex
   expect(server.clients.every(client => !client.leased && client.watched.size === 0)).toBe(true);
   expect(await code(check(s))).toBe('OK');
 });
+
+it('revokes every existing session of one user while permitting a new login and preserving other users', async () => {
+  const first = await create(), second = await create(), otherUser = crypto.randomUUID();
+  const other = await sessions.create({ userId: otherUser, credentialVersion: version });
+  await sessions.revokeAll({ userId });
+  expect(await code(check(first))).toBe('SESSION_REVOKED');
+  expect(await code(sessions.rotate({ refreshToken: second.refreshToken, credentialVersion: version }))).toBe('SESSION_REVOKED');
+  expect(await code(sessions.check({ userId: otherUser, sessionId: other.sessionId, credentialVersion: version }))).toBe('OK');
+  expect(await code(check(await create()))).toBe('OK');
+});
+it.each(['read', 'touch', 'rotate'])('cannot race %s past a committed all-session revocation', async operation => {
+  const s = await create(); let injected = false;
+  server.beforeExec = async () => { if (!injected) { injected = true; await sessions.revokeAll({ userId }); } };
+  const result = operation === 'rotate' ? sessions.rotate({ refreshToken: s.refreshToken, credentialVersion: version }) : check(s, { touch: operation === 'touch' });
+  expect(await code(result)).toBe('SESSION_REVOKED'); expect(server.conflicts).toBe(1);
+});

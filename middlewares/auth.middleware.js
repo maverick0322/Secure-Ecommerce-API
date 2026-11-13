@@ -1,6 +1,7 @@
 const CLAIM_TYPES = require('../config/claim-types');
-const { generateToken, verifyToken, getJwtSecret } = require('../services/jwttoken.service');
-const { AccountError, respondError, findAccountById, accountType, isActive, serializeAccount } = require('../services/accounts.service');
+const runtime = require('../services/auth-runtime.service');
+const accounts = require('../services/accounts.service');
+const { AccountError, respondError, accountType, isActive, serializeAccount } = accounts;
 
 // Existing route declarations keep working while their contracts are adapted.
 const legacyPermissions = { Administrador: 'ADMIN', Usuario: 'BUYER' };
@@ -16,27 +17,27 @@ function authorize(profiles, { allowUnapprovedSeller = false } = {}) {
     if (!token) return deny(req,res, new AccountError(401, 'Se requiere un token Bearer.'));
 
     try {
-      const secret = getJwtSecret();
-      let decoded;
-      try {
-        decoded = verifyToken(token, secret);
-      } catch {
-        return deny(req,res, new AccountError(401, 'Token inválido o expirado.'));
-      }
-      const account = await findAccountById(decoded.sub);
+      // Signature/claims are checked before Redis; no HS256 fallback exists.
+      const decoded = runtime.getTokens().verify(token);
+      const { sessions, versions } = await runtime.getRuntime();
+      const account = await accounts.findAccountById(decoded.sub, { withPassword: true });
       const profile = accountType(account);
-      if (!isActive(account) || !profile || !allowed.includes(profile)) {
+      if (!isActive(account) || !profile) {
         return deny(req,res, new AccountError(403, 'Acceso prohibido para esta cuenta.'),account?.id);
       }
-      if (profile === 'SELLER' && !allowUnapprovedSeller && account.seller.status !== 'APPROVED') {
+      const permittedProfile = allowed.includes(profile);
+      const permittedSeller = profile !== 'SELLER' || allowUnapprovedSeller || account.seller.status === 'APPROVED';
+      // Denied permissions still validate Redis, but cannot extend inactivity.
+      await sessions.check({ userId: account.id, sessionId: decoded.sid,
+        credentialVersion: versions.derive(account.passwordHash), touch: permittedProfile && permittedSeller });
+      if (!permittedProfile) return deny(req, res, new AccountError(403, 'Acceso prohibido para esta cuenta.'), account.id);
+      if (!permittedSeller) {
         return deny(req,res, new AccountError(403, 'La cuenta de vendedor debe estar aprobada.'),account.id);
       }
 
       req.account = serializeAccount(account, profile);
       req.decodedToken = { ...decoded, [CLAIM_TYPES.Name]: account.email, [CLAIM_TYPES.GivenName]: account.name,
         [CLAIM_TYPES.Role]: profile };
-      const remaining = decoded.exp - Date.now() / 1000;
-      if (remaining > 0 && remaining < 5 * 60) res.set('Set-Authorization', generateToken(req.account));
     } catch (error) {
       return respondError(res, error);
     }

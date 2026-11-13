@@ -1,5 +1,6 @@
 @baseUrl = http://localhost:3000/api
 @token = PEGAR_JWT_AQUI
+@refreshToken = PEGAR_REFRESH_PRIVADO_AQUI
 @email = demo@example.invalid
 @password = REEMPLAZAR_CON_CONTRASENA_DE_PRUEBA
 @verificationCode = PEGAR_CODIGO_RECIBIDO
@@ -30,11 +31,21 @@ Content-Type: application/json
 
 {"email":"{{email}}","code":"{{verificationCode}}","password":"{{password}}","name":"Cuenta de ejemplo","profile":"SELLER","storeName":"Tienda de ejemplo"}
 
-### Iniciar sesión con una cuenta verificada
+### Iniciar sesión: RS256 de 5 minutos y refresh opaco, conservar solo en privado
 POST {{baseUrl}}/auth
 Content-Type: application/json
 
 {"email":"{{email}}","password":"{{password}}"}
+
+### Renovar: reemplazar ambos tokens; no repetir un refresh consumido
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{"refreshToken":"{{refreshToken}}"}
+
+### Cerrar únicamente la sesión actual
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{token}}
 
 ### Consultar el tiempo restante de sesión
 GET {{baseUrl}}/auth/time

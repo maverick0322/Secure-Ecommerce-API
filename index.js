@@ -17,7 +17,7 @@ app.use(express.urlencoded({
   extended: false
 }));
 
-// 4. Configuración de CORS con lista blanca dinámica y exposición de cabeceras de renovación
+// 4. Configuración de CORS con lista blanca dinámica
 const defaultOrigins = ['http://localhost:8080', 'http://localhost:8081'];
 const envOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean) : [];
 if(envOrigins.includes('*')) throw new Error('Configure explicit CORS origins; wildcard access is forbidden.');
@@ -30,9 +30,7 @@ const corsOptions = {
     return callback(new Error(`Origen no permitido por política CORS: ${origin}`));
   },
   methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  // CORRECCIÓN CRÍTICA: Exponer Set-Authorization para que clientes frontend puedan leer el token renovado
-  exposedHeaders: ['Set-Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
 app.use(cors(corsOptions));
 
@@ -83,10 +81,12 @@ const PORT = process.env.SERVER_PORT || 3000;
 if (require.main === module) {
   Promise.resolve().then(async()=>{
     require('./services/jwttoken.service').getJwtSecret();
+    await require('./services/auth-runtime.service').getRuntime();
     await require('./services/database.service').verifyConnection(require('./models').sequelize);
     require('./services/product-images.service').startRecovery();
     app.listen(PORT,process.env.SERVER_HOST||'127.0.0.1',()=>console.log(`API conectada a secure_ecommerce; puerto ${PORT}.`));
   }).catch(async()=>{
+    require('./services/auth-runtime.service').close();
     console.error('No se pudo verificar la conexión segura. La API no se inició.');
     await require('./models').sequelize.close();process.exitCode=1;
   });

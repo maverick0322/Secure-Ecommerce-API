@@ -21,7 +21,7 @@ const docker = (args, input) => {
 };
 
 async function main() {
-  let containerId, root, models;
+  let containerId, root, models, isolatedAuth;
   try {
     if(!external){
     containerId = docker(['run','--detach','--name',name,'--hostname',name,'--publish',`127.0.0.1:${port}:3306`,
@@ -71,8 +71,9 @@ async function main() {
     }
     const request = require('supertest');
     const app = require('../../index');
-    const token = require('../../services/jwttoken.service').generateToken;
-    const headers = buyers.map(id => `Bearer ${token({id,email:`${id}@example.invalid`,name:'Synthetic buyer',profile:'BUYER'})}`);
+    isolatedAuth = await require('../../tests/support/isolated-auth').start();
+    const token = account => isolatedAuth.issue(account);
+    const headers = await Promise.all(buyers.map(async id => `Bearer ${await token({id})}`));
     const body = { recipientName:'Synthetic',street:'Street',exteriorNumber:'1',neighborhood:'District',city:'City',state:'State',postalCode:'01000',isDefault:true };
     const created = await Promise.all([1,2].map(() => request(app).post('/api/addresses').set('Authorization',headers[0]).send(body)));
     assert(created.every(r => r.status === 201),JSON.stringify(created.map(r => ({status:r.status,body:r.body}))));
@@ -214,7 +215,7 @@ async function main() {
       assert.equal((await request(app).get('/api/products').set('Authorization',sellerHeader)).status,403);
     }finally{mail.sendVerificationCode=originalMail;}
     await require('../../tests/support/security-checks')({root,models,app,admin,adminHeader,
-      buyerId:buyers[0],buyerHeader:headers[0]});
+      buyerId:buyers[0],buyerHeader:headers[0],isolatedAuth});
     // Re-run the pre-existing account/catalog scenarios against independent final-schema fixtures.
     const adminFixture='00000000-0000-4000-8000-000000000003';
     const fixtureHash=await require('bcrypt').hash('synthetic-stage3a-password',10);
@@ -228,7 +229,7 @@ async function main() {
       await root.query('INSERT INTO admins (userId) VALUES (?)',[adminFixture]);
       await root.query("INSERT INTO categories (id,name,protected,createdAt,updatedAt) VALUES (1,'Synthetic protected category',1,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))");
     }
-    const child=spawnSync(process.execPath,['node_modules/jest/bin/jest.js','--runInBand','--runTestsByPath','tests/database/accounts.mysql.test.js','tests/database/catalog.mysql.test.js'],{
+    const child=spawnSync(process.execPath,['node_modules/jest/bin/jest.js','--runInBand','--runTestsByPath','tests/database/accounts.mysql.test.js','tests/database/catalog.mysql.test.js','tests/database/account-session-security.mysql.test.js'],{
       encoding:'utf8',timeout:180000,maxBuffer:8*1024*1024,windowsHide:true,
       env:{...process.env,NODE_ENV:'test',STAGE3A_MYSQL_UUID:identity.uuid,STAGE3A_TEST_PASSWORD:appPassword,
         STAGE3A_TEST_HOSTNAME:name,STAGE3A_TEST_PORT:String(port),STAGE3B_MYSQL_UUID:identity.uuid,
@@ -237,6 +238,7 @@ async function main() {
     process.stdout.write((child.stdout||'')+(child.stderr||''));assert.equal(child.status,0,'Final-schema account/catalog regressions failed');
     console.log('PASS: isolated MySQL final DDL, application SQL grants, HTTP authentication, concurrent defaults and cart writes, ownership, live prices and soft-delete reactivation.');
   } finally {
+    if (isolatedAuth) await isolatedAuth.close();
     if (models) await models.sequelize.close();
     if (root) await root.end();
     if (containerId) {

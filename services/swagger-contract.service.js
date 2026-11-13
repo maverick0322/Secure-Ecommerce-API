@@ -28,13 +28,15 @@ function buildDefinitions() {
     CategoryCreated: object({ id: integer, ...categoryFields, createdAt: timestamp, updatedAt: timestamp }),
     Product: object({ productId: integer, ...productFields, price: { type: 'string', example: '950.00', description: 'Las consultas conservan el tipo cadena que devuelve Sequelize para DECIMAL.' }, categories: { type: 'array', items: { $ref: '#/definitions/Category' } } }),
     User: object(userFields),
-    LoginResponse: object({ ...userFields, jwt: text }),
+    LoginResponse: object({ ...userFields, jwt: {type:'string',description:'Access token RS256, máximo cinco minutos.'},
+      refreshToken:{type:'string',minLength:43,maxLength:43,description:'Secreto opaco de un solo uso; sustituirlo en cada refresh.'},
+      expiresIn:{type:'integer',enum:[300]},tokenType:{type:'string',enum:['Bearer']} }),
     VerificationRequested: object({ message: text }),
     SellerReview: object({ userId: userFields.id, status: { type: 'string', enum: ['APPROVED', 'REJECTED'] },
       rejectionReason: { type: 'string', 'x-nullable': true }, reviewedAt: timestamp, reviewedByUserId: userFields.id }),
     SellerSuspension: object({ userId: userFields.id, status: {type:'string',enum:['SUSPENDED']},
       reviewedAt: timestamp, reviewedByUserId: userFields.id }),
-    SessionTime: object({ remainingTime: { type: 'string', example: '00:19:59' } }),
+    SessionTime: object({ remainingTime: { type: 'string', example: '00:04:59' } }),
     AuditLog: object({ id: integer, actorUserId: {type:'string',format:'uuid','x-nullable':true},action:{type:'string',maxLength:80},
       targetType:{type:'string','x-nullable':true},targetId:{type:'string','x-nullable':true},
       ipAddress:{type:'string','x-nullable':true},outcome:{type:'string',enum:['SUCCESS','DENIED','ERROR']},occurredAt:timestamp })
@@ -96,6 +98,11 @@ function completeSpecification(specification) {
   addAddressOperations(specification);
   require('./cart-openapi')(specification);
   require('./orders-openapi')(specification);
+  for (const operations of Object.values(specification.paths)) {
+    for (const operation of Object.values(operations)) if (operation.security?.some(s => s.bearerAuth)) {
+      operation.responses[503] = { description:'El almacén de sesiones o su configuración segura no está disponible.', schema:{$ref:'#/definitions/ErrorResponse'} };
+    }
+  }
   for(const [path,operations] of Object.entries(specification.paths)) {
     if(!/^\/api\/(files|roles)(\/|$)/.test(path)) continue;
     for(const operation of Object.values(operations)) {
@@ -217,7 +224,13 @@ function addAccountOperations(paths) {
     paths[path][method] = { description, parameters, security: authenticated ? [{ bearerAuth: [] }] : [], responses };
   }
   define('/api/auth', 'post', 'Inicia sesión con una cuenta activa y verificada.',
-    [body({ email, password }, ['email', 'password'])], 200, 'LoginResponse', [400, 401, 429], false);
+    [body({ email, password }, ['email', 'password'])], 200, 'LoginResponse', [400, 401, 429, 503], false);
+  paths['/api/auth'].post.description += ' Emite RS256 de cinco minutos y refresh opaco; inactividad 30 minutos, máximo ocho horas. Cache-Control: no-store. Rechaza JWT HS256 antiguos.';
+  paths['/api/auth'].post.parameters[0].schema.additionalProperties = false;
+  define('/api/auth/refresh','post','Rota un refresh opaco una sola vez, sin exigir access token. Reutilización revoca toda la sesión; solicitudes simultáneas pueden revocar al ganador. Ante respuesta perdida o resultado incierto, iniciar sesión otra vez. Cache-Control: no-store.',
+    [body({refreshToken:{type:'string',minLength:43,maxLength:43,pattern:'^[A-Za-z0-9_-]{43}$'}},['refreshToken'])],200,'LoginResponse',[400,401,429,503],false);
+  paths['/api/auth/refresh'].post.parameters[0].schema.additionalProperties = false;
+  define('/api/auth/logout','post','Revoca solo la sesión del Bearer RS256 vigente, sin cuerpo ni identificadores ajenos. Access y refresh dejan de funcionar. Repetir con sesión revocada devuelve 401.',[],204,null,[400,429,503]);
   define('/api/auth/register', 'post', 'Solicita un código de verificación por correo.',
     [body({ email }, ['email'])], 202, 'VerificationRequested', [400, 429, 503], false);
   define('/api/auth/register/verify', 'post', 'Verifica el correo y crea la cuenta. SELLER requiere storeName.',
@@ -230,7 +243,7 @@ function addAccountOperations(paths) {
   paths['/api/users'].get.responses[200].schema = { type: 'array', items: { $ref: '#/definitions/User' } };
   const user = [pathParameter('email', 'email')];
   define('/api/users/{email}', 'get', 'Consulta una cuenta por correo.', user, 200, 'User', [400, 404]);
-  define('/api/users/{email}', 'put', 'Actualiza datos o estado sin cambiar el perfil.',
+  define('/api/users/{email}', 'put', 'Actualiza datos o estado sin cambiar el perfil. Cambiar password revoca todas las sesiones antes del commit SQL; un rollback no restaura sesiones: autenticar otra vez.',
     [...user, body({ name, password: newPassword, status: { type: 'string', enum: ['ACTIVE', 'SUSPENDED', 'DISABLED'] } })], 204, null, [400, 404]);
   paths['/api/users/{email}'].put.parameters.at(-1).schema.additionalProperties = false;
   define('/api/users/{email}', 'delete', 'Cierra una cuenta mediante borrado lógico.', user, 204, null, [400, 404]);

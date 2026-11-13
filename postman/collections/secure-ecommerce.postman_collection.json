@@ -233,6 +233,267 @@
           ]
         },
         {
+          "name": "Login sesion independiente para rotacion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{buyerEmail}}\",\"password\":\"{{buyerPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.variables.set('probeToken',b.jwt);pm.variables.set('probeRefresh',b.refreshToken);pm.test('RS256 session lifetime',()=>pm.expect(b.expiresIn).to.eql(300)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rotar refresh opaco",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/refresh",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\":\"{{probeRefresh}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.variables.set('consumedRefresh',pm.variables.get('probeRefresh'));pm.variables.set('probeToken',b.jwt);pm.variables.set('probeRefresh',b.refreshToken);pm.test('RS256 session lifetime',()=>pm.expect(b.expiresIn).to.eql(300)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reutilizacion revoca la sesion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/refresh",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\":\"{{consumedRefresh}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401',function(){pm.expect(pm.response.code).to.eql(401);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===401) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Access revocado por reutilizacion",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{probeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/time",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401',function(){pm.expect(pm.response.code).to.eql(401);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===401) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login para logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{buyerEmail}}\",\"password\":\"{{buyerPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.variables.set('probeToken',b.jwt);pm.variables.set('probeRefresh',b.refreshToken);pm.test('RS256 session lifetime',()=>pm.expect(b.expiresIn).to.eql(300)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cerrar solo la sesion actual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{probeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/logout",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Access rechazado tras logout",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{probeToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/time",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401',function(){pm.expect(pm.response.code).to.eql(401);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===401) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh rechazado tras logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/refresh",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\":\"{{probeRefresh}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401',function(){pm.expect(pm.response.code).to.eql(401);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===401) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Password incorrecto",
           "request": {
             "method": "POST",

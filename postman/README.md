@@ -1,8 +1,9 @@
 # Pruebas Postman de Secure-Ecommerce-API
 
-Colección Postman v2.1 con **106 peticiones**, organizada en autenticación,
+Colección Postman v2.1 con **114 peticiones**, organizada en autenticación,
 usuarios, vendedores, categorías, productos, direcciones, carrito, checkout,
-pedidos, seguridad y auditoría. HTTP, JWT, bcrypt y persistencia MySQL son reales.
+pedidos, seguridad y auditoría. HTTP, RS256, bcrypt, MySQL y sesiones Redis son reales.
+Incluye rotación/reutilización de refresh y logout en sesiones independientes.
 El correo y Cloudinary son proveedores **simulados en memoria**: los resultados
 no acreditan el funcionamiento de Resend ni Cloudinary reales.
 
@@ -14,6 +15,12 @@ no acreditan el funcionamiento de Resend ni Cloudinary reales.
   en Linux, el contexto activo debe tener un endpoint local `unix:`.
 - Imagen local `mysql:8.0`. El runner usa `--pull never` y falla si no existe.
   Si hace falta descargarla: `docker pull mysql:8.0`. No utiliza Docker Compose.
+- Imagen local `redis:8.2`; se reutiliza el runner temporal con tmpfs, puerto
+  aleatorio loopback, identidad y ACL de prueba. Las llaves RSA se generan en
+  memoria. No se usan credenciales, CA ni sesiones del Redis habitual.
+- Word original en `docs/Propuesta_BD_Secure_Ecommerce_14_tablas.docx`: su SHA-256
+  debe coincidir con el esquema de fixtures. Si falta, el runner se detiene
+  antes de las peticiones; no omitir ni sustituir esa barrera.
 - Puerto `127.0.0.1:3001` disponible. Puede elegirse otro entre 3001 y 3099.
 
 Todos los comandos siguientes se ejecutan desde la raíz del repositorio.

@@ -1,6 +1,6 @@
 # E-Commerce Backend API en Node.js 🛡️
 
-Redis 8.2 y `compose.yaml`: [preparaci?n manual, TLS, secretos y recuperaci?n](docs/security/redis-compose.md). Redis todav?a no est? iniciado ni conectado al login.
+Redis 8.2 y `compose.yaml`: [preparación manual, TLS y secretos](docs/security/redis-compose.md). [Etapa 3 de autenticación](docs/security/auth-stage3.md): integración RS256/refresh implementada y probada en aislamiento; activación habitual pendiente de revisar configuración y coordinar la API.
 
 > Etapa 5: el backend ya utiliza `secure_ecommerce` con `ecommerce_app`. Direcciones, carrito, cotizaciones, checkout, pedidos y auditoría disponen de pruebas HTTP/MySQL aisladas. La lectura administrativa de auditoría requiere el SELECT limitado documentado en el [reporte de implementación](docs/implementation/implementation-report.md); todavía no se ha concedido en la base habitual. Las instrucciones antiguas de instalación, migraciones y seeders conservadas más abajo son históricas: no deben ejecutarse sobre el destino definitivo.
 
