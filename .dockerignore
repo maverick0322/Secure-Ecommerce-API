@@ -37,6 +37,7 @@ log/**
 *.tgz
 *.zip
 .aws/
+.secrets/
 .codex/
 .agents/
 postman/reports/

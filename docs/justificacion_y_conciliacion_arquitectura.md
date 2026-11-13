@@ -23,7 +23,7 @@ El diseño plasmado en el mapa técnico no es una abstracción genérica; deriva
 | **Bloque 7** | Págs. 52-56 | Servicios criptográficos, login de autenticación, tiempo de sesión y middleware de autorización RBAC con Rolling Tokens. | `services/jwttoken.service.js`, `controllers/auth.controller.js`, `middlewares/auth.middleware.js`. |
 | **Bloque 8** | Págs. 57-63 | Enrutamiento Express, integración de Swagger UI y generación OpenAPI mediante `swagger-autogen`. | `routes/*.js`, `swagger.js`, `swagger-output.json`, `index.js`. |
 | **Bloque 9** | Págs. 64-69 | Pruebas de integración cliente con extensión REST Client (`.http`). | `restclient/*.http`, `restclient/assets/`. |
-| **Bloque 10**| Pág. 70 | Publicación, control de versiones y exclusión defensiva de secretos. | `.gitignore`, `Dockerfile`, `docker-compose.yml`. |
+| **Bloque 10**| Pág. 70 | Publicación, control de versiones y exclusión defensiva de secretos. | `.gitignore`, `Dockerfile`, `compose.yaml`. |
 
 ---
 

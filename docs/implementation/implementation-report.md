@@ -10,7 +10,7 @@ Preparar MySQL y Sequelize para un esquema nuevo, conservando el destino de la A
 
 | Archivos | Cambios y motivo |
 | --- | --- |
-| `docker-compose.yml`, `bd.sql` | Se conservó `3307:3306`. El bootstrap de un volumen nuevo crea el esquema anterior y deja el aprovisionamiento de cuentas al administrador. Compose retiró los secretos predeterminados y exige `JWT_SECRET` al arrancar la API. |
+| `compose.yaml`, `bd.sql` | Se conservó `3307:3306`. El bootstrap de un volumen nuevo crea el esquema anterior y deja el aprovisionamiento de cuentas al administrador. Compose retiró los secretos predeterminados y exige `JWT_SECRET` al arrancar la API. |
 | `.env.example`, `config/config.js` | Se documentaron los dos puertos y las variables de la API. Las conexiones de desarrollo y producción rechazan `root`, `ecommerce_migrator` y contraseñas vacías. |
 | `.env.migration.example`, `config/secure-ecommerce-migrations.js` | Se preparó una configuración independiente de Sequelize CLI, limitada a `secure_ecommerce` y a `ecommerce_migrator`. La credencial se obtiene del entorno o de `.env.migration.local`. |
 | `README.md`, `docs/database/etapa-1-secure-ecommerce.md` | Se documentaron el aprovisionamiento, los permisos por tabla y la transición de datos y aplicación. |
@@ -155,7 +155,7 @@ Antes de migrar se comprobó el identificador del contenedor, su mapeo de puerto
 | --- | --- |
 | Modelos | `models/user.js`, `models/admin.js`, `models/buyer.js`, `models/seller.js`, `models/role.js` |
 | Cuentas, correo y seguridad | `services/accounts.service.js`, `services/email-verification.service.js`, `services/registration-email.service.js`, `services/jwttoken.service.js`, `middlewares/auth.middleware.js` |
-| HTTP y configuración | `controllers/auth.controller.js`, `controllers/users.controller.js`, `routes/auth.routes.js`, `routes/users.routes.js`, `services/swagger-contract.service.js`, `examples/api.http`, `index.js`, `.env.example`, `docker-compose.yml` |
+| HTTP y configuración | `controllers/auth.controller.js`, `controllers/users.controller.js`, `routes/auth.routes.js`, `routes/users.routes.js`, `services/swagger-contract.service.js`, `examples/api.http`, `index.js`, `.env.example`, `compose.yaml` |
 | Pruebas unitarias | `tests/unit/auth.middleware.test.js`, `tests/unit/email-verification.service.test.js`, `tests/unit/jwttoken.service.test.js` |
 | Pruebas de contratos | `tests/integration/auth.routes.test.js`, `tests/integration/users.routes.test.js`, `tests/integration/english-contract.test.js`, `tests/integration/audit-logs.routes.test.js`, `tests/integration/categories.routes.test.js`, `tests/integration/files.routes.test.js`, `tests/integration/products.routes.test.js`, `tests/integration/roles.routes.test.js`, `tests/support/auth-fixtures.js` |
 | Pruebas de MySQL | `tests/database/accounts.mysql.test.js`, `tests/support/accounts-transition-schema.js`, `tests/database/schema.mysql.test.js` |
@@ -208,7 +208,7 @@ Los eventos de escritura del catálogo insertan el contrato nuevo de `audit_logs
 | Modelos | `models/product.js`, `models/category.js`, `models/product-category.js`, `models/file.js` |
 | Catálogo e imágenes | `services/catalog.service.js`, `services/cloudinary.service.js`, `services/product-images.service.js`, `controllers/products.controller.js`, `controllers/categories.controller.js`, `controllers/files.controller.js`, `middlewares/upload.middleware.js` |
 | Rutas | `routes/products.routes.js`, `routes/categories.routes.js`, `routes/files.routes.js` |
-| Dependencias y configuración | `package.json`, `package-lock.json`, `.env.example`, `docker-compose.yml`, `.gitignore`, `.dockerignore`, `index.js` |
+| Dependencias y configuración | `package.json`, `package-lock.json`, `.env.example`, `compose.yaml`, `.gitignore`, `.dockerignore`, `index.js` |
 | Contratos y documentación | `services/swagger-contract.service.js`, `examples/api.http`, `README.md`, este reporte |
 | Pruebas | `tests/integration/products.routes.test.js`, `tests/integration/categories.routes.test.js`, `tests/integration/files.routes.test.js`, `tests/integration/english-contract.test.js`, `tests/unit/upload.middleware.test.js`, `tests/unit/cloudinary.service.test.js`, `tests/unit/product-images.service.test.js`, `tests/support/auth-fixtures.js`, `tests/database/catalog.mysql.test.js`, `tests/support/catalog-final-schema.js`, `tests/database/schema.mysql.test.js` |
 
@@ -586,7 +586,7 @@ Criterio de referencia: [OWASP Authentication Cheat Sheet](https://cheatsheetser
 
 #### Docker: configuración corregida, activación pendiente
 
-`docker-compose.yml` publica ahora `127.0.0.1:3307:3306`. La configuración efectiva de Compose se validó: conserva `db:3306` para la API y el volumen `secure-ecommerce-api_mysql_data` para `/var/lib/mysql`. No se identificó una necesidad documentada de acceso remoto directo. Si se necesitara posteriormente, debe acordarse un túnel SSH/VPN y controles de acceso, sin abrir silenciosamente MySQL a todas las interfaces.
+`compose.yaml` publica ahora `127.0.0.1:3307:3306`. La configuración efectiva de Compose se validó: conserva `db:3306` para la API y el volumen `secure-ecommerce-api_mysql_data` para `/var/lib/mysql`. No se identificó una necesidad documentada de acceso remoto directo. Si se necesitara posteriormente, debe acordarse un túnel SSH/VPN y controles de acceso, sin abrir silenciosamente MySQL a todas las interfaces.
 
 **El contenedor habitual NO se recreó:** sigue siendo `29e92b602f717a55be5195e1ef823545844d7cd6ef87eca45bd59800ec823142`, con publicaciones `0.0.0.0:3307` y `[::]:3307`. Cambiar el enlace de un contenedor existente requiere sustituirlo; se respeta la restricción anterior del usuario de no eliminar contenedores compartidos. La protección está preparada en el archivo, pero no se declara activa en Docker.
 
@@ -726,3 +726,85 @@ Evidencias locales ignoradas por Git: `network-activation.preflight.json`, `netw
 Para operaciones futuras de Compose deben preservarse explícitamente la imagen y el entorno protegido: esta recreación utilizó un override efímero para mantener variables históricas que no están declaradas en el archivo base. No se añadieron secretos al repositorio ni se modificaron archivos de credenciales. Un `compose up` posterior sin preparar ese entorno no forma parte de esta autorización.
 
 **La publicación local ya está activa y verificada.** Siguen pendientes de autorización separada el SELECT mínimo de auditoría, cualquier rotación de contraseñas y la eventual eliminación de `mercadolibrenode`. ADMIN inicial, proveedores reales y Quality Gate remoto mantienen su estado anterior. No se hicieron commit, push ni PR; se conserva `feature/secure-ecommerce-db`.
+
+
+## Infraestructura Redis 8.2 y nombre moderno de Compose ? 12 de noviembre de 2026
+
+Se renombr? el archivo Compose a `compose.yaml` y se actualizaron sus referencias
+activas en README y documentaci?n. La b?squeda de referencias al nombre anterior
+no encontr? scripts ni workflows que requirieran cambios. No se modificaron los
+workflows ni el generador de diagramas; sus marcas previas de Git se conservaron.
+
+La comparaci?n del objeto completo `services.db` y de `volumes.mysql_data` con
+el archivo anterior result? id?ntica. Imagen, nombre, credenciales por variables,
+puerto loopback 3307, montajes, healthcheck y red por defecto de MySQL permanecen
+sin cambios de configuraci?n. No se oper? el contenedor ni se consultaron o
+modificaron las bases habituales. No se hicieron migraciones, seeders ni GRANT.
+
+Redis queda definido como servicio independiente, imagen 8.2, volumen propio,
+red dedicada, publicaci?n exclusiva 127.0.0.1:6380, TLS y ACL m?nima. Se prepara
+AOF con fsync por escritura, rechazo de AOF truncado, noeviction y l?mites de
+memoria. El healthcheck usa TLS y una cuenta con solo PING. El bridge dedicado
+permite la excepci?n de conexi?n desde Windows por loopback; no se presenta
+como una red con prohibici?n de tr?fico saliente. No se inicia Redis al importar
+servicios de Node ni se agrega dependencia de arranque de la API sobre Redis.
+
+Archivos de infraestructura: `compose.yaml`, `config/redis/redis.conf`,
+`scripts/redis/control.js`, `services/auth-redis.service.js`,
+`tests/unit/redis-compose.test.js`, `.env.example`,
+`.gitignore`, `.dockerignore`, README y documentaci?n. Se excluye
+`.secrets/` de Git y del contexto Docker. No se generaron credenciales reales:
+las pruebas crearon ?nicamente secretos sint?ticos en directorios temporales.
+
+La utilidad JavaScript manual rechaza sobrescribir credenciales y prepara ACL
+con hashes. Su recuperaci?n solo lee INFO en Redis con TLS, valida primario,
+versi?n e identidad estable y reemplaza at?micamente un JSON local con run_id y
+UUID de generaci?n nuevo. El cargador rechaza fuentes ambiguas de identidad.
+Cada reinicio/restauraci?n exige recuperaci?n controlada y nueva instancia de
+los futuros consumidores; las sesiones anteriores requieren autenticarse otra
+vez. No se elimina fencing ni se reutilizan generaciones restauradas. Se mantienen
+WATCH/MULTI/EXEC, pool exclusivo, SHA-256 de refresh y reloj Redis, sin conectar
+endpoints ni alterar JWT actual, checkout o las 14 tablas.
+
+Verificaci?n: `docker compose --env-file .env.example -f compose.yaml config --quiet`
+salida 0. **88 pruebas espec?ficas aprobadas**, incluida compatibilidad del runner
+temporal, preparaci?n, ACL, estado, conflictos de configuraci?n y timeout sin
+publicaci?n tard?a. **Regresi?n completa: 398 aprobadas y 40 omitidas**, 39 suites
+aprobadas y seis omitidas; salida 0. Se desactivaron integraciones reales y SQL de
+pruebas se dirigi? a un puerto sin servicio. Persiste el aviso previo de Jest
+por paquetes duplicados en reportes de Postman. No se repitieron pruebas contra
+Redis real ni se ejecut? Node 20/Linux; quedan pendientes, no aprobadas.
+
+Antes de iniciar Redis faltan autorizaci?n operativa, preparaci?n manual de
+secretos locales, CA/certificado con SAN redis/localhost/127.0.0.1, permisos de
+lectura para los UID de contenedores, configuraci?n local y posterior generaci?n
+del estado con Redis ya disponible. La validez efectiva de TLS, healthcheck y
+conectividad queda pendiente de ese arranque autorizado. No se cambian ni rotan
+secretos existentes. Instrucciones completas: [Redis en Compose](../security/redis-compose.md).
+No se hicieron commits, push ni PR; contin?a `feature/secure-ecommerce-db`.
+
+
+### Consolidaci?n del entorno local Redis
+
+Las variables Redis se mantienen ?nicamente en la secci?n REDIS de `.env.example`;
+se retir? el ejemplo separado para evitar duplicaciones. El procedimiento manual
+usa ahora `node --env-file=.env scripts/redis/control.js recover --invalidate-sessions`.
+Si existe un `.env` local, se incorporan solo las variables faltantes sin reemplazar
+credenciales. El ejemplo no contiene secretos ni rutas privadas y no se modific?
+el entorno local real. La identidad procede del JSON o de las variables manuales,
+nunca simult?neamente; para recuperaci?n se dejan vac?as generaci?n/run_id y se
+usa el JSON. Se documenta la precedencia de las variables del shell.
+
+Windows conserva 127.0.0.1:6380 y rutas absolutas locales; Docker mantiene redis:6379
+y rutas /run en Compose. Secretos y certificados siguen en `.secrets/redis/`,
+excluido de Git y del contexto Docker. El script ya recibe process.env, por lo
+que no requiere cambios de c?digo para utilizar el entorno unificado.
+
+Verificaciones de este ajuste: Compose validado con `.env.example` (salida 0),
+**88 pruebas aprobadas en cuatro suites**, claves sin duplicaciones, todas las
+variables del ejemplo retirado presentes y campos sensibles vac?os. Se verificaron
+las exclusiones de secretos y el contrato MySQL existente. No se repiti? la
+regresi?n completa porque no cambi? l?gica de aplicaci?n; persiste el aviso
+previo de Jest por workspaces Postman duplicados. No se ejecutaron servicios,
+recuperaciones reales, operaciones SQL, commits ni push. Redis contin?a sin
+integraci?n con endpoints; las verificaciones reales de TLS/arranque siguen pendientes.
