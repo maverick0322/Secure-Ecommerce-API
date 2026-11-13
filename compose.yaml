@@ -101,7 +101,7 @@ services:
       - redis_server_cert
       - redis_server_key
     healthcheck:
-      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$(cat /run/secrets/redis_health_password)" redis-cli --tls --cacert /run/secrets/redis_ca --host 127.0.0.1 --port 6379 --user redis_health ping | grep -qx PONG']
+      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$(cat /run/secrets/redis_health_password)" redis-cli --tls --cacert /run/secrets/redis_ca -h 127.0.0.1 -p 6379 --user redis_health ping | grep -qx PONG']
       interval: 10s
       timeout: 5s
       retries: 5
