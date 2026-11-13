@@ -1,0 +1,823 @@
+services/authentication.service.js
+Make sure this bcrypt password hash gets revoked, changed, and removed from the code.
+
+Responsibility
+Security
+
+
+1
+Blocker
+cwe
+secret
+Not assigned
+L6
+30min effort
+4 hours ago
+Dockerfile
+Copying recursively might inadvertently add sensitive data to the container. Make sure it is safe here.
+
+Intentionality
+Security
+
+
+4
+High
+cwe
+dockerfile
+...
+ERICKMEL VAZQUEZ LOPEZ
+ERICKMEL VAZQUEZ LOPEZ
+L13
+20min effort
+29 days ago
+postman/scripts/cleanup.js
+Path Traversal via faulty LLM-supplied CLI arguments
+
+Intentionality
+Security
+
+
+4
+High
+cwe
+Not assigned
+L7
+30min effort
+1 day ago
+Path Traversal via faulty LLM-supplied CLI arguments
+
+Intentionality
+Security
+
+
+4
+High
+cwe
+Not assigned
+L20
+30min effort
+1 day ago
+Path Traversal via faulty LLM-supplied CLI arguments
+
+Intentionality
+Security
+
+
+4
+High
+cwe
+Not assigned
+L22
+30min effort
+1 day ago
+Path Traversal via faulty LLM-supplied CLI arguments
+
+Intentionality
+Security
+
+
+4
+High
+cwe
+Not assigned
+L22
+30min effort
+1 day ago
+Path Traversal via faulty LLM-supplied CLI arguments
+
+Intentionality
+Security
+
+
+4
+High
+cwe
+Not assigned
+L24
+30min effort
+1 day ago
+postman/scripts/isolation.js
+Command Argument Injection via faulty LLM-supplied CLI arguments
+
+Intentionality
+Security
+
+
+4
+High
+cwe
+Not assigned
+L15
+30min effort
+1 day ago
+scripts/database/Dockerfile.node20-verify
+Copying recursively might inadvertently add sensitive data to the container. Make sure it is safe here.
+
+Intentionality
+Security
+
+
+4
+High
+cwe
+dockerfile
+...
+Not assigned
+L3
+20min effort
+1 day ago
+postman/scripts/api-server.js
+Provide a compare function to avoid sorting elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L43
+10min effort
+1 day ago
+postman/scripts/container-metadata.js
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L8
+10min effort
+1 day ago
+postman/scripts/isolation.js
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L110
+10min effort
+1 day ago
+scripts/database/activate-final.js
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L25
+10min effort
+1 day ago
+Provide a compare function to avoid sorting elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L39
+10min effort
+1 day ago
+scripts/database/stage4-verify.js
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L13
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L20
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L37
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L63
+10min effort
+1 day ago
+scripts/database/stage4.js
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L15
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L19
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L171
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L174
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L202
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L206
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L208
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L212
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L222
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L224
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L229
+10min effort
+1 day ago
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L231
+10min effort
+1 day ago
+services/auth-redis.service.js
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L41
+10min effort
+6 hours ago
+services/database.service.js
+Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L2
+10min effort
+1 day ago
+services/orders.service.js
+Provide a compare function to avoid sorting elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L28
+10min effort
+1 day ago
+tests/support/security-checks.js
+Provide a compare function to avoid sorting elements alphabetically.
+
+Intentionality
+Reliability
+
+
+4
+High
+bad-practice
+type-dependent
+Not assigned
+L169
+10min effort
+1 day ago
+scripts/database/stage4-contract.js
+Review this potentially hard-coded password.
+
+Responsibility
+Security
+
+
+2
+Medium
+cwe
+former-hotspot
+...
+Not assigned
+L15
+30min effort
+1 day ago
+services/swagger-contract.service.js
+Review this potentially hard-coded password.
+
+Responsibility
+Security
+
+
+2
+Medium
+cwe
+former-hotspot
+...
+Not assigned
+L75
+30min effort
+1 day ago
+postman/scripts/container-metadata.check.cjs
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L17
+5min effort
+1 day ago
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L44
+5min effort
+1 day ago
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L50
+5min effort
+1 day ago
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L57
+5min effort
+1 day ago
+postman/scripts/isolation.check.cjs
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L17
+5min effort
+1 day ago
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L20
+5min effort
+1 day ago
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L23
+5min effort
+1 day ago
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L36
+5min effort
+1 day ago
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L45
+5min effort
+1 day ago
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L46
+5min effort
+1 day ago
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L60
+5min effort
+1 day ago
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned
+L67
+5min effort
+1 day ago
+postman/scripts/isolation.js
+Simplify this regular expression to reduce its runtime, as it has super-linear performance due to backtracking.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+performance
+regex
+Not assigned
+L109
+20min effort
+1 day ago
+Simplify this regular expression to reduce its runtime, as it has super-linear performance due to backtracking.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+performance
+regex
+Not assigned
+L110
+20min effort
+1 day ago
+services/audit.service.js
+Simplify this regular expression to reduce its runtime, as it has super-linear performance due to backtracking.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+performance
+regex
+Not assigned
+L20
+20min effort
+1 day ago
+services/auth-redis.service.js
+Prefer `Number.NaN` over `NaN`.
+
+Consistency
+Reliability
+
+
+2
+Medium
+Maintainability
+
+
+3
+Low
+convention
+editable-source
+...
+Not assigned
+L109
+2min effort
+6 hours ago
+services/cloudinary.service.js
+Expected the Promise rejection reason to be an Error.
+
+Consistency
+Reliability
+
+
+2
+Medium
+type-dependent
+Not assigned
+L18
+5min effort
+1 day ago
+services/password-policy.service.js
+Simplify this regular expression to reduce its runtime, as it has super-linear performance due to backtracking.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+performance
+regex
+Not assigned
+L30
+20min effort
+1 day ago
+services/redis-tls-config.service.js
+Either remove this useless object instantiation of "X509Certificate" or use it.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+No tags
+Not assigned
+L12
+5min effort
+2 hours ago
+tests/support/isolated-auth.js
+Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator. A rejection handler that is not a function will be ignored.
+
+Intentionality
+Reliability
+
+
+2
+Medium
+async
+es2017
+...
+Not assigned

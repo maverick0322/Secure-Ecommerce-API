@@ -72,7 +72,7 @@ function completeSpecification(specification) {
         input.description = 'Campos de la solicitud.';
         input.required = true;
         for (const [name, field] of Object.entries(input.schema.properties || {})) {
-          field.example = { name: 'Persona o categoría de ejemplo', title: 'Teclado', description: 'Teclado mecánico', price: 950, email: 'demo@example.invalid', password: 'CambiarAntesDeUsar123', categoryId: 1 }[name];
+          field.example = { name: 'Persona o categoría de ejemplo', title: 'Teclado', description: 'Teclado mecánico', price: 950, email: 'demo@example.invalid', categoryId: 1 }[name];
         }
       }
       if (apiPath === '/api/files/{id}' && method === 'get') {

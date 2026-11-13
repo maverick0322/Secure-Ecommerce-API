@@ -11,13 +11,48 @@ const ownerLabel='secure-ecommerce.test-suite';
 const runLabel='secure-ecommerce.test-run';
 function ensure(condition,code){if(!condition){const e=new Error(code);e.safe=true;throw e;}}
 const dockerArgs=process.platform==='win32'?['--context','desktop-linux']:[];
+function validateRunId(runId){
+  ensure(typeof runId==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(runId),'INVALID_RUN_ID');
+  return runId;
+}
+function validateDockerArgs(args){
+  ensure(Array.isArray(args)&&args.every(a=>typeof a==='string'&&!/[\0\r\n]/.test(a)),'INVALID_DOCKER_ARGUMENTS');
+  const id=value=>/^[a-f0-9]{64}$/.test(value);
+  const equal=value=>JSON.stringify(args)===JSON.stringify(value);
+  const socketCommand='export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; exec mysql --protocol=SOCKET --user=root --batch --skip-column-names --execute="SELECT @@server_uuid"';
+  if(args[0]==='inspect')ensure(args.length===2&&(id(args[1])||args[1]==='ecommerce_db'),'INVALID_INSPECT_TARGET');
+  else if(args[0]==='context')ensure(equal(['context','inspect',...(process.platform==='win32'?['desktop-linux']:[])]),'INVALID_CONTEXT_ARGUMENTS');
+  else if(args[0]==='stop')ensure(args.length===4&&args[1]==='--time'&&args[2]==='10'&&id(args[3]),'INVALID_STOP_TARGET');
+  else if(args[0]==='rm')ensure(args.length===2&&id(args[1]),'INVALID_REMOVE_TARGET');
+  else if(args[0]==='exec')ensure(args.length===5&&id(args[1])&&args[2]==='sh'&&args[3]==='-c'&&args[4]===socketCommand,'INVALID_EXEC_ARGUMENTS');
+  else if(args[0]==='ps'){
+    const runId=args[6]?.slice(('label='+runLabel+'=').length);validateRunId(runId);
+    ensure(equal(['ps','--all','--no-trunc','--filter','label='+ownerLabel+'=postman','--filter','label='+runLabel+'='+runId,'--format','{{.ID}}']),'INVALID_LIST_ARGUMENTS');
+  }else if(args[0]==='run'){
+    const runId=args[11]?.slice((runLabel+'=').length);validateRunId(runId);
+    const name='secure-ecommerce-postman-'+runId.replace(/-/g,'').slice(0,12);
+    ensure(equal(['run','--detach','--pull','never','--name',name,'--hostname',name,
+      '--label',ownerLabel+'=postman','--label',runLabel+'='+runId,'--publish','127.0.0.1::3306',
+      '--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.0']),'INVALID_RUN_ARGUMENTS');
+  }else ensure(false,'FORBIDDEN_DOCKER_OPERATION');
+}
+function assertLocalContext(){
+  const context=JSON.parse(docker(['context','inspect',...(process.platform==='win32'?['desktop-linux']:[])]))[0];
+  ensure(/^(?:unix:|npipe:)/.test(context.Endpoints.docker.Host),'REMOTE_DOCKER_CONTEXT_FORBIDDEN');
+}
 function docker(args,{input,env={},allowMissing=false}={}){
+  validateDockerArgs(args);
+  ensure(!process.env.DOCKER_HOST||/^(?:unix:|npipe:)/.test(process.env.DOCKER_HOST),'REMOTE_DOCKER_HOST_FORBIDDEN');
+  ensure(!Object.hasOwn(env,'DOCKER_HOST')&&!Object.hasOwn(env,'DOCKER_CONTEXT'),'DOCKER_ENDPOINT_OVERRIDE_FORBIDDEN');
   const result=spawnSync('docker',[...dockerArgs,...args],{encoding:'utf8',input,
-    env:{...process.env,...env},windowsHide:true,timeout:60000,maxBuffer:4*1024*1024});
+    env:{...process.env,...env},shell:false,windowsHide:true,timeout:60000,maxBuffer:4*1024*1024});
   if(allowMissing&&result.status!==0)return null;
   ensure(result.status===0,'DOCKER_OPERATION_FAILED');return result.stdout.trim();
 }
 function assertMetadata(info,fixture,{cleanup=false}={}){
+  validateRunId(fixture.runId);
+  ensure(fixture.name==='secure-ecommerce-postman-'+fixture.runId.replace(/-/g,'').slice(0,12),'CONTAINER_NAME_MISMATCH');
+  ensure(fixture.database==='secure_ecommerce_postman_'+fixture.runId.replace(/-/g,''),'DATABASE_RUN_MISMATCH');
   ensure(/^[a-f0-9]{64}$/.test(fixture.containerId)&&info.Id===fixture.containerId,'CONTAINER_ID_MISMATCH');
   ensure(info.Name==='/'+fixture.name&&fixture.name.startsWith('secure-ecommerce-postman-'),'CONTAINER_NAME_MISMATCH');
   ensure(info.Config.Hostname===fixture.name,'CONTAINER_HOSTNAME_MISMATCH');
@@ -64,9 +99,9 @@ async function verify(fixture,connection,{unselected=false}={}){
   ensure(usual.length===0,'HABITUAL_DATABASE_ON_TEST_SERVER');
 }
 async function create(runId){
+  validateRunId(runId);
   const crypto=require('node:crypto');const mysql=appRequire('mysql2/promise');
-  const context=JSON.parse(docker(['context','inspect',...(process.platform==='win32'?['desktop-linux']:[])]))[0];
-  ensure(/^(?:unix:|npipe:)/.test(context.Endpoints.docker.Host),'REMOTE_DOCKER_CONTEXT_FORBIDDEN');
+  assertLocalContext();
   const fixture={runId,name:'secure-ecommerce-postman-'+runId.replace(/-/g,'').slice(0,12),
     database:'secure_ecommerce_postman_'+runId.replace(/-/g,''),deniedUuids:[protectedUuid]};
   const protectedInfo=protectedSnapshot();fixture.protectedContainerId=protectedInfo?.id;
@@ -129,9 +164,12 @@ async function provision(fixture,admin){
 }
 function destroy(fixture){
   if(!fixture?.containerId)return;
+  validateRunId(fixture.runId);
+  ensure(/^[a-f0-9]{64}$/.test(fixture.containerId),'INVALID_CONTAINER_ID');
+  assertLocalContext();
   const raw=docker(['inspect',fixture.containerId],{allowMissing:true});if(!raw)return;
   assertMetadata(JSON.parse(raw)[0],fixture,{cleanup:true});
   docker(['stop','--time','10',fixture.containerId]);docker(['rm',fixture.containerId]);
 }
 module.exports={root,appRequire,ensure,docker,create,provision,verify,destroy,assertMetadata,assertIdentity,
-  identitySql,protectedSnapshot,protectedUuid,protectedVolume};
+  identitySql,protectedSnapshot,protectedUuid,protectedVolume,validateRunId,validateDockerArgs,assertLocalContext};

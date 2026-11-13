@@ -10,10 +10,18 @@ COPY package*.json ./
 RUN npm ci --ignore-scripts
 
 # Copiar el código fuente del proyecto
-COPY . .
+COPY index.js swagger.js ./
+COPY config/ ./config/
+COPY controllers/ ./controllers/
+COPY middlewares/ ./middlewares/
+COPY models/ ./models/
+COPY routes/ ./routes/
+COPY services/ ./services/
+COPY validators/ ./validators/
 
 # Asegurar existencia de directorios de almacenamiento y logs con permisos adecuados para usuario sin privilegios
-RUN mkdir -p uploads log && chown -R node:node /usr/src/app
+RUN npm run swagger && npm prune --omit=dev --ignore-scripts \
+    && mkdir -p uploads log && chown node:node uploads log
 
 # Seguridad Defensiva (Principio de Menor Privilegio): Ejecutar como usuario 'node' no privilegiado (no-root)
 USER node

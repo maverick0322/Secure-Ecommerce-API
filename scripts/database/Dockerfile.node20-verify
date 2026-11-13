@@ -1,7 +1,24 @@
 FROM node:20-bookworm
 WORKDIR /workspace
-COPY . .
+RUN chown node:node /workspace
+USER node
+COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --ignore-scripts
+COPY --chown=node:node index.js swagger.js compose.yaml Dockerfile .dockerignore .env.example .env.migration.example .env.secure-ecommerce.example .sequelizerc bd.sql README.md sonar-project.properties ./
+COPY --chown=node:node config/ ./config/
+COPY --chown=node:node controllers/ ./controllers/
+COPY --chown=node:node middlewares/ ./middlewares/
+COPY --chown=node:node models/ ./models/
+COPY --chown=node:node routes/ ./routes/
+COPY --chown=node:node services/ ./services/
+COPY --chown=node:node validators/ ./validators/
+COPY --chown=node:node tests/ ./tests/
+COPY --chown=node:node scripts/ ./scripts/
+COPY --chown=node:node migrations/ ./migrations/
+COPY --chown=node:node seeders/ ./seeders/
+COPY --chown=node:node docs/ ./docs/
+COPY --chown=node:node postman/ ./postman/
+COPY --chown=node:node .github/ ./.github/
 RUN npm audit --audit-level=high
 RUN npm run test:coverage
 RUN npm run swagger

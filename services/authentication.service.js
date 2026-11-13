@@ -3,6 +3,8 @@ const bcrypt = require('bcrypt');
 const accounts = require('./accounts.service');
 const runtime = require('./auth-runtime.service');
 const { AccountError } = accounts;
+// Public timing-only bcrypt work factor (12), never assigned to any account.
+// Keep the comparison on lookup misses; this value is not a credential.
 const DUMMY_HASH = '$2b$12$yIYsFG/CLkHoQu1IXqg0Ke4Vy3kGCImKQPBR0tcNW5QXxWLnxZH3y';
 function body(input, fields) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
