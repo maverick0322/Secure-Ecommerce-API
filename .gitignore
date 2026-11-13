@@ -21,6 +21,9 @@ restclient/
 
 # Archivos de registro / logs
 log/*.txt
+log/cloudinary/
+log/stage4/
+log/stage5/
 *.log
 
 # Archivos cargados por usuarios (uploads)
@@ -42,4 +45,22 @@ coverage/
 
 # Directorio de compilación de documentación (Asciidoctor)
 dist/
+
+# Private exports, credentials and backup archives
+.env.*
+!.env.example
+!.env.*.example
+log/**
+!log/.gitkeep
+*.sql.*
+*.dump
+*.bak
+*.pem
+*.key
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+.aws/
+.secrets/
 

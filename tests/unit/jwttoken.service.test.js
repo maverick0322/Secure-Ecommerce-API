@@ -1,66 +1,27 @@
 const jwt = require('jsonwebtoken');
-const CLAIM_TYPES = require("../../config/claim-types");
-const {
-  generateToken,
-  getRemainingTokenTime
-} = require('../../services/jwttoken.service');
-describe('Pruebas Unitarias: jwttoken.service.js', () => {
-  const mockEmail = 'admin@uv.mx';
-  const mockName = 'Administrador Sistema';
-  const mockRole = 'Administrador';
-  const secretKey = process.env.JWT_SECRET || 'secret_fallback_key_35_bytes_hex_secure_default';
-  describe('Función generateToken', () => {
-    it('debe generar un JWT con estructura válida de 3 partes separadas por puntos', () => {
-      const token = generateToken(mockEmail, mockName, mockRole);
-      expect(typeof token).toBe('string');
-      const parts = token.split('.');
-      expect(parts.length).toBe(3);
-    });
-    it('debe incluir los atributos estándar requeridos en el payload', () => {
-      const token = generateToken(mockEmail, mockName, mockRole);
-      const decoded = jwt.verify(token, secretKey);
-      expect(decoded[CLAIM_TYPES.Name]).toBe(mockEmail);
-      expect(decoded[CLAIM_TYPES.GivenName]).toBe(mockName);
-      expect(decoded[CLAIM_TYPES.Role]).toBe(mockRole);
-      expect(decoded.iss).toBe('ServidorFeiJWT');
-      expect(decoded.aud).toBe('ClientesFeiJWT');
-    });
-    it('debe fijar una ventana de expiración de 20 minutos (1200 segundos)', () => {
-      const token = generateToken(mockEmail, mockName, mockRole);
-      const decoded = jwt.verify(token, secretKey);
-      const durationSeconds = decoded.exp - decoded.iat;
-      expect(durationSeconds).toBe(20 * 60); // 1200 segundos
-    });
-  });
-  describe('Función getRemainingTokenTime', () => {
-    it('debe calcular correctamente el tiempo restante en formato 00:MM:SS', () => {
-      const token = generateToken(mockEmail, mockName, mockRole);
-      const req = {
-        header: jest.fn().mockReturnValue(`Bearer ${token}`)
-      };
-      const time = getRemainingTokenTime(req);
-      expect(time).toMatch(/^00:(19|20):[0-5][0-9]$/);
-    });
-    it('debe retornar null si la cabecera Authorization está ausente', () => {
-      const req = {
-        header: jest.fn().mockReturnValue(undefined)
-      };
-      const time = getRemainingTokenTime(req);
-      expect(time).toBeNull();
-    });
-    it('debe retornar null si la cabecera no utiliza el esquema Bearer', () => {
-      const req = {
-        header: jest.fn().mockReturnValue('Basic dXNlcjpwYXNz')
-      };
-      const time = getRemainingTokenTime(req);
-      expect(time).toBeNull();
-    });
-    it('debe retornar null si el token es inválido o está manipulado', () => {
-      const req = {
-        header: jest.fn().mockReturnValue('Bearer token_falso_invalido_123')
-      };
-      const time = getRemainingTokenTime(req);
-      expect(time).toBeNull();
-    });
-  });
+const { generateToken, verifyToken, getJwtSecret, getRemainingTokenTime } = require('../../services/jwttoken.service');
+const { makeAccount } = require('../support/auth-fixtures');
+const crypto = require('node:crypto');
+afterEach(() => jest.restoreAllMocks());
+it('uses the RS256 facade with a mandatory session UUID and five-minute lifetime', () => {
+  const account = makeAccount('BUYER'), sessionId = crypto.randomUUID();
+  const decoded = verifyToken(generateToken({ id: account.id, sessionId }));
+  expect(decoded).toMatchObject({ sub: account.id, sid: sessionId }); expect(decoded.exp - decoded.iat).toBe(300);
+  expect(getRemainingTokenTime(decoded)).toMatch(/^00:0[45]:[0-5]\d$/);
+  expect(() => generateToken(account)).toThrow();
+});
+it.each(['HS256','HS384','none'])('rejects legacy/symmetric access algorithm %s', algorithm => {
+  const token = jwt.sign({ sub: crypto.randomUUID() }, algorithm === 'none' ? null : process.env.JWT_SECRET, { algorithm });
+  expect(() => verifyToken(token)).toThrow();
+});
+it.each(['','short','a'.repeat(64),'human-readable-secret-passphrase-without-randomness'])('retains checkout secret validation %#', secret => {
+  jest.replaceProperty(process, 'env', { ...process.env, JWT_SECRET: secret });
+  expect(() => getJwtSecret()).toThrow('JWT_SECRET');
+});
+it('retains the existing checkout secret bytes without rotation or changes', () => {
+  for (const encoding of ['hex','base64url']) {
+    const secret = (encoding === 'base64url' ? 'base64url:' : '') + crypto.randomBytes(48).toString(encoding);
+    jest.replaceProperty(process, 'env', { ...process.env, JWT_SECRET: secret });
+    expect(getJwtSecret() === secret).toBe(true);
+  }
 });

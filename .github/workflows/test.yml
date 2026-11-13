@@ -32,8 +32,19 @@ jobs:
       - name: Run Dependency Security Audit
         run: npm audit --audit-level=high
 
+      - name: Prepare isolated Redis test image
+        # The isolated runner deliberately refuses implicit image downloads.
+        # Provision its disposable Redis image before enabling MySQL HTTP tests.
+        # No habitual Redis/Compose service is used by CI.
+        run: docker pull redis:8.2
+
       - name: Run Test Suite with Coverage
+        env:
+          RUN_STAGE5_MYSQL: '1'
         run: npm run test:coverage
+
+      - name: Verify historical migrations on isolated MySQL
+        run: node scripts/database/stage5-historical-tests.js
 
       - name: Upload Test Coverage Artifact
         if: always()

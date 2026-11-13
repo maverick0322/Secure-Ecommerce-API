@@ -1,209 +1,66 @@
-const {
-  User: user,
-  Role: role,
-  Sequelize
-} = require('../models');
-const bcrypt = require('bcrypt');
-const crypto = require('crypto');
-const self = {};
+const accounts = require('../services/accounts.service');
+const { isUuid } = require('../validators/uuid');
+const { AccountError, respondError, serializeAccount } = accounts;
 
-// GET: api/users
-self.getAll = async function (req, res, next) {
+async function getAll(req, res) {
   try {
-    const data = await user.findAll({
-      raw: true,
-      attributes: ['id', 'email', "name", "protected", [Sequelize.col("role.name"), "role"]],
-      include: {
-        model: role,
-        as: 'role',
-        attributes: []
-      }
-    });
-    return res.status(200).json(data);
+    return res.status(200).json((await accounts.listAccounts()).map(account => serializeAccount(account)));
   } catch (error) {
-    next(error);
+    return respondError(res, error);
   }
-};
+}
 
-// GET: api/users/:email
-self.get = async function (req, res, next) {
+async function targetByEmail(req) {
+  const account = await accounts.findAccountByEmail(await accounts.normalizeEmail(req.params.email));
+  if (!account) throw new AccountError(404, 'Usuario no encontrado.');
+  return account;
+}
+
+async function get(req, res) {
   try {
-    const email = req.params.email;
-    const data = await user.findOne({
-      where: {
-        email: email
-      },
-      raw: true,
-      attributes: ['id', 'email', "name", "protected", [Sequelize.col("role.name"), "role"]],
-      include: {
-        model: role,
-        as: 'role',
-        attributes: []
-      }
-    });
-    if (data) {
-      return res.status(200).json(data);
-    }
-    return res.status(404).json({
-      message: 'Usuario no encontrado.'
-    });
+    return res.status(200).json(serializeAccount(await targetByEmail(req)));
   } catch (error) {
-    next(error);
+    return respondError(res, error);
   }
-};
+}
 
-// POST: api/users
-self.create = async function (req, res, next) {
+async function update(req, res) {
   try {
-    const {
-      email,
-      password,
-      name,
-      role: roleName
-    } = req.body;
-    if (!email || !password || !name || !roleName) {
-      return res.status(400).json({
-        message: "Todos los campos (email, password, name, role) son obligatorios."
-      });
-    }
+    await accounts.updateAccount(req.account.id, await accounts.normalizeEmail(req.params.email), req.body, { ipAddress: req.ip });
+    return res.status(204).end();
+  } catch (error) { return respondError(res, error); }
+}
 
-    // Validar si el rol solicitado existe en la base de datos
-    const userRole = await role.findOne({
-      where: {
-        name: roleName
-      }
-    });
-    if (!userRole) {
-      return res.status(400).json({
-        message: `El rol '${roleName}' no existe en el sistema.`
-      });
-    }
-
-    // Verificar si el correo ya está registrado
-    const existingUser = await user.findOne({
-      where: {
-        email: email
-      }
-    });
-    if (existingUser) {
-      return res.status(409).json({
-        message: 'El correo electrónico ya se encuentra registrado.'
-      });
-    }
-
-    // Hash criptográfico con rondas de sal = 10
-    const passwordHash = await bcrypt.hash(password, 10);
-    const data = await user.create({
-      id: crypto.randomUUID(),
-      email: email,
-      passwordHash,
-      name,
-      protected: false,
-      roleId: userRole.id
-    });
-    if (req.logAudit) {
-      await req.logAudit('usuarios.crear', data.email);
-    }
-    return res.status(201).json({
-      id: data.id,
-      email: data.email,
-      name: data.name,
-      role: userRole.name
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// PUT: api/users/:email
-self.update = async function (req, res, next) {
+async function remove(req, res) {
   try {
-    const email = req.params.email;
-    const existingUser = await user.findOne({
-      where: {
-        email: email
-      }
-    });
-    if (!existingUser) {
-      return res.status(404).json({
-        message: 'Usuario no encontrado.'
-      });
-    }
-    const fieldsToUpdate = {};
-    if (req.body.name) {
-      fieldsToUpdate.name = req.body.name;
-    }
-    if (req.body.role) {
-      const userRole = await role.findOne({
-        where: {
-          name: req.body.role
-        }
-      });
-      if (!userRole) {
-        return res.status(400).json({
-          message: `El rol '${req.body.role}' no existe en el sistema.`
-        });
-      }
-      fieldsToUpdate.roleId = userRole.id;
-    }
+    await accounts.removeAccount(req.account.id, await accounts.normalizeEmail(req.params.email), { ipAddress: req.ip });
+    return res.status(204).end();
+  } catch (error) { return respondError(res, error); }
+}
 
-    // Si se envía una nueva contraseña, debe hashearse de forma segura
-    if (req.body.password) {
-      fieldsToUpdate.passwordHash = await bcrypt.hash(req.body.password, 10);
-    }
-    await user.update(fieldsToUpdate, {
-      where: {
-        email: email
-      }
-    });
-    if (req.logAudit) {
-      await req.logAudit('usuarios.editar', email);
-    }
-    return res.status(204).send();
-  } catch (error) {
-    next(error);
-  }
-};
-
-// DELETE: api/users/:email
-self.delete = async function (req, res, next) {
+async function suspendSeller(req, res) {
   try {
-    const email = req.params.email;
-    const data = await user.findOne({
-      where: {
-        email: email
-      }
-    });
+    const body = req.body;
+    if (!body || Array.isArray(body) || Object.keys(body).length !== 1 || !Object.hasOwn(body,'reason')) {
+      throw new AccountError(400,'Indique únicamente reason.');
+    }
+    return res.json(await accounts.suspendSeller(req.account.id,req.params.userId,body.reason,{ipAddress:req.ip}));
+  } catch (error) { return respondError(res,error); }
+}
 
-    // CORRECCIÓN CRÍTICA DE ROBUSTEZ: Validar existencia antes de leer data.protected
-    if (!data) {
-      return res.status(404).json({
-        message: 'Usuario no encontrado.'
-      });
+async function reviewSeller(req, res) {
+  try {
+    const { userId } = req.params;
+    const { status, rejectionReason: reason } = req.body || {};
+    if (!isUuid(userId) || !['APPROVED', 'REJECTED'].includes(status)) {
+      throw new AccountError(400, 'Indique un vendedor válido y el estado APPROVED o REJECTED.');
     }
-
-    // Regla de negocio y seguridad: No se pueden eliminar usuarios protegidos
-    if (data.protected) {
-      return res.status(403).json({
-        message: 'Acceso prohibido: No se pueden eliminar usuarios protegidos del sistema.'
-      });
-    }
-    const rowsDeleted = await user.destroy({
-      where: {
-        email: email
-      }
-    });
-    if (rowsDeleted === 1) {
-      if (req.logAudit) {
-        await req.logAudit('usuarios.eliminar', email);
-      }
-      return res.status(204).send();
-    }
-    return res.status(404).json({
-      message: 'Usuario no encontrado.'
-    });
+    if (status === 'APPROVED' && reason != null) throw new AccountError(400, 'El motivo solo se admite al rechazar.');
+    const rejectionReason = status === 'REJECTED' ? accounts.text(reason, 255, 'El rechazo requiere un motivo de hasta 255 caracteres.') : null;
+    return res.status(200).json(await accounts.reviewSeller(req.account.id, userId, status, rejectionReason, req.ip));
   } catch (error) {
-    next(error);
+    return respondError(res, error);
   }
-};
-module.exports = self;
+}
+
+module.exports = { getAll, get, update, remove, reviewSeller, suspendSeller };

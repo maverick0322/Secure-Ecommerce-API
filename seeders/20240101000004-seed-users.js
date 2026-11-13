@@ -7,6 +7,8 @@ const {
 } = require('../services/seed-data.service');
 module.exports = {
   async up(queryInterface, Sequelize) {
+    // Historical fixtures only. No default credential is ever provisioned.
+    const password = require('../services/accounts.service').newPassword(process.env.LEGACY_SEED_USER_PASSWORD);
     const adminRoleId = '09e30209-acbf-4391-baea-c719dd271c5f';
     const userRoleId = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
     await insertMissingRecords(queryInterface, Sequelize, 'roles', [{
@@ -51,11 +53,11 @@ module.exports = {
         limit: 1
       });
       if (existing.length > 0) continue;
-      // La contraseña de demostración solo se asigna al crear un usuario faltante.
+      // The explicit protected credential is used only for missing fixture users.
       await queryInterface.bulkInsert('users', [{
         ...user,
         roleId: role.id,
-        passwordHash: await bcrypt.hash('patito', 10),
+        passwordHash: await bcrypt.hash(password, 12),
         createdAt: new Date(),
         updatedAt: new Date()
       }], {

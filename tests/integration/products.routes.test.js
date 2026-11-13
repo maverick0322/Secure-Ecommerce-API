@@ -1,263 +1,82 @@
 const request = require('supertest');
 const app = require('../../index');
-const {
-  Product: product,
-  Category: category,
-  AuditLog: auditLog
-} = require('../../models');
-const {
-  generateToken
-} = require('../../services/jwttoken.service');
-describe("Pruebas de Integración: Endpoints de Productos (/api/products)", () => {
-  let adminToken;
-  let userToken;
-  beforeAll(() => {
-    adminToken = generateToken('admin@uv.mx', 'Administrador General', 'Administrador');
-    userToken = generateToken('usuario@uv.mx', 'Usuario Normal', 'Usuario');
-  });
-  beforeEach(() => {
-    // Evitar que llamadas de bitácora intenten tocar BD real y generen logs en consola
-    jest.spyOn(auditLog, 'create').mockResolvedValue({});
-  });
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-  describe("GET /api/products", () => {
-    it('debe responder con 401 si la petición carece de token de autorización', async () => {
-      const res = await request(app).get("/api/products");
-      expect(res.statusCode).toBe(401);
-    });
-    it('debe responder con 200 OK y la lista de productos para rol Usuario', async () => {
-      jest.spyOn(product, 'findAll').mockResolvedValue([{
-        productId: 1,
-        title: 'Laptop Dell XPS 15',
-        description: 'Potente laptop para desarrollo',
-        price: 25000.0,
-        fileId: null,
-        categories: []
-      }]);
-      const res = await request(app).get("/api/products").set('Authorization', `Bearer ${userToken}`);
-      expect(res.statusCode).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBe(1);
-      expect(res.body[0].title).toBe('Laptop Dell XPS 15');
-    });
-    it('debe filtrar productos cuando se envía el parámetro ?s=termino', async () => {
-      const spyFind = jest.spyOn(product, 'findAll').mockResolvedValue([]);
-      const res = await request(app).get("/api/products?s=Monitor").set('Authorization', `Bearer ${userToken}`);
-      expect(res.statusCode).toBe(200);
-      expect(spyFind).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.objectContaining({
-          title: expect.anything()
-        })
-      }));
-    });
-    it('debe responder con 500 si falla la consulta de productos en la base de datos', async () => {
-      jest.spyOn(product, 'findAll').mockRejectedValue(new Error('Fallo de conexión'));
-      const res = await request(app).get("/api/products").set('Authorization', `Bearer ${userToken}`);
-      expect(res.statusCode).toBe(500);
-    });
-  });
-  describe("GET /api/products/:id", () => {
-    it('debe responder con 200 OK y el detalle del producto si existe', async () => {
-      jest.spyOn(product, 'findByPk').mockResolvedValue({
-        productId: 1,
-        title: 'Mouse Ergonómico',
-        description: 'Mouse inalámbrico óptico',
-        price: 450.0,
-        fileId: null,
-        categories: []
-      });
-      const res = await request(app).get("/api/products/1").set('Authorization', `Bearer ${userToken}`);
-      expect(res.statusCode).toBe(200);
-      expect(res.body.title).toBe('Mouse Ergonómico');
-    });
-    it('debe responder con 404 Not Found si el producto no existe', async () => {
-      jest.spyOn(product, 'findByPk').mockResolvedValue(null);
-      const res = await request(app).get("/api/products/999").set('Authorization', `Bearer ${userToken}`);
-      expect(res.statusCode).toBe(404);
-      expect(res.body.message).toContain('no encontrado');
-    });
-    it('debe responder con 500 si la base de datos lanza un error en get por ID', async () => {
-      jest.spyOn(product, 'findByPk').mockRejectedValue(new Error('Fallo interno'));
-      const res = await request(app).get("/api/products/1").set('Authorization', `Bearer ${userToken}`);
-      expect(res.statusCode).toBe(500);
-    });
-  });
-  describe("POST /api/products (Validación y Creación RBAC)", () => {
-    it('debe responder con 403 Forbidden si un rol Usuario intenta crear un producto', async () => {
-      const res = await request(app).post("/api/products").set('Authorization', `Bearer ${userToken}`).send({
-        title: 'Producto no autorizado',
-        description: 'Intento de usuario',
-        price: 100
-      });
-      expect(res.statusCode).toBe(403);
-    });
-    it('debe responder con 400 Bad Request si faltan campos obligatorios o precio no es numérico', async () => {
-      const res = await request(app).post("/api/products").set('Authorization', `Bearer ${adminToken}`).send({
-        title: '',
-        description: '',
-        price: 'invalido'
-      });
-      expect(res.statusCode).toBe(400);
-      expect(res.body.message).toContain('Errores de validación');
-      expect(res.body.errors).toBeDefined();
-    });
-    it('debe responder con 201 Created si Administrador envía datos válidos', async () => {
-      jest.spyOn(product, 'create').mockResolvedValue({
-        id: 10,
-        title: 'Teclado Mecánico RGB',
-        description: 'Switches táctiles',
-        price: 1200.5,
-        fileId: null
-      });
-      const res = await request(app).post("/api/products").set('Authorization', `Bearer ${adminToken}`).send({
-        title: 'Teclado Mecánico RGB',
-        description: 'Switches táctiles',
-        price: 1200.5
-      });
-      expect(res.statusCode).toBe(201);
-      expect(res.body.id).toBe(10);
-      expect(res.body.title).toBe('Teclado Mecánico RGB');
-    });
-    it('debe responder con 500 si falla Product.create en BD', async () => {
-      jest.spyOn(product, 'create').mockRejectedValue(new Error('Error al insertar producto'));
-      const res = await request(app).post("/api/products").set('Authorization', `Bearer ${adminToken}`).send({
-        title: 'Producto Válido',
-        description: 'Descripción válida',
-        price: 50.0
-      });
-      expect(res.statusCode).toBe(500);
-    });
-  });
-  describe("PUT /api/products/:id (Actualización y Mitigación CWE-915)", () => {
-    it('debe responder con 400 si los campos enviados no pasan la validación', async () => {
-      const res = await request(app).put("/api/products/1").set('Authorization', `Bearer ${adminToken}`).send({
-        title: '',
-        description: '',
-        price: 'no-numero'
-      });
-      expect(res.statusCode).toBe(400);
-    });
-    it('debe responder con 404 si el producto a actualizar no existe', async () => {
-      jest.spyOn(product, 'findByPk').mockResolvedValue(null);
-      const res = await request(app).put("/api/products/999").set('Authorization', `Bearer ${adminToken}`).send({
-        title: 'Nuevo título',
-        description: 'Nueva descripción',
-        price: 200.0
-      });
-      expect(res.statusCode).toBe(404);
-    });
-    it('debe responder con 204 No Content al actualizar exitosamente', async () => {
-      jest.spyOn(product, 'findByPk').mockResolvedValue({
-        id: 1,
-        fileId: 2
-      });
-      jest.spyOn(product, 'update').mockResolvedValue([1]);
-      const res = await request(app).put("/api/products/1").set('Authorization', `Bearer ${adminToken}`).send({
-        title: 'Título Actualizado',
-        description: 'Descripción Actualizada',
-        price: 350.0
-      });
-      expect(res.statusCode).toBe(204);
-    });
-    it('debe responder con 500 si ocurre un fallo interno al actualizar', async () => {
-      jest.spyOn(product, 'findByPk').mockRejectedValue(new Error('Error de BD'));
-      const res = await request(app).put("/api/products/1").set('Authorization', `Bearer ${adminToken}`).send({
-        title: 'Título',
-        description: 'Descripción',
-        price: 100.0
-      });
-      expect(res.statusCode).toBe(500);
-    });
-  });
-  describe("DELETE /api/products/:id", () => {
-    it('debe responder con 404 si el producto a eliminar no existe', async () => {
-      jest.spyOn(product, 'findByPk').mockResolvedValue(null);
-      const res = await request(app).delete("/api/products/999").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(404);
-    });
-    it('debe responder con 204 No Content al eliminar un producto exitosamente', async () => {
-      jest.spyOn(product, 'findByPk').mockResolvedValue({
-        id: 1
-      });
-      jest.spyOn(product, 'destroy').mockResolvedValue(1);
-      const res = await request(app).delete("/api/products/1").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(204);
-    });
-    it('debe responder con 500 si falla la eliminación en base de datos', async () => {
-      jest.spyOn(product, 'findByPk').mockResolvedValue({
-        id: 1
-      });
-      jest.spyOn(product, 'destroy').mockRejectedValue(new Error('Fallo al borrar'));
-      const res = await request(app).delete("/api/products/1").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(500);
-    });
-  });
-  describe('Asignación y Desasociación de Categorías (N:M)', () => {
-    it("POST /api/products/:id/categories: debe responder 400 si falta categoryId", async () => {
-      const res = await request(app).post("/api/products/1/categories").set('Authorization', `Bearer ${adminToken}`).send({});
-      expect(res.statusCode).toBe(400);
-    });
-    it("POST /api/products/:id/categories: debe responder 404 si la categoría no existe", async () => {
-      jest.spyOn(category, 'findByPk').mockResolvedValue(null);
-      const res = await request(app).post("/api/products/1/categories").set('Authorization', `Bearer ${adminToken}`).send({
-        categoryId: 99
-      });
-      expect(res.statusCode).toBe(404);
-      expect(res.body.message).toContain('Categoría no encontrada');
-    });
-    it("POST /api/products/:id/categories: debe responder 404 si el producto no existe", async () => {
-      jest.spyOn(category, 'findByPk').mockResolvedValue({
-        id: 2
-      });
-      jest.spyOn(product, 'findByPk').mockResolvedValue(null);
-      const res = await request(app).post("/api/products/1/categories").set('Authorization', `Bearer ${adminToken}`).send({
-        categoryId: 2
-      });
-      expect(res.statusCode).toBe(404);
-      expect(res.body.message).toContain('Producto no encontrado');
-    });
-    it("POST /api/products/:id/categories: debe responder 204 al asociar categoría con éxito", async () => {
-      const mockItem = {
-        id: 1,
-        addCategory: jest.fn().mockResolvedValue({})
-      };
-      jest.spyOn(category, 'findByPk').mockResolvedValue({
-        id: 2
-      });
-      jest.spyOn(product, 'findByPk').mockResolvedValue(mockItem);
-      const res = await request(app).post("/api/products/1/categories").set('Authorization', `Bearer ${adminToken}`).send({
-        categoryId: 2
-      });
-      expect(res.statusCode).toBe(204);
-      expect(mockItem.addCategory).toHaveBeenCalled();
-    });
-    it("DELETE /api/products/:id/categories/:categoryId: debe responder 404 si categoría no existe", async () => {
-      jest.spyOn(category, 'findByPk').mockResolvedValue(null);
-      const res = await request(app).delete("/api/products/1/categories/99").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(404);
-    });
-    it("DELETE /api/products/:id/categories/:categoryId: debe responder 404 si producto no existe", async () => {
-      jest.spyOn(category, 'findByPk').mockResolvedValue({
-        id: 2
-      });
-      jest.spyOn(product, 'findByPk').mockResolvedValue(null);
-      const res = await request(app).delete("/api/products/1/categories/2").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(404);
-    });
-    it("DELETE /api/products/:id/categories/:categoryId: debe responder 204 al remover categoría", async () => {
-      const mockItem = {
-        id: 1,
-        removeCategory: jest.fn().mockResolvedValue({})
-      };
-      jest.spyOn(category, 'findByPk').mockResolvedValue({
-        id: 2
-      });
-      jest.spyOn(product, 'findByPk').mockResolvedValue(mockItem);
-      const res = await request(app).delete("/api/products/1/categories/2").set('Authorization', `Bearer ${adminToken}`);
-      expect(res.statusCode).toBe(204);
-      expect(mockItem.removeCategory).toHaveBeenCalled();
-    });
-  });
+const { AuditLog } = require('../../models');
+const catalog = require('../../services/catalog.service');
+const images = require('../../services/product-images.service');
+const cloud = require('../../services/cloudinary.service');
+const { tokenFor, mockAccountLookups } = require('../support/auth-fixtures');
+
+const seller = tokenFor('SELLER', { seller: { status: 'APPROVED' } });
+const buyer = tokenFor('BUYER');
+const admin = tokenFor('ADMIN');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
+const header = fixture => `Bearer ${fixture.token}`;
+const sample = { id: 1, sellerId: seller.account.id, title: 'Fixture', description: null, price: '12.50', stock: 2, imagePublicId: null };
+
+beforeEach(() => {
+  mockAccountLookups();
+  jest.spyOn(AuditLog, 'create').mockResolvedValue({});
+});
+afterEach(() => jest.restoreAllMocks());
+
+it('allows an approved seller to create and derives sellerId on the server', async () => {
+  const create = jest.spyOn(catalog, 'createProduct').mockResolvedValue(sample);
+  const result = await request(app).post('/api/products').set('Authorization', header(seller)).send({ title: 'Fixture', price: '12.5', stock: 2 });
+  expect(result.status).toBe(201);
+  expect(result.body).toMatchObject({ productId: 1, sellerId: seller.account.id, price: '12.50', imagePublicId: null });
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ id: seller.account.id }), { title: 'Fixture', price: '12.50', stock: 2 },{ipAddress:expect.any(String)});
+});
+
+it.each(['PENDING', 'REJECTED', 'SUSPENDED'])('rejects a %s seller before reaching the catalog', async status => {
+  const pending = tokenFor('SELLER', { seller: { status } });
+  const create = jest.spyOn(catalog, 'createProduct');
+  expect((await request(app).post('/api/products').set('Authorization', header(pending)).send({ title: 'Fixture', price: 1 })).status).toBe(403);
+  expect(create).not.toHaveBeenCalled();
+});
+
+it.each([buyer, admin, tokenFor('SELLER', { status: 'SUSPENDED', seller: { status: 'APPROVED' } })])('rejects a non-commercial account', async account => {
+  expect((await request(app).post('/api/products').set('Authorization', header(account)).send({ title: 'Fixture', price: 1 })).status).toBe(403);
+});
+
+it.each([
+  { price: -1 }, { price: '1.234' }, { price: true }, { price: '1e3' }, { stock: -1 }, { stock: 1.5 },
+  { stock: '1' }, { sellerId: buyer.account.id }, { fileId: 1 }, { imagePublicId: 'client-image' }, { deletedAt: null }
+])('rejects invalid or administrative input %j', async extra => {
+  const create = jest.spyOn(catalog, 'createProduct');
+  expect((await request(app).post('/api/products').set('Authorization', header(seller)).send({ title: 'Fixture', price: '1.00', ...extra })).status).toBe(400);
+  expect(create).not.toHaveBeenCalled();
+});
+
+it('permits buyers to query the active catalog and sanitizes failures', async () => {
+  jest.spyOn(catalog, 'listProducts').mockResolvedValue([sample]);
+  const result = await request(app).get('/api/products?s=Fixture').set('Authorization', header(buyer));
+  expect(result.status).toBe(200);
+  expect(result.body[0]).not.toHaveProperty('fileId');
+  jest.spyOn(catalog, 'getProduct').mockRejectedValue(new Error('secret SQL diagnostics'));
+  const failed = await request(app).get('/api/products/1').set('Authorization', header(buyer));
+  expect(failed.status).toBe(500);
+  expect(failed.text).not.toContain('secret');
+});
+
+it('validates category assignment and uses logical product mutations', async () => {
+  const change = jest.spyOn(catalog, 'changeCategory').mockResolvedValue();
+  expect((await request(app).post('/api/products/1/categories').set('Authorization', header(seller)).send({ categoryId: 2 })).status).toBe(204);
+  expect(change).toHaveBeenCalledWith(expect.objectContaining({ id: seller.account.id }), 1, 2, false,{ipAddress:expect.any(String)});
+  expect((await request(app).delete('/api/products/1/categories/2').set('Authorization', header(seller))).status).toBe(204);
+  expect(change).toHaveBeenLastCalledWith(expect.any(Object), 1, 2, true,{ipAddress:expect.any(String)});
+  expect((await request(app).post('/api/products/1/categories').set('Authorization', header(seller)).send({ categoryId: 'bad' })).status).toBe(400);
+  const remove = jest.spyOn(catalog,'removeProduct').mockResolvedValue();
+  expect((await request(app).delete('/api/products/1').set('Authorization', header(seller))).status).toBe(204);
+  expect(remove).toHaveBeenCalledWith(expect.objectContaining({id:seller.account.id}),1,{ipAddress:expect.any(String)});
+});
+
+it('uploads one image after checking ownership and exposes only a public identifier and URL', async () => {
+  const owner = jest.spyOn(catalog, 'ownedProduct').mockResolvedValue(sample);
+  const replace = jest.spyOn(images, 'replace').mockResolvedValue('managed-image');
+  jest.spyOn(cloud, 'deliveryUrl').mockReturnValue('https://example.invalid/image');
+  const result = await request(app).put('/api/products/1/image').set('Authorization', header(seller)).attach('image', png, 'fixture.png');
+  expect(result.status).toBe(200);
+  expect(owner).toHaveBeenCalledWith(1, seller.account.id);
+  expect(replace).toHaveBeenCalledWith(expect.objectContaining({ id: seller.account.id }), 1, png,{ipAddress:expect.any(String)});
+  expect(result.body).toEqual({ productId: 1, imagePublicId: 'managed-image', imageUrl: 'https://example.invalid/image' });
 });

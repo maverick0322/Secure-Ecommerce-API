@@ -1,0 +1,28 @@
+{
+  "name": "secure-ecommerce-postman-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Postman HTTP tests with disposable MySQL and local providers",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build-collection.js",
+    "test": "node --test scripts/isolation.check.cjs scripts/container-metadata.check.cjs",
+    "run": "node scripts/run.js",
+    "repeat": "node scripts/run.js --repeat 2",
+    "serve": "node scripts/run.js --serve"
+  },
+  "devDependencies": {
+    "newman": "6.2.3"
+  },
+  "overrides": {
+    "handlebars": "4.7.10",
+    "lodash": "4.18.1",
+    "node-forge": "1.4.3",
+    "flatted": "3.4.4",
+    "underscore": "1.13.8",
+    "jose": "4.15.9",
+    "qs": "6.17.1"
+  }
+}

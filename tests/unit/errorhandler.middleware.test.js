@@ -41,14 +41,14 @@ describe('Pruebas Unitarias: errorhandler.middleware.js (Manejo Seguro y Fuga CW
     expect(response.stack).toBeUndefined(); // Traza oculta en producción
     expect(response.message).toBe('No se ha podido procesar la petición. Inténtelo nuevamente más tarde.');
   });
-  it('en entorno de desarrollo debe exponer el stack trace y detalle para depuración', () => {
+  it('también oculta detalles internos y stack en desarrollo', () => {
     process.env.NODE_ENV = 'development';
     const errorDev = new Error('Error de prueba en desarrollo');
     errorDev.stack = 'Traza de prueba...';
     errorHandler(errorDev, req, res, next);
     expect(res.status).toHaveBeenCalledWith(500);
     const response = res.json.mock.calls[0][0];
-    expect(response.stack).toBeDefined();
-    expect(response.message).toBe('Error de prueba en desarrollo');
+    expect(response.stack).toBeUndefined();
+    expect(response.message).toBe('No se ha podido procesar la petición. Inténtelo nuevamente más tarde.');
   });
 });

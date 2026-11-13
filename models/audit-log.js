@@ -1,45 +1,13 @@
 'use strict';
-
-const {
-  Model
-} = require('sequelize');
-module.exports = (sequelize, DataTypes) => {
-  class AuditLog extends Model {
-    static associate(models) {
-      // Sin asociaciones foráneas estrictas para permitir bitácora histórica inmutable
-    }
-  }
-  AuditLog.init({
-    id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
-      primaryKey: true
-    },
-    action: {
-      type: DataTypes.STRING,
-      allowNull: false
-    },
-    elementId: {
-      type: DataTypes.STRING,
-      allowNull: true
-    },
-    ip: {
-      type: DataTypes.STRING,
-      allowNull: false
-    },
-    user: {
-      type: DataTypes.STRING,
-      allowNull: false
-    },
-    date: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW
-    }
-  }, {
-    sequelize,
-    freezeTableName: true,
-    modelName: 'AuditLog',
-    tableName: 'audit_logs'
-  });
-  return AuditLog;
+module.exports=(sequelize,T)=>{
+  const immutable=()=>{throw new Error('Audit logs are append-only.');};
+  const Audit=sequelize.define('AuditLog',{
+    id:{type:T.INTEGER,autoIncrement:true,primaryKey:true,allowNull:false},
+    actorUserId:{type:T.UUID,allowNull:true},action:{type:T.STRING(80),allowNull:false},
+    targetType:{type:T.STRING(40),allowNull:true},targetId:{type:T.STRING(64),allowNull:true},
+    ipAddress:{type:T.STRING(45),allowNull:true},outcome:{type:T.STRING(16),allowNull:false},
+    details:{type:T.JSON,allowNull:true},occurredAt:{type:T.DATE(3),allowNull:false}
+  },{tableName:'audit_logs',timestamps:false,hooks:{beforeUpdate:immutable,beforeBulkUpdate:immutable,beforeDestroy:immutable,beforeBulkDestroy:immutable}});
+  Audit.associate=({User})=>Audit.belongsTo(User,{as:'actor',foreignKey:'actorUserId',onDelete:'RESTRICT',onUpdate:'RESTRICT'});
+  return Audit;
 };

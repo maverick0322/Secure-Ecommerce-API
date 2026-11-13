@@ -1,17 +1,2 @@
-const {
-  Role: role
-} = require('../models');
-const self = {};
-
-// GET: api/roles
-self.getAll = async function (req, res, next) {
-  try {
-    const data = await role.findAll({
-      attributes: ['id', "name"]
-    });
-    return res.status(200).json(data);
-  } catch (error) {
-    next(error);
-  }
-};
-module.exports = self;
+'use strict';
+module.exports.getAll=(req,res)=>res.status(410).json({status:410,message:'Recurso retirado. La autorizaci?n utiliza perfiles.'});

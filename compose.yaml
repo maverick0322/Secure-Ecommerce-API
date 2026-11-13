@@ -1,0 +1,165 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: ecommerce_db
+    restart: unless-stopped
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-}
+      MYSQL_ROOT_HOST: localhost
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./bd.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "--host=127.0.0.1", "--user=mysql_healthcheck", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecommerce_api
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-3000}:3000"
+    environment:
+      - DB_HOST=${DOCKER_DB_HOST:-db}
+      - DB_PORT=${DOCKER_DB_PORT:-3306}
+      - DB_DATABASE=${DB_DATABASE:-secure_ecommerce}
+      - DB_USER=${DB_USER:-ecommerce_app}
+      - DB_PASSWORD=${DB_PASSWORD:-}
+      - DB_EXPECTED_UUID=${DB_EXPECTED_UUID:-}
+      - SERVER_PORT=${SERVER_PORT:-3000}
+      - SERVER_HOST=0.0.0.0
+      - NODE_ENV=${NODE_ENV:-development}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - GMAIL_CLIENT_PATH=/run/secrets/gmail_client
+      - GMAIL_TOKEN_PATH=/run/secrets/gmail_token
+      - GMAIL_SENDER_EMAIL=${GMAIL_SENDER_EMAIL:-}
+      - GMAIL_REDIRECT_URI=http://localhost:3001/oauth2/callback
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8080,http://localhost:8081}
+      - FILES_IN_DB=${FILES_IN_DB:-false}
+      # RS256/session infrastructure; provision protected files before activating this API.
+      - JWT_RS256_ISSUER=${JWT_RS256_ISSUER:-secure-ecommerce-api/access-v2}
+      - JWT_RS256_AUDIENCE=${JWT_RS256_AUDIENCE:-secure-ecommerce-clients/access-v2}
+      - JWT_RS256_ACTIVE_KID=${JWT_RS256_ACTIVE_KID:-access-v1}
+      - JWT_RS256_PRIVATE_KEY_PATH=/run/secrets/access_private_key
+      - JWT_RS256_PUBLIC_KEYS_PATH=/run/secrets/access_public_manifest
+      - AUTH_CREDENTIAL_VERSION_KEY_PATH=/run/secrets/auth_credential_key
+      - AUTH_REDIS_HOST=redis
+      - AUTH_REDIS_PORT=6379
+      - AUTH_REDIS_TLS=true
+      - AUTH_REDIS_USER=auth_session_app
+      - AUTH_REDIS_NAMESPACE=secure-ecommerce-auth
+      - AUTH_REDIS_PASSWORD_PATH=/run/secrets/redis_app_password
+      - AUTH_REDIS_CA_PATH=/run/secrets/redis_ca
+      - AUTH_REDIS_STATE_PATH=/run/redis-state/state.json
+      - NODE_EXTRA_CA_CERTS=/run/secrets/redis_ca
+    command: ["sh", "-ec", ': "$${JWT_SECRET:?Set JWT_SECRET for the API}"; exec node index.js']
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+      - ./log:/usr/src/app/log
+      - type: bind
+        source: ./.secrets/auth/public-keys
+        target: /run/auth/public-keys
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.secrets/redis/state
+        target: /run/redis-state
+        read_only: true
+        bind:
+          create_host_path: false
+    secrets:
+      - redis_app_password
+      - redis_ca
+      - access_private_key
+      - access_public_manifest
+      - auth_credential_key
+      - gmail_client
+      - gmail_token
+    networks:
+      - default
+      - redis_private
+
+  redis:
+    image: redis:8.2
+    restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    networks:
+      - redis_private
+    volumes:
+      - redis_data:/data
+      - type: bind
+        source: ./config/redis/redis.conf
+        target: /usr/local/etc/redis/redis.conf
+        read_only: true
+        bind:
+          create_host_path: false
+    secrets:
+      - redis_acl
+      - redis_health_password
+      - redis_ca
+      - redis_server_cert
+      - redis_server_key
+    healthcheck:
+      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$(cat /run/secrets/redis_health_password)" redis-cli --tls --cacert /run/secrets/redis_ca -h 127.0.0.1 -p 6379 --user redis_health ping | grep -qx PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  redis_private:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"
+
+secrets:
+  gmail_client:
+    file: ./.secrets/gmail/client.json
+  gmail_token:
+    file: ./.secrets/gmail/token.json
+  access_private_key:
+    file: ./.secrets/auth/access-private.pem
+  access_public_manifest:
+    file: ./.secrets/auth/public-keys.docker.json
+  auth_credential_key:
+    file: ./.secrets/auth/credential-version.key
+  redis_acl:
+    file: ./.secrets/redis/users.acl
+  redis_app_password:
+    file: ./.secrets/redis/app-password
+  redis_health_password:
+    file: ./.secrets/redis/health-password
+  redis_ca:
+    file: ./.secrets/redis/ca.crt
+  redis_server_cert:
+    file: ./.secrets/redis/server.crt
+  redis_server_key:
+    file: ./.secrets/redis/server.key
