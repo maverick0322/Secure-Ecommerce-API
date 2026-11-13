@@ -21,14 +21,15 @@ Variables documentadas en `.env.example`, sin secretos reales:
 | `AUTH_REDIS_HOST`, `AUTH_REDIS_PORT` | Destino del operador; no admite URLs con credenciales. |
 | `AUTH_REDIS_TLS` | `true` o `false`; texto plano solo en loopback. TLS verifica certificados. |
 | `AUTH_REDIS_USER` | Usuario ACL dedicado. |
-| `AUTH_REDIS_PASSWORD_PATH` | Archivo regular absoluto de 32–256 bytes UTF-8, sin salto de línea ni NUL. |
+| `AUTH_REDIS_PASSWORD_PATH` | Archivo protegido de 32–256 bytes UTF-8, relativo bajo `.secrets/` o absoluto permitido; sin salto de línea ni NUL. |
+| `AUTH_REDIS_CA_PATH` | Bundle CA PEM protegido y portable; se carga explícitamente en el cliente TLS. |
 | `AUTH_REDIS_NAMESPACE` | Prefijo de 3–64 caracteres ASCII: minúsculas, dígitos y guiones. |
 | `AUTH_REDIS_GENERATION` | UUID del almacén aprovisionado por el operador, estable entre reinicios de la API. |
 | `AUTH_REDIS_EXPECTED_RUN_ID` | Identidad `run_id` esperada: 40 hexadecimales. |
-| `AUTH_REDIS_STATE_PATH` | JSON absoluto de configuración del operador; sustituye generación/run_id. No se admiten ambas fuentes a la vez. |
+| `AUTH_REDIS_STATE_PATH` | JSON protegido de configuración del operador; sustituye generación/run_id. No se admiten ambas fuentes a la vez. |
 | `AUTH_REDIS_CONNECT_TIMEOUT_MS` | 100–5000 ms, por defecto 1000; también limita la espera de una conexión del pool. |
 | `AUTH_REDIS_COMMAND_TIMEOUT_MS` | 100–5000 ms por comando o `EXEC`, por defecto 1000. |
-| `AUTH_CREDENTIAL_VERSION_KEY_PATH` | Archivo regular absoluto: clave binaria aleatoria independiente de 32–128 bytes. |
+| `AUTH_CREDENTIAL_VERSION_KEY_PATH` | Archivo protegido, relativo o absoluto permitido: clave binaria aleatoria independiente de 32–128 bytes. |
 
 Los archivos secretos deben quedar fuera de Git/contexto Docker, con ACL NTFS
 o permisos 0400/0600 adecuados. Los cargadores validan tipo y tamaño; el operador

@@ -960,3 +960,58 @@ repetición completa aprobó después de corregirlo. No se ejecutaron recuperaci
 rotaciones ni operaciones en bases o contenedores habituales. Los runners usaron
 solo fixtures descartables y su material efímero de pruebas; no se generaron ni
 modificaron claves para el entorno habitual. No se hicieron commits ni push.
+
+### Configuración portable y diagnóstico de RS256
+
+Se comprobó sin mostrar secretos que el `.env` local no tenía las variables
+RS256 ni la ruta de clave HMAC. Los archivos RSA existentes eran una pareja
+RSA 3072 coincidente y los manifiestos contenían `access-v1`. La ausencia de
+configuración, junto al requisito anterior de rutas absolutas, explicaba
+`RS256_CONFIGURATION_INVALID`; no se atribuyó el fallo a claves dañadas.
+
+Se añadió `secure-config-file.service.js`, compartido por los cargadores RSA,
+HMAC, contraseña/estado Redis y CA. Resuelve rutas respecto a la raíz del proyecto,
+no respecto a cwd. Las relativas solo pueden estar bajo `.secrets/`; se rechazan
+traversal, rutas remotas/UNC, streams Windows, componentes simbólicos/junctions y
+directorios no autorizados. Se conserva soporte absoluto para montajes Docker;
+otros directorios administrados requieren `AUTH_CONFIG_ALLOWED_ROOTS` explícito.
+La lectura valida archivo/tamaño, descriptor/inodo antes de leer y ruta/descriptor
+después, con O_NOFOLLOW donde existe. No se desactivan controles mediante opciones.
+
+El manifiesto público admite rutas relativas al proyecto y BOM UTF-8 de Windows.
+Se mantiene `access-v1`, RSA 3072 y pareja pública/privada coincidente. Se añadió
+`config/auth/public-keys.example.json` sin material criptográfico. El `.env` local
+se completó solo con configuración y rutas relativas; se creó su manifiesto
+portable bajo `.secrets/auth/`. Se conservaron byte a byte los archivos RSA/HMAC,
+contraseña Redis, CA y estado/run_id/generación, y las demás variables locales,
+incluido JWT_SECRET. No se regeneraron ni rotaron claves existentes.
+
+`redis-tls-config.service.js` carga `AUTH_REDIS_CA_PATH` explícitamente en el socket
+TLS y mantiene rejectUnauthorized=true. No depende de cambiar NODE_EXTRA_CA_CERTS
+después de arrancar Node. Se documentó que esa variable global se lee al inicio;
+Docker conserva sus rutas internas absolutas y ahora prepara la CA explícita del
+cliente. No se modificaron los servicios MySQL o Redis en Compose.
+
+`scripts/auth/check-config.js` informa solo estados y nombres de variables ausentes.
+No muestra rutas privadas, llaves, contraseñas ni causas de filesystem y no conecta
+Redis ni inicializa marcadores. Ejecutado desde la raíz y desde otro cwd, cargó
+correctamente RS256, HMAC y configuración Redis con access-v1. Una comprobación
+separada de conexión real efectuó únicamente AUTH/TLS e INFO: identidad esperada
+y primario confirmados, sin tocar sesiones ni ejecutar recovery.
+
+Verificaciones: **456 pruebas aprobadas, 45 omitidas**, tanto Windows/Node 24 como
+Node 20/Linux. Se añadieron 30 casos para separadores, cwd, allowlists, symlinks,
+traversal, sustitución entre validación/apertura, tamaños, manifiesto/BOM, CA y
+diagnóstico. La primera regresión ya aprobó; se repitió tras fortalecer la lectura
+por descriptor. Node 20 también aprobó instalación limpia, auditoría sin altas o
+críticas, Swagger y build documental; no se generaron diagramas. Compose validó
+sin iniciar servicios. Las integraciones SQL optativas omitidas no se presentan
+como ejecutadas en este ajuste; no hubo consultas ni modificaciones MySQL.
+
+Archivos: cargadores y nueva utilidad compartida/TLS, preparador de estado Redis
+(solo compatibilidad de rutas; no se ejecutó contra Redis), ejemplos `.env` y
+manifiesto, configuración del cliente API en Compose, pruebas y documentación.
+La guía [Configuración portable](../security/portable-config.md) documenta el
+aprovisionamiento inicial para compañeros y las diferencias Docker/host.
+No se modificaron servidores ni sesiones Redis habituales, permisos o credenciales.
+No se inició la API habitual, ni se hicieron commits o push.

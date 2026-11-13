@@ -1,7 +1,6 @@
 'use strict';
 const crypto = require('node:crypto');
-const fs = require('node:fs');
-const path = require('node:path');
+const { readConfigFile } = require('./secure-config-file.service');
 const { RedisConfigurationError } = require('./auth-session-errors');
 
 // The caller supplies a protected, dedicated CSPRNG key. Never use a password,
@@ -18,11 +17,7 @@ function createCredentialVersionService(key) {
 }
 function loadCredentialVersionService(env = process.env) {
   try {
-    const location = env.AUTH_CREDENTIAL_VERSION_KEY_PATH;
-    if (typeof location !== 'string' || !path.isAbsolute(location)) throw new RedisConfigurationError();
-    const stat = fs.statSync(location);
-    if (!stat.isFile() || stat.size < 32 || stat.size > 128) throw new RedisConfigurationError();
-    return createCredentialVersionService(fs.readFileSync(location));
+    return createCredentialVersionService(readConfigFile(env.AUTH_CREDENTIAL_VERSION_KEY_PATH, 128, env, null));
   } catch { throw new RedisConfigurationError(); }
 }
 module.exports = { createCredentialVersionService, loadCredentialVersionService };

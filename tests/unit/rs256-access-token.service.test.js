@@ -209,7 +209,9 @@ function mockedFiles() {
     [publicPath, active.publicKey.export({ format: 'pem', type: 'spki' })],
     [manifestPath, JSON.stringify({ [activeKid]: publicPath })]]);
   const env = { JWT_RS256_ISSUER: issuer, JWT_RS256_AUDIENCE: audience, JWT_RS256_ACTIVE_KID: activeKid,
-    JWT_RS256_PRIVATE_KEY_PATH: privatePath, JWT_RS256_PUBLIC_KEYS_PATH: manifestPath };
+    JWT_RS256_PRIVATE_KEY_PATH: privatePath, JWT_RS256_PUBLIC_KEYS_PATH: manifestPath,
+    AUTH_CONFIG_ALLOWED_ROOTS: JSON.stringify([directory]) };
+  require('../support/mock-config-paths')([privatePath, publicPath, manifestPath]);
   jest.spyOn(fs, 'statSync').mockImplementation(location => {
     if (!files.has(location)) throw new Error('Synthetic inaccessible file');
     return { isFile: () => true, size: Buffer.byteLength(files.get(location)) };

@@ -82,7 +82,7 @@ el aprovisionamiento de secretos y el inicio de Redis antes de realizarlos.
    variables existentes. Si todavía no existe, crear `.env` a partir del ejemplo
    y completar los valores necesarios. No hay un archivo de entorno Redis aparte.
    Para Node ejecutado en Windows/host, conservar `127.0.0.1:6380`, TLS y establecer rutas
-   **absolutas** de `AUTH_REDIS_PASSWORD_PATH` a `app-password` y
+   **relativas al proyecto** de `AUTH_REDIS_PASSWORD_PATH` a `.secrets/redis/app-password` y
    `AUTH_REDIS_STATE_PATH` a `.secrets/redis/state/state.json`. Mantener
    namespace/usuario del ejemplo. No definir `AUTH_REDIS_GENERATION` ni
    `AUTH_REDIS_EXPECTED_RUN_ID` si se usa el JSON: dejarlas vacías; fuentes ambiguas
@@ -92,8 +92,11 @@ el aprovisionamiento de secretos y el inicio de Redis antes de realizarlos.
    esos valores al `.env` utilizado por Node en Windows. Todos los secretos y
    certificados continúan bajo `.secrets/redis/`, excluido de Git y del build.
 
-5. Establecer `NODE_EXTRA_CA_CERTS` en el shell **antes** de iniciar Node, con la
-   ruta absoluta de `ca.crt`. Ejemplo PowerShell, sin credenciales:
+5. Configurar `AUTH_REDIS_CA_PATH=.secrets/redis/ca.crt` en el `.env` unificado.
+   El cliente resuelve y carga esa CA explícitamente sin depender del directorio
+   de ejecución ni de modificar la confianza global después de iniciar Node.
+   Si otros proveedores necesitan `NODE_EXTRA_CA_CERTS`, configurarlo en el shell
+   **antes** de iniciar Node. Ejemplo PowerShell opcional, sin credenciales:
 
    ```powershell
    $env:NODE_EXTRA_CA_CERTS = (Resolve-Path .secrets/redis/ca.crt).Path

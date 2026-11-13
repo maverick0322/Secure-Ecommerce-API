@@ -51,7 +51,7 @@ services:
       # RS256/session infrastructure; provision protected files before activating this API.
       - JWT_RS256_ISSUER=${JWT_RS256_ISSUER:-secure-ecommerce-api/access-v2}
       - JWT_RS256_AUDIENCE=${JWT_RS256_AUDIENCE:-secure-ecommerce-clients/access-v2}
-      - JWT_RS256_ACTIVE_KID=${JWT_RS256_ACTIVE_KID:-access-v2-current}
+      - JWT_RS256_ACTIVE_KID=${JWT_RS256_ACTIVE_KID:-access-v1}
       - JWT_RS256_PRIVATE_KEY_PATH=/run/secrets/access_private_key
       - JWT_RS256_PUBLIC_KEYS_PATH=/run/secrets/access_public_manifest
       - AUTH_CREDENTIAL_VERSION_KEY_PATH=/run/secrets/auth_credential_key
@@ -61,6 +61,7 @@ services:
       - AUTH_REDIS_USER=auth_session_app
       - AUTH_REDIS_NAMESPACE=secure-ecommerce-auth
       - AUTH_REDIS_PASSWORD_PATH=/run/secrets/redis_app_password
+      - AUTH_REDIS_CA_PATH=/run/secrets/redis_ca
       - AUTH_REDIS_STATE_PATH=/run/redis-state/state.json
       - NODE_EXTRA_CA_CERTS=/run/secrets/redis_ca
     command: ["sh", "-ec", ': "$${JWT_SECRET:?Set JWT_SECRET for the API}"; exec node index.js']

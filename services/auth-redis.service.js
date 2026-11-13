@@ -1,6 +1,6 @@
 'use strict';
-const fs = require('node:fs');
-const path = require('node:path');
+const { readConfigFile } = require('./secure-config-file.service');
+const { loadRedisCa } = require('./redis-tls-config.service');
 const net = require('node:net');
 const { createClientPool, WatchError } = require('redis');
 const { isAccessUuid } = require('../validators/uuid');
@@ -9,27 +9,25 @@ const { RedisConfigurationError, SessionStoreUnavailableError, AuthSessionError 
 const validRunId = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 function configured(condition) { if (!condition) throw new RedisConfigurationError(); }
 
-function readSecret(location) {
-  configured(typeof location === 'string' && path.isAbsolute(location));
-  const stat = fs.statSync(location);
-  configured(stat.isFile() && stat.size >= 32 && stat.size <= 256);
-  const secret = fs.readFileSync(location, 'utf8');
+function readSecret(location, env) {
+  const secret = readConfigFile(location, 256, env);
   configured(Buffer.byteLength(secret) >= 32 && Buffer.byteLength(secret) <= 256 && !/[\r\n\0]/.test(secret));
   return secret;
 }
 function validateConfiguration(config) {
   configured(config && typeof config === 'object');
-  const { host, port, username, password, tls, namespace, generation, expectedRunId,
+  const { host, port, username, password, tls, ca, namespace, generation, expectedRunId,
     connectTimeoutMs = 1000, commandTimeoutMs = 1000 } = config;
   configured(typeof host === 'string' && (net.isIP(host) || /^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$/.test(host)));
   configured(Number.isInteger(port) && port > 0 && port <= 65535);
   configured(typeof username === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(username));
   configured(typeof password === 'string' && Buffer.byteLength(password) >= 32 && Buffer.byteLength(password) <= 256 && !/[\r\n\0]/.test(password));
   configured(typeof tls === 'boolean' && (tls || ['127.0.0.1', '::1', 'localhost'].includes(host)));
+  configured(ca === undefined || (tls && typeof ca === 'string' && Buffer.byteLength(ca) <= 65536));
   configured(typeof namespace === 'string' && /^[a-z][a-z0-9-]{2,63}$/.test(namespace));
   configured(isAccessUuid(generation) && validRunId(expectedRunId));
   for (const value of [connectTimeoutMs, commandTimeoutMs]) configured(Number.isInteger(value) && value >= 100 && value <= 5000);
-  return Object.freeze({ host, port, username, password, tls, namespace, generation, expectedRunId,
+  return Object.freeze({ host, port, username, password, tls, ca, namespace, generation, expectedRunId,
     connectTimeoutMs, commandTimeoutMs });
 }
 function loadRedisConfiguration(env = process.env) {
@@ -38,16 +36,14 @@ function loadRedisConfiguration(env = process.env) {
     let generation = env.AUTH_REDIS_GENERATION, expectedRunId = env.AUTH_REDIS_EXPECTED_RUN_ID;
     if (env.AUTH_REDIS_STATE_PATH) {
       configured(!generation && !expectedRunId);
-      configured(path.isAbsolute(env.AUTH_REDIS_STATE_PATH));
-      const stat = fs.statSync(env.AUTH_REDIS_STATE_PATH);
-      configured(stat.isFile() && stat.size > 0 && stat.size <= 1024);
-      const state = JSON.parse(fs.readFileSync(env.AUTH_REDIS_STATE_PATH, 'utf8'));
+      const state = JSON.parse(readConfigFile(env.AUTH_REDIS_STATE_PATH, 1024, env).replace(/^\uFEFF/, ''));
       configured(state && state.namespace === env.AUTH_REDIS_NAMESPACE && state.version === 1 &&
         Object.keys(state).sort().join(',') === 'expectedRunId,generation,namespace,version');
       generation = state.generation; expectedRunId = state.expectedRunId;
     }
     return validateConfiguration({ host: env.AUTH_REDIS_HOST, port: Number(env.AUTH_REDIS_PORT),
-      username: env.AUTH_REDIS_USER, password: readSecret(env.AUTH_REDIS_PASSWORD_PATH), tls: env.AUTH_REDIS_TLS === 'true',
+      username: env.AUTH_REDIS_USER, password: readSecret(env.AUTH_REDIS_PASSWORD_PATH, env), tls: env.AUTH_REDIS_TLS === 'true',
+      ca: loadRedisCa(env),
       namespace: env.AUTH_REDIS_NAMESPACE, generation, expectedRunId,
       connectTimeoutMs: env.AUTH_REDIS_CONNECT_TIMEOUT_MS === undefined ? 1000 : Number(env.AUTH_REDIS_CONNECT_TIMEOUT_MS),
       commandTimeoutMs: env.AUTH_REDIS_COMMAND_TIMEOUT_MS === undefined ? 1000 : Number(env.AUTH_REDIS_COMMAND_TIMEOUT_MS) });
@@ -178,7 +174,7 @@ function createAuthRedisConnection(configuration, { poolFactory = createClientPo
       pool = poolFactory({ username: config.username, password: config.password, database: 0, RESP: 2,
         disableOfflineQueue: true, commandsQueueMaxLength: 100, disableClientInfo: true, maintNotifications: 'disabled',
         commandOptions: { timeout: config.commandTimeoutMs },
-        socket: { host: config.host, port: config.port, tls: config.tls, rejectUnauthorized: true,
+        socket: { host: config.host, port: config.port, tls: config.tls, ...(config.ca && { ca: config.ca }), rejectUnauthorized: true,
           connectTimeout: config.connectTimeoutMs, reconnectStrategy: false } },
       { minimum: 1, maximum: 4, acquireTimeout: config.connectTimeoutMs, cleanupDelay: 1000 });
       pool.on('error', poison);

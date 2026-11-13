@@ -5,6 +5,7 @@ const path = require('node:path');
 const { randomBytes, randomUUID, createHash } = require('node:crypto');
 const { createClient } = require('redis');
 const { loadRedisConfiguration } = require('../../services/auth-redis.service');
+const { resolveConfigPath } = require('../../services/secure-config-file.service');
 const ROOT = path.resolve(__dirname, '../..');
 const SECRET_DIRECTORY = path.join(ROOT, '.secrets/redis');
 const NAMESPACE = 'secure-ecommerce-auth';
@@ -42,7 +43,7 @@ function parseIdentity(info) {
 async function recover(env, { clientFactory = createClient } = {}) {
   // This tool only reads Redis. State changes are local and require explicit
   // invalidation. The service itself remains fail-closed, never auto-recovers.
-  demand(env.AUTH_REDIS_STATE_PATH && path.isAbsolute(env.AUTH_REDIS_STATE_PATH));
+  const target = resolveConfigPath(env.AUTH_REDIS_STATE_PATH, env, { allowMissingLeaf: true });
   demand(!env.AUTH_REDIS_GENERATION && !env.AUTH_REDIS_EXPECTED_RUN_ID);
   demand(env.AUTH_REDIS_NAMESPACE === NAMESPACE && env.AUTH_REDIS_USER === USER);
   const config = loadRedisConfiguration({ ...env, AUTH_REDIS_STATE_PATH: '',
@@ -51,7 +52,7 @@ async function recover(env, { clientFactory = createClient } = {}) {
   const client = clientFactory({ username: config.username, password: config.password, RESP: 2,
     disableOfflineQueue: true, disableClientInfo: true, maintNotifications: 'disabled', commandsQueueMaxLength: 10,
     commandOptions: { timeout: config.commandTimeoutMs }, socket: { host: config.host, port: config.port,
-      tls: true, rejectUnauthorized: true, reconnectStrategy: false, connectTimeout: config.connectTimeoutMs } });
+      tls: true, ...(config.ca && { ca: config.ca }), rejectUnauthorized: true, reconnectStrategy: false, connectTimeout: config.connectTimeoutMs } });
   client.on('error', () => {});
   let timer, expired = false;
   try {
@@ -61,7 +62,7 @@ async function recover(env, { clientFactory = createClient } = {}) {
       const again = parseIdentity(await client.sendCommand(['INFO', 'server', 'replication']));
       demand(!expired && runId === again);
       const state = { version: 1, namespace: NAMESPACE, generation: randomUUID(), expectedRunId: runId };
-      const target = env.AUTH_REDIS_STATE_PATH;
+      demand(resolveConfigPath(env.AUTH_REDIS_STATE_PATH, env, { allowMissingLeaf: true }) === target);
       demand(fs.statSync(path.dirname(target)).isDirectory());
       if (fs.existsSync(target)) demand(fs.lstatSync(target).isFile() && !fs.lstatSync(target).isSymbolicLink());
       const temporary = target + '.' + randomUUID() + '.tmp';

@@ -96,11 +96,13 @@ it('permits a remote hostname only with verified TLS', () => {
 });
 it('reads an explicitly configured secret file without logging or inlining it in errors', () => {
   const location = path.resolve(path.parse(process.cwd()).root, 'auth-test-memory.key');
+  require('../support/mock-config-paths')([location]);
   jest.spyOn(fs, 'statSync').mockReturnValue({ isFile: () => true, size: 64 });
   jest.spyOn(fs, 'readFileSync').mockReturnValue(options.password);
   const env = { AUTH_REDIS_HOST: options.host, AUTH_REDIS_PORT: String(options.port), AUTH_REDIS_USER: options.username,
     AUTH_REDIS_TLS: 'false', AUTH_REDIS_NAMESPACE: options.namespace, AUTH_REDIS_GENERATION: options.generation,
-    AUTH_REDIS_EXPECTED_RUN_ID: options.expectedRunId, AUTH_REDIS_PASSWORD_PATH: location };
+    AUTH_REDIS_EXPECTED_RUN_ID: options.expectedRunId, AUTH_REDIS_PASSWORD_PATH: location,
+    AUTH_CONFIG_ALLOWED_ROOTS: JSON.stringify([path.dirname(location)]) };
   expect(loadRedisConfiguration(env).password === options.password).toBe(true);
   expect(() => loadRedisConfiguration({ ...env, AUTH_REDIS_PASSWORD_PATH: 'relative.key' })).toThrow(RedisConfigurationError);
   expect(() => loadRedisConfiguration({ ...env, AUTH_REDIS_TLS: 'maybe' })).toThrow(RedisConfigurationError);

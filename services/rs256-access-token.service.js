@@ -1,7 +1,6 @@
 'use strict';
 
-const fs = require('node:fs');
-const path = require('node:path');
+const { readConfigFile } = require('./secure-config-file.service');
 const crypto = require('node:crypto');
 const jwt = require('jsonwebtoken');
 const { isAccessUuid } = require('../validators/uuid');
@@ -127,29 +126,20 @@ function createAccessTokenService(options = {}) {
   return Object.freeze({ sign, verify });
 }
 
-function readConfiguredFile(location, maxBytes) {
-  configured(typeof location === 'string' && path.isAbsolute(location));
-  const stat = fs.statSync(location);
-  configured(stat.isFile() && stat.size > 0 && stat.size <= maxBytes);
-  const contents = fs.readFileSync(location, 'utf8');
-  configured(Buffer.byteLength(contents, 'utf8') <= maxBytes);
-  return contents;
-}
-
 /** Invoke explicitly with server-owned configuration, never req.body/headers. */
 function loadAccessTokenService(env = process.env) {
   try {
-    const manifest = JSON.parse(readConfiguredFile(env.JWT_RS256_PUBLIC_KEYS_PATH, 65536));
+    const manifest = JSON.parse(readConfigFile(env.JWT_RS256_PUBLIC_KEYS_PATH, 65536, env).replace(/^\uFEFF/, ''));
     configured(record(manifest) && Object.keys(manifest).length > 0 && Object.keys(manifest).length <= MAX_KEYS);
     const publicKeys = new Map();
     for (const [kid, location] of Object.entries(manifest)) {
       configured(validKid(kid));
-      const pem = readConfiguredFile(location, 16384);
+      const pem = readConfigFile(location, 16384, env);
       // A public-key location must not silently contain a private key.
       configured(/^-----BEGIN PUBLIC KEY-----\r?\n[A-Za-z0-9+/=\r\n]+-----END PUBLIC KEY-----$/.test(pem.trim()));
       publicKeys.set(kid, crypto.createPublicKey(pem));
     }
-    const privateKey = crypto.createPrivateKey(readConfiguredFile(env.JWT_RS256_PRIVATE_KEY_PATH, 16384));
+    const privateKey = crypto.createPrivateKey(readConfigFile(env.JWT_RS256_PRIVATE_KEY_PATH, 16384, env));
     return createAccessTokenService({ issuer: env.JWT_RS256_ISSUER, audience: env.JWT_RS256_AUDIENCE,
       activeKid: env.JWT_RS256_ACTIVE_KID, privateKey, publicKeys });
   } catch {

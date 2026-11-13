@@ -109,7 +109,9 @@ se ejecuta esa rotación en esta etapa.
 ## Activación posterior, sin recuperaciones automáticas
 
 1. Revisar `.env` sin sobrescribir credenciales: issuer/audience, kid activo,
-   ruta absoluta de llave privada RSA 3072 y manifiesto público `kid -> ruta PEM`.
+   ruta protegida de llave privada RSA 3072 y manifiesto público `kid -> ruta PEM`.
+   Las rutas locales pueden ser relativas a la raíz bajo `.secrets/`; ver
+   [configuración portable](portable-config.md). Se conserva el kid `access-v1`.
    No generar ni publicar llaves reales como parte de pruebas. Mantenerlas bajo
    almacenamiento protegido, por ejemplo `.secrets/`, fuera de Git/build.
 2. Verificar el archivo binario independiente `AUTH_CREDENTIAL_VERSION_KEY_PATH`,
@@ -128,7 +130,7 @@ se ejecuta esa rotación en esta etapa.
    `/run/secrets/access_private_key`, `/run/secrets/access_public_manifest`,
    `/run/secrets/auth_credential_key` y `/run/auth/public-keys/`. El manifiesto Docker
    debe mapear el kid activo a un PEM público bajo esa última ruta. Windows usa
-   otro manifiesto con rutas absolutas locales; ambos pueden referenciar las mismas
+   otro manifiesto con rutas relativas al proyecto; ambos pueden referenciar las mismas
    llaves aprobadas sin rotarlas. Revisar permisos de lectura para el UID Node y
    mantener la CA cargada antes de iniciar Node. MySQL y servicio Redis en Compose
    no se modificaron.

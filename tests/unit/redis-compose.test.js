@@ -91,7 +91,8 @@ function fixture(changes = {}) {
   const env = { AUTH_REDIS_HOST: '127.0.0.1', AUTH_REDIS_PORT: '6380', AUTH_REDIS_TLS: 'true',
     AUTH_REDIS_USER: 'auth_session_app', AUTH_REDIS_NAMESPACE: 'secure-ecommerce-auth',
     AUTH_REDIS_PASSWORD_PATH: path.join(directory, 'app-password'),
-    AUTH_REDIS_STATE_PATH: path.join(directory, 'state/state.json'), ...changes };
+    AUTH_REDIS_STATE_PATH: path.join(directory, 'state/state.json'),
+    AUTH_CONFIG_ALLOWED_ROOTS: JSON.stringify([directory]), ...changes };
   const client = { isOpen: false, on: jest.fn(), connect: jest.fn(async () => { client.isOpen = true; }),
     destroy: jest.fn(() => { client.isOpen = false; }),
     sendCommand: jest.fn(async () => `redis_version:8.2.3\r\nrun_id:${runId}\r\nrole:master\r\n`) };

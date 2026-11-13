@@ -155,9 +155,11 @@ it('derives non-plaintext credential versions with a dedicated key, without reta
 
 it('loads the credential-reference key only from an explicit protected absolute file', () => {
   const key = crypto.randomBytes(32); const location = path.resolve(path.parse(process.cwd()).root, 'auth-memory.key');
+  require('../support/mock-config-paths')([location]);
   jest.spyOn(fs, 'statSync').mockReturnValue({ isFile: () => true, size: key.length });
   jest.spyOn(fs, 'readFileSync').mockReturnValue(key);
-  expect(typeof loadCredentialVersionService({ AUTH_CREDENTIAL_VERSION_KEY_PATH: location }).derive).toBe('function');
+  expect(typeof loadCredentialVersionService({ AUTH_CREDENTIAL_VERSION_KEY_PATH: location,
+    AUTH_CONFIG_ALLOWED_ROOTS: JSON.stringify([path.dirname(location)]) }).derive).toBe('function');
   expect(() => loadCredentialVersionService({ AUTH_CREDENTIAL_VERSION_KEY_PATH: 'relative' })).toThrow();
   fs.statSync.mockReturnValue({ isFile: () => false, size: key.length });
   expect(() => loadCredentialVersionService({ AUTH_CREDENTIAL_VERSION_KEY_PATH: location })).toThrow();
