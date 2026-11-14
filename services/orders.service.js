@@ -1,4 +1,6 @@
 'use strict';
+const { compareCodeUnits } = require('./canonical-order');
+
 const {randomUUID}=require('node:crypto');
 const {isDeepStrictEqual}=require('node:util');
 const db=require('../models');
@@ -25,7 +27,7 @@ async function loadCart(buyerId,addressId,transaction){
   const initial=await db.Product.findAll({where:{id:lines.map(row=>row.productId)},transaction});
   if(initial.length!==lines.length) throw conflict('Algún producto ya no está disponible.');
   // Match catalog's lock order: seller account, seller profile, then product.
-  for(const id of [...new Set(initial.map(row=>row.sellerId))].sort()){
+  for(const id of [...new Set(initial.map(row=>row.sellerId))].sort(compareCodeUnits)){
     const user=await db.User.findByPk(id,{transaction,lock:transaction.LOCK.UPDATE});
     const seller=await db.Seller.findByPk(id,{transaction,lock:transaction.LOCK.UPDATE});
     if(!isActive(user)||seller?.status!=='APPROVED') throw conflict('Algún vendedor no está disponible.');

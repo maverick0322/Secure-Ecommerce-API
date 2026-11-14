@@ -119,6 +119,14 @@ it('rejects invalid CA bundles and CA configuration with plaintext transport',()
   expect(()=>loadRedisConfiguration(env)).toThrow();
   expect(()=>loadRedisConfiguration({...env,AUTH_REDIS_TLS:'false'})).toThrow();
 });
+it('rejects a valid PEM envelope with invalid DER and preserves a valid multi-certificate bundle',()=>{
+  const {env}=fixture();
+  fs.writeFileSync(path.join(directory,'ca.crt'),'-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----');
+  expect(()=>loadRedisConfiguration(env)).toThrow();
+  const bundle=require('node:tls').rootCertificates.slice(0,2).join('\n');
+  fs.writeFileSync(path.join(directory,'ca.crt'),bundle);
+  expect(loadRedisConfiguration(env).ca).toBe(bundle);
+});
 it('reports sanitized file/loader status and does not connect to Redis',()=>{
   const {env,password}=fixture(),report=checkConfiguration(env);
   expect(report.rs256).toBe('OK');expect(report.hmac).toBe('OK');expect(report.redis).toBe('OK');

@@ -42,3 +42,14 @@ log/**
 .agents/
 postman/reports/
 postman/node_modules/
+**/.secrets/**
+**/.env
+**/.env.*.local
+**/node_modules/**
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*credentials*.json
+**/*token*.json
+config/config.json

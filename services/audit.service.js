@@ -4,6 +4,35 @@ const {AuditLog,Sequelize}=require('../models');
 const {isUuid}=require('../validators/uuid');
 const {AccountError}=require('./accounts.service');
 const fields=['id','actorUserId','action','targetType','targetId','ipAddress','outcome','occurredAt'];
+// Stop before allocating a copy of an arbitrarily large reason.
+function reasonPrefix(value) {
+  let prefix='', count=0;
+  for(const character of value){if(count++===255)break;prefix+=character;}
+  return prefix;
+}
+function redactEmails(value) {
+  const local=character=>character!==undefined&&/^[\w.+-]$/.test(character);
+  const domain=character=>character!==undefined&&/^[\w.-]$/.test(character);
+  const letter=character=>character!==undefined&&/^[A-Za-z]$/.test(character);
+  let result='',copied=0,index=0;
+  while(index<value.length){
+    const start=index;
+    while(local(value[index]))index++;
+    if(index===start||value[index]!=='@'){if(index===start)index++;continue;}
+    const domainStart=index+1;
+    let domainEnd=domainStart;
+    while(domain(value[domainEnd]))domainEnd++;
+    let dot=-1;
+    for(let at=domainStart+1;at<domainEnd-2;at++){
+      if(value[at]==='.'&&letter(value[at+1])&&letter(value[at+2]))dot=at;
+    }
+    if(dot<0){index=domainStart;continue;}
+    let end=dot+3;
+    while(letter(value[end]))end++;
+    result+=value.slice(copied,start)+'[REDACTED]';copied=end;index=end;
+  }
+  return result+value.slice(copied);
+}
 function sanitize(details) {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return null;
   const result={};
@@ -13,11 +42,10 @@ function sanitize(details) {
     if (typeof value === 'string' && value.length <= 64 && /^[\w-]+$/.test(value)) result[key]=value;
   }
   if (typeof details.reason === 'string') {
-    result.reason = [...details.reason].slice(0,255).join('')
+    result.reason = redactEmails(reasonPrefix(details.reason)
       .replace(/[\u0000-\u001f\u007f]/g,' ')
       .replace(/(?:password|contraseña|token|secret|api[_ -]?key|otp|code)\s*[:=].*/gi,'[REDACTED]')
-      .replace(/[A-Za-z0-9_+\/=-]{32,}(?:\.[A-Za-z0-9_+\/=-]+)*/g,'[REDACTED]')
-      .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g,'[REDACTED]');
+      .replace(/[A-Za-z0-9_+\/=-]{32,}(?:\.[A-Za-z0-9_+\/=-]+)*/g,'[REDACTED]'));
   }
   return Object.keys(result).length ? result : null;
 }

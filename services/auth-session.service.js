@@ -72,10 +72,11 @@ function createSessionService(connection) {
     if (s.epoch !== await userEpoch(tx, s.user)) return revokeRecord(tx, s, 'user-revoked', 'SESSION_REVOKED');
     const alive = await tx.get(aliveKey(s.sid));
     if (now >= s.idle || now >= s.absolute || alive === null) return revokeRecord(tx, s, 'expired', 'SESSION_EXPIRED');
-    // Different revisions indicate a partial EXEC failure. Deny, never repair it
-    // into an active session. A separate expiring watched key prevents revival
-    // when the inactivity deadline passes between TIME and EXEC.
-    if (alive !== s.revision) return corrupt();
+    // WATCH is optimistic concurrency, not a snapshot of these separate GETs.
+    // A concurrent touch can change both records between them. Confirm a stable
+    // read-only EXEC before declaring corruption: an aborted EXEC is retried by
+    // the existing bounded transaction loop; a stable mismatch still fails closed.
+    if (alive !== s.revision) { await tx.commit(); return corrupt(); }
     if (s.credential !== credentialVersion) return revokeRecord(tx, s, 'credentials', 'CREDENTIALS_CHANGED');
     await tx.watch([refreshKey(s.digest)]);
     if (!matches(parse(await tx.get(refreshKey(s.digest)), 'refresh'), s)) return corrupt();

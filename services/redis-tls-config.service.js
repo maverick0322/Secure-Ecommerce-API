@@ -9,7 +9,12 @@ function loadRedisCa(env) {
   if (!certificates?.length || pem.replace(/-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\r\n]+-----END CERTIFICATE-----/g, '').trim()) {
     throw new Error('Invalid Redis CA bundle.');
   }
-  for (const certificate of certificates) new X509Certificate(certificate);
+  // Construction validates DER/PEM. Exporting its parsed representation also
+  // makes explicit that this is validation, not an unused allocation.
+  for (const certificate of certificates) {
+    const parsed = new X509Certificate(certificate);
+    if (!parsed.raw.length) throw new Error('Invalid Redis CA certificate.');
+  }
   return pem;
 }
 module.exports = { loadRedisCa };

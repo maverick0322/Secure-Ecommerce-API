@@ -12,12 +12,17 @@ function credentials() {
 function upload(buffer, publicId, productId) {
   const options = credentials();
   return new Promise((resolve, reject) => {
+    function fail(error) {
+      reject(error instanceof Error ? error : new Error('Image upload failed.'));
+    }
+    try {
     const stream = cloudinary.uploader.upload_stream({ ...options, public_id: publicId, resource_type: 'image', type: 'upload',
       overwrite: false, allowed_formats: ['jpg', 'png', 'webp'], timeout: 30000,
       context: { catalog_owner: 'secure-ecommerce-api', product_id: String(productId) } },
-    (error, result) => error ? reject(error) : resolve(result));
-    stream.on('error', reject);
+    (error, result) => error ? fail(error) : resolve(result));
+    stream.on('error', fail);
     stream.end(buffer);
+    } catch (error) { fail(error); }
   });
 }
 

@@ -1,5 +1,6 @@
 'use strict';
 const { test } = require('node:test');
+// node:test owns and reports callback rejections; void applies only to registration.
 const assert = require('node:assert/strict');
 const { compare } = require('./container-metadata');
 
@@ -14,7 +15,7 @@ function snapshot() {
   };
 }
 
-test('mount ordering and object key ordering do not report a change; snapshots are retained without mutation', () => {
+void test('mount ordering and object key ordering do not report a change; snapshots are retained without mutation', () => {
   const before = snapshot(), after = snapshot();
   after.mounts.reverse();
   after.mounts[0] = Object.fromEntries(Object.entries(after.mounts[0]).reverse());
@@ -41,20 +42,20 @@ for (const [field, mutate] of [
   ['ports', s => { s.ports['3306/tcp'][0].HostPort = '3308'; }],
   ['ports', s => { s.ports['3307/tcp'] = s.ports['3306/tcp']; delete s.ports['3306/tcp']; }],
   ['ports', s => { s.ports['3306/tcp'].push({ ...s.ports['3306/tcp'][0] }); }]
-]) test('still detects a real change in ' + field + ': ' + mutate.toString(), () => {
+]) void test('still detects a real change in ' + field + ': ' + mutate.toString(), () => {
   const before = snapshot(), after = snapshot(); mutate(after);
   const result = compare(before, after);
   assert.equal(result.unchanged, false); assert.deepEqual(result.differences, [field]);
 });
 
-test('port binding list ordering is insignificant, but no values are discarded', () => {
+void test('port binding list ordering is insignificant, but no values are discarded', () => {
   const before = snapshot();
   before.ports['3306/tcp'].push({ HostIp: '::1', HostPort: '3307' });
   const after = structuredClone(before); after.ports['3306/tcp'].reverse();
   assert.equal(compare(before, after).unchanged, true);
 });
 
-test('container appearance and disappearance remain failures', () => {
+void test('container appearance and disappearance remain failures', () => {
   assert.equal(compare(null, snapshot()).unchanged, false);
   assert.equal(compare(snapshot(), null).unchanged, false);
 });

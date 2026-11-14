@@ -25,6 +25,8 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
   let suspended;
   let productId;
   let categoryId;
+  let diagnostics;
+  const rounds=Number(process.env.CATALOG_CONCURRENCY_ROUNDS||1);
 
   beforeAll(async () => {
     expect(process.env.STAGE3B_TEST_PASSWORD).toBeTruthy();
@@ -40,12 +42,13 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
       CLOUDINARY_CLOUD_NAME: 'synthetic-cloud', CLOUDINARY_API_KEY: 'synthetic-key', CLOUDINARY_API_SECRET: 'synthetic-secret',
       CLOUDINARY_CLEANUP_DIR: directory });
     jest.resetModules();
+    diagnostics=require('../support/redis-diagnostics').redisDiagnostics();
     app = require('../../index');
     models = require('../../models');
     cloud = require('../../services/cloudinary.service');
     images = require('../../services/product-images.service');
     const accounts = require('../../services/accounts.service');
-    isolatedAuth = await require('../support/isolated-auth').start();
+    isolatedAuth = await require('../support/isolated-auth').start({poolFactory:diagnostics.poolFactory});
     async function account(label, profile, status = 'APPROVED') {
       const row = await accounts.createPublicAccount({ email: `${label}@example.invalid`, name: label, password, profile, storeName: 'Synthetic shop' });
       if (profile === 'SELLER') await models.Seller.update({ status }, { where: { userId: row.id } });
@@ -113,12 +116,41 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
   });
 
   it('reuses one category link across concurrent assignment, removal and reactivation', async () => {
+    expect(Number.isInteger(rounds)&&rounds>=1&&rounds<=500).toBe(true);
     const category = await request(app).post('/api/categories').set('Authorization', auth(admin)).send({ name: 'Fixture category' });
     expect(category.status).toBe(201);
     categoryId = category.body.categoryId;
     expect((await request(app).delete('/api/categories/1').set('Authorization', auth(admin))).status).toBe(400);
     const assign = () => request(app).post(`${product()}/categories`).set('Authorization', auth(seller)).send({ categoryId });
-    expect((await Promise.all([assign(), assign()])).map(row => row.status)).toEqual([204, 204]);
+    const business={calls:0,errors:[]};
+    const catalog=require('../../services/catalog.service'),change=catalog.changeCategory;
+    jest.spyOn(catalog,'changeCategory').mockImplementation(async(...args)=>{
+      business.calls++;
+      try{return await change(...args);}catch(error){
+        business.errors.push(['ER_LOCK_DEADLOCK','ER_LOCK_WAIT_TIMEOUT'].includes(error.original?.code)?error.original.code:'other');throw error;
+      }
+    });
+    diagnostics.reset();
+    let injected=false;
+    if(process.env.CATALOG_TORN_READ_INJECTION==='1'){
+      const claims=isolatedAuth.tokens.verify(seller.token);
+      diagnostics.beforeGet(async key=>{
+        if(injected||!key.endsWith('alive:'+claims.sid))return;
+        injected=true;
+        const nested=await assign();
+        expect(nested.status).toBe(204);
+      });
+    }
+    for(let round=0;round<rounds;round++){
+      const statuses=(await Promise.all([assign(),assign()])).map(row=>row.status);
+      if(statuses.some(status=>status!==204)){
+        throw new Error(JSON.stringify({scenario:'concurrent-category-assignment',round,statuses,business,redis:diagnostics.snapshot()}));
+      }
+    }
+    diagnostics.beforeGet(undefined);
+    if(process.env.CATALOG_TORN_READ_INJECTION==='1')expect(injected).toBe(true);
+    expect(business.calls).toBe(rounds*2+(injected?1:0));expect(business.errors).toEqual([]);
+    if(rounds>1)process.stdout.write(JSON.stringify({scenario:'concurrent-category-assignment',rounds,injected,business,redis:diagnostics.snapshot()})+'\n');
     const before = await models.ProductCategory.findOne({ where: { productId, categoryId } });
     expect((await request(app).delete(`${product()}/categories/${categoryId}`).set('Authorization', auth(seller))).status).toBe(204);
     expect(await models.ProductCategory.count({ where: { productId, categoryId } })).toBe(0);
@@ -128,7 +160,7 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     expect(await models.ProductCategory.count({ where: { productId, categoryId }, paranoid: false })).toBe(1);
     const response = await request(app).get(product()).set('Authorization', auth(buyer));
     expect(response.body.categories).toEqual([{ categoryId, name: 'Fixture category', protected: false }]);
-  });
+  },5000+Math.max(0,rounds-1)*100);
 
   it('uploads, replaces and compensates an image when the SQL update fails', async () => {
     const first = await upload(seller);

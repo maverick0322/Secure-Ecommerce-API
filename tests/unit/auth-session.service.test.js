@@ -21,6 +21,54 @@ afterEach(() => { connection.close(); jest.restoreAllMocks(); });
 const create = () => sessions.create({ userId, credentialVersion: version });
 const check = (s, extra = {}) => sessions.check({ userId, sessionId: s.sessionId, credentialVersion: version, ...extra });
 
+it.each(['read','touch','rotate'])('retries a torn session/alive read during %s instead of reporting corruption',async operation=>{
+  const s=await create(),key=connection.prefix+'alive:'+s.sessionId;
+  const client=server.clients[0],send=client.sendCommand;
+  let injected=false;
+  client.sendCommand=async args=>{
+    if(!injected&&args[0]==='GET'&&args[1]===key){
+      injected=true;await check(s,{touch:true});
+    }
+    return send(args);
+  };
+  const result=operation==='rotate'?sessions.rotate({refreshToken:s.refreshToken,credentialVersion:version}):check(s,{touch:operation==='touch'});
+  await expect(result).resolves.toMatchObject({sessionId:s.sessionId,state:'active'});
+  expect(injected).toBe(true);expect(server.conflicts).toBe(1);
+  expect(await code(check(s))).toBe('OK');
+});
+it('still rejects stable revision corruption without repairing or extending the session',async()=>{
+  const s=await create();
+  server.command(['SET',connection.prefix+'alive:'+s.sessionId,crypto.randomUUID(),'PXAT',String(s.idleExpiresAt)]);
+  const data=server.serializedData(),writes=server.writes;
+  expect(await code(check(s,{touch:true}))).toBe('SESSION_STORE_UNAVAILABLE');
+  expect(server.serializedData()).toBe(data);expect(server.writes).toBe(writes);
+});
+it('does not authorize a torn-read retry past a concurrent revocation',async()=>{
+  const s=await create(),client=server.clients[0],send=client.sendCommand;
+  let touched=false,revoked=false;
+  client.sendCommand=async args=>{
+    if(!touched&&args[0]==='GET'&&args[1]===connection.prefix+'alive:'+s.sessionId){
+      touched=true;await check(s,{touch:true});
+    }
+    return send(args);
+  };
+  server.beforeExec=async(c,commands)=>{
+    if(touched&&!revoked&&!commands.some(args=>args[0]==='SET')){
+      revoked=true;await sessions.revoke({userId,sessionId:s.sessionId});
+    }
+  };
+  expect(await code(check(s,{touch:true}))).toBe('SESSION_REVOKED');
+  expect(touched&&revoked).toBe(true);expect(await code(check(s))).toBe('SESSION_REVOKED');
+});
+it('fails closed on an uncertain read-only corruption confirmation without writing repairs',async()=>{
+  const s=await create();
+  server.command(['SET',connection.prefix+'alive:'+s.sessionId,crypto.randomUUID(),'PXAT',String(s.idleExpiresAt)]);
+  const writes=server.writes;
+  server.beforeExec=()=>{throw new Error('Synthetic connection failure');};
+  expect(await code(check(s,{touch:true}))).toBe('SESSION_STORE_UNAVAILABLE');
+  expect(server.writes).toBe(writes);expect(await code(check(s))).toBe('SESSION_STORE_UNAVAILABLE');
+});
+
 it('creates independent random UUID sessions and stores only refresh digests and credential tags', async () => {
   const first = await create(), second = await create(); const data = server.serializedData();
   expect(isAccessUuid(first.sessionId)).toBe(true); expect(first.sessionId === second.sessionId).toBe(false);

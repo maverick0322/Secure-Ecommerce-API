@@ -166,7 +166,7 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
   const [historical]=await root.query('SELECT id,total,deliveryAddressSnapshot FROM orders ORDER BY id');
   const [details]=await root.query('SELECT id,productTitle,unitPrice,quantity FROM order_items ORDER BY id');
   const outcomes=await Promise.all([1,2].map(()=>auth(request(app).put(path)).send({reason:'Incumplimiento de las condiciones de venta'})));
-  assert.deepEqual(outcomes.map(r=>r.status).sort(),[200,409]);
+  assert.deepEqual(outcomes.map(r=>r.status).sort((a,b)=>a-b),[200,409]);
   const [[state]]=await root.query('SELECT status,reviewedByUserId FROM sellers WHERE userId=?',[seller.id]);
   assert.equal(state.status,'SUSPENDED');assert.equal(state.reviewedByUserId,admin);
   const [[event]]=await root.query("SELECT COUNT(*) n FROM audit_logs WHERE action='seller.suspended' AND targetId=?",[seller.id]);assert.equal(event.n,1);

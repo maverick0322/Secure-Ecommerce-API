@@ -1,4 +1,6 @@
 'use strict';
+const { compareCodeUnits } = require('../../services/canonical-order');
+
 
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -9,15 +11,15 @@ async function verifySchema() {
   const c = await connect('ecommerce_migrator');
   const q = async (sql, values) => (await c.query(sql, values))[0];
   try {
-    const tables = (await q('SHOW TABLES')).map(r => Object.values(r)[0]).sort();
-    assert.deepEqual(tables, [...business, 'SequelizeMeta'].sort());
+    const tables = (await q('SHOW TABLES')).map(r => Object.values(r)[0]).sort(compareCodeUnits);
+    assert.deepEqual(tables, [...business, 'SequelizeMeta'].sort(compareCodeUnits));
     const columns = await q(`SELECT TABLE_NAME AS t, COLUMN_NAME AS c, COLUMN_TYPE AS type,
       IS_NULLABLE AS nullable, COLUMN_DEFAULT AS def, EXTRA AS extra,
       CHARACTER_SET_NAME AS charset, COLLATION_NAME AS collation
       FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME, ORDINAL_POSITION`);
     for (const [table, fields] of Object.entries(contract)) {
       const actual = columns.filter(r => r.t === table);
-      assert.deepEqual(actual.map(r => r.c).sort(), Object.keys(fields).sort(), table);
+      assert.deepEqual(actual.map(r => r.c).sort(compareCodeUnits), Object.keys(fields).sort(compareCodeUnits), table);
       for (const [name, value] of Object.entries(fields)) {
         const expected = typeof value === 'string' ? { type: value, nullable: 'NO', def: null } : value;
         const field = actual.find(r => r.c === name);
@@ -34,7 +36,7 @@ async function verifySchema() {
       FROM information_schema.KEY_COLUMN_USAGE k JOIN information_schema.REFERENTIAL_CONSTRAINTS r
       ON k.CONSTRAINT_SCHEMA=r.CONSTRAINT_SCHEMA AND k.TABLE_NAME=r.TABLE_NAME AND k.CONSTRAINT_NAME=r.CONSTRAINT_NAME
       WHERE k.TABLE_SCHEMA=DATABASE() AND k.REFERENCED_TABLE_NAME IS NOT NULL`);
-    assert.deepEqual(fks.map(r => [r.t,r.c,r.p,r.pc].join('.')).sort(), edges.map(e => e.join('.')).sort());
+    assert.deepEqual(fks.map(r => [r.t,r.c,r.p,r.pc].join('.')).sort(compareCodeUnits), edges.map(e => e.join('.')).sort(compareCodeUnits));
     for (const fk of fks) {
       assert.equal(fk.ps, 'secure_ecommerce');
       assert.equal(fk.d, 'RESTRICT'); assert.equal(fk.u, 'RESTRICT');
@@ -58,9 +60,9 @@ async function verifySchema() {
       FROM information_schema.TABLE_CONSTRAINTS t JOIN information_schema.CHECK_CONSTRAINTS c
       ON t.CONSTRAINT_SCHEMA=c.CONSTRAINT_SCHEMA AND t.CONSTRAINT_NAME=c.CONSTRAINT_NAME
       WHERE t.CONSTRAINT_SCHEMA=DATABASE() AND t.CONSTRAINT_TYPE='CHECK'`);
-    assert.deepEqual(checks.map(r => r.name).sort(), ['categories_protected_valid','products_price_nonnegative',
+    assert.deepEqual(checks.map(r => r.name).sort(compareCodeUnits), ['categories_protected_valid','products_price_nonnegative',
       'user_addresses_default_valid','cart_items_quantity_positive','orders_total_nonnegative',
-      'order_items_quantity_positive','order_items_unit_price_nonnegative'].sort());
+      'order_items_quantity_positive','order_items_unit_price_nonnegative'].sort(compareCodeUnits));
     assert(checks.every(r => r.enforced === 'YES'));
     const ddl = {};
     for (const table of tables) ddl[table] = (await q(`SHOW CREATE TABLE \`${table}\``))[0]['Create Table'];

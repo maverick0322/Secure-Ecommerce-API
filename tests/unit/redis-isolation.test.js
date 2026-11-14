@@ -14,6 +14,27 @@ it('accepts only an owned tmpfs Redis with an isolated loopback port', () => {
   const f = fixture(); expect(inspectOwned(f.info, f.expected)).toBe(16379);
   expect(inspectOwned(f.info, f.expected, true)).toBeNull();
 });
+it('permits only the exact Redis test startup and rejects flag/target injection',()=>{
+  const {validateDockerArgs,redisTestStartup}=require('../../postman/scripts/isolation');
+  const {expected:f}=fixture();
+  const args=['create','--pull','never','--name',f.name,'--hostname',f.name,
+    '--label','secure-ecommerce.redis-test='+f.runId,'--publish','127.0.0.1::6379','--tmpfs','/data:rw',
+    '--env','REDIS_TEST_PASSWORD','--entrypoint','sh','redis:8.2','-c',redisTestStartup];
+  expect(()=>validateDockerArgs(args)).not.toThrow();
+  args[10]='6379:6379';expect(()=>validateDockerArgs(args)).toThrow();
+  expect(()=>validateDockerArgs(['start','ecommerce_db'])).toThrow();
+  expect(()=>validateDockerArgs(['restart','--all'])).toThrow();
+});
+it('refuses to start a container with missing Redis test ownership before mutation',()=>{
+  const spawn=jest.spyOn(require('node:child_process'),'spawnSync').mockImplementation((cmd,args)=>({status:0,stdout:JSON.stringify(
+    args.includes('context')?[{Endpoints:{docker:{Host:'unix:///var/run/docker.sock'}}}]:[{Config:{Labels:{}}}])}));
+  try {
+    jest.isolateModules(()=>{
+      expect(()=>require('../../postman/scripts/isolation').docker(['start','a'.repeat(64)])).toThrow('INVALID_RUN_ID');
+    });
+    expect(spawn.mock.calls.every(call=>!call[1].includes('start'))).toBe(true);
+  }finally {spawn.mockRestore();}
+});
 it.each([
   f => { f.info.Id = 'c'.repeat(64); },
   f => { f.info.Name = '/ecommerce_db'; },

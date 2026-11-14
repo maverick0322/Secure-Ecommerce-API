@@ -1,6 +1,8 @@
 const request = require('supertest');
 const express = require('express');
 const mysql = require('mysql2/promise');
+const {performance}=require('node:perf_hooks');
+const {fixtureLifecycle}=require('../support/fixture-lifecycle');
 
 const isolated = process.env.STAGE3A_MYSQL_UUID ? describe : describe.skip;
 const password = 'synthetic-stage3a-password';
@@ -15,32 +17,47 @@ isolated('Stage 3A isolated MySQL account workflows', () => {
   let accounts;
   let mailer;
   let commerce;
+  function timing(phase,ms){
+    if(process.env.STAGE3A_TIMINGS==='1')process.stdout.write(JSON.stringify({scenario:'accounts-setup',phase,ms:Math.round(ms)})+'\n');
+  }
+  async function measured(phase,work){
+    const start=performance.now();
+    try{return await work();}finally{timing(phase,performance.now()-start);}
+  }
 
-  beforeAll(async () => {
+  async function initialize(){
+    const started=performance.now();
+    try{
     expect(process.env.STAGE3A_TEST_PASSWORD).toBeTruthy();
     const config = { host: '127.0.0.1', port: Number(process.env.STAGE3A_TEST_PORT || 13307), database: 'secure_ecommerce_3a_test', user: 'ecommerce_app',
       password: process.env.STAGE3A_TEST_PASSWORD };
-    db = await mysql.createConnection(config);
-    const [[identity]] = await db.query('SELECT @@server_uuid AS uuid, @@hostname AS host, @@port AS port, DATABASE() AS db, CURRENT_USER() AS account');
+    db = await measured('mysql-connect',()=>mysql.createConnection(config));
+    const [[identity]] = await measured('mysql-identity',()=>db.query('SELECT @@server_uuid AS uuid, @@hostname AS host, @@port AS port, DATABASE() AS db, CURRENT_USER() AS account'));
     expect(identity).toEqual({ uuid: process.env.STAGE3A_MYSQL_UUID, host: process.env.STAGE3A_TEST_HOSTNAME || 'secure-ecommerce-stage3a', port: 3306,
       db: config.database, account: 'ecommerce_app@%' });
     Object.assign(process.env, { TEST_DB_HOST: config.host, TEST_DB_PORT: String(config.port), TEST_DB_DATABASE: config.database,
       TEST_DB_USER: config.user, TEST_DB_PASSWORD: config.password,
       JWT_SECRET: require('../support/signing-secret') });
-    app = require('../../index');
-    models = require('../../models');
-    accounts = require('../../services/accounts.service');
-    isolatedAuth = await require('../support/isolated-auth').start();
-    mailer = require('../../services/registration-email.service');
+    await measured('application-imports',()=>{
+      app = require('../../index');models = require('../../models');accounts = require('../../services/accounts.service');
+    });
+    isolatedAuth = await measured('isolated-auth',()=>require('../support/isolated-auth').start({onTiming:timing}));
+    mailer = await measured('mailer-import',()=>require('../../services/registration-email.service'));
     commerce = express().get('/commerce', require('../../middlewares/auth.middleware')('SELLER'), (req, res) => res.status(204).end());
+    }finally{timing('total',performance.now()-started);}
+  }
+  const lifecycle=fixtureLifecycle(initialize,async()=>{
+    // Jest timing out a hook does not cancel its promise. Join initialization
+    // before cleanup so a late Redis handle cannot be created after teardown.
+    try{if(isolatedAuth)await isolatedAuth.close();}finally{
+      try{if(models)await models.sequelize.close();}finally{if(db)await db.end();}
+    }
   });
-
+  // Composite Docker/RSA setup, like the catalog fixture. Business tests retain
+  // Jest's 5-second limit; service connection/command deadlines are unchanged.
+  beforeAll(()=>lifecycle.start(),30000);
   afterEach(() => jest.restoreAllMocks());
-  afterAll(async () => {
-    if (isolatedAuth) await isolatedAuth.close();
-    if (models) await models.sequelize.close();
-    if (db) await db.end();
-  });
+  afterAll(()=>lifecycle.close(),30000);
 
   const token = jwt => `Bearer ${jwt}`;
   const login = email => request(app).post('/api/auth').send({ email, password });

@@ -1,4 +1,6 @@
 'use strict';
+const { compareCodeUnits } = require('../../services/canonical-order');
+
 
 // Administrative operations are explicit subcommands; never load the API's .env.
 const { spawnSync } = require('node:child_process');
@@ -12,11 +14,11 @@ const expectedContainer = '29e92b602f717a55be5195e1ef823545844d7cd6ef87eca45bd59
 const expectedUuid = 'b68c7b62-dc02-11f1-b706-caca74da477e';
 const database = 'secure_ecommerce';
 const artifactDirectory = path.resolve('log/stage4');
-const historical = fs.readdirSync('migrations').filter(n => /^(202401|20261108).*\.js$/.test(n)).sort();
+const historical = fs.readdirSync('migrations').filter(n => /^(202401|20261108).*\.js$/.test(n)).sort(compareCodeUnits);
 const additive = ['20261110000001-create-secure-ecommerce-tables.js', '20261110000002-prepare-existing-ecommerce-tables.js'];
 const cutover = '20261110000003-finalize-secure-ecommerce-schema.js';
 const business = ['users','admins','sellers','buyers','user_addresses','categories','products',
-  'product_categories','carts','cart_items','orders','order_items','order_status_history','audit_logs'].sort();
+  'product_categories','carts','cart_items','orders','order_items','order_status_history','audit_logs'].sort(compareCodeUnits);
 const sha = data => crypto.createHash('sha256').update(data).digest('hex');
 
 function docker(args, input) {
@@ -133,7 +135,7 @@ async function assertEmpty(c, tables) {
 
 async function backup(c, label) {
   verifyAdmin(true);
-  const tables = (await c.query('SHOW TABLES'))[0].map(row => Object.values(row)[0]).sort();
+  const tables = (await c.query('SHOW TABLES'))[0].map(row => Object.values(row)[0]).sort(compareCodeUnits);
   await assertEmpty(c, tables);
   const dump = docker(['exec', container, 'sh', '-c',
     'export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; exec mysqldump --protocol=SOCKET --user=root --single-transaction --skip-add-drop-table --set-gtid-purged=OFF --no-tablespaces --hex-blob secure_ecommerce']);
@@ -168,10 +170,10 @@ async function finalSnapshot() {
     const origin = JSON.parse(fs.readFileSync(path.join(artifactDirectory, 'origin.json')));
     for (const [file, hash] of Object.entries(origin.originalFiles)) assert.equal(sha(fs.readFileSync(file)),hash, `${file} changed`);
     const [tables] = await c.query('SHOW TABLES');
-    assert.deepEqual(tables.map(r => Object.values(r)[0]).sort(),[...business,'SequelizeMeta'].sort());
+    assert.deepEqual(tables.map(r => Object.values(r)[0]).sort(compareCodeUnits),[...business,'SequelizeMeta'].sort(compareCodeUnits));
     await assertEmpty(c,business);
     const [history] = await c.query('SELECT name FROM SequelizeMeta ORDER BY name');
-    assert.deepEqual(history.map(r => r.name),[...historical,...additive,cutover].sort());
+    assert.deepEqual(history.map(r => r.name),[...historical,...additive,cutover].sort(compareCodeUnits));
     const [grants] = await c.query('SHOW GRANTS');
     const migratorGrants = grants.map(r => Object.values(r)[0]);
     assert(migratorGrants.every(g => g === 'GRANT USAGE ON *.* TO `ecommerce_migrator`@`%`' || g.includes(' ON `secure\\_ecommerce`.* ')));
@@ -198,18 +200,18 @@ async function build() {
     assert.deepEqual((await c.query('SELECT name FROM SequelizeMeta ORDER BY name'))[0].map(r => r.name), historical);
     await assertEmpty(c, (await c.query('SHOW TABLES'))[0].map(r => Object.values(r)[0]));
     cli(['--to', additive.at(-1)]);
-    const tables = (await c.query('SHOW TABLES'))[0].map(r => Object.values(r)[0]).sort();
-    assert.deepEqual(tables, [...business, 'roles', 'files', 'SequelizeMeta'].sort());
+    const tables = (await c.query('SHOW TABLES'))[0].map(r => Object.values(r)[0]).sort(compareCodeUnits);
+    assert.deepEqual(tables, [...business, 'roles', 'files', 'SequelizeMeta'].sort(compareCodeUnits));
     await backup(c, 'before-cutover');
     // Explicit user approval is restricted to this schema, created empty by provision().
     cli(['--migrations-path', 'migrations/cutover', '--to', cutover]);
-    assert.deepEqual((await c.query('SHOW TABLES'))[0].map(r => Object.values(r)[0]).sort(), [...business, 'SequelizeMeta'].sort());
+    assert.deepEqual((await c.query('SHOW TABLES'))[0].map(r => Object.values(r)[0]).sort(compareCodeUnits), [...business, 'SequelizeMeta'].sort(compareCodeUnits));
     const before = (await c.query('SELECT name FROM SequelizeMeta ORDER BY name'))[0];
-    assert.deepEqual(before.map(r => r.name), [...historical, ...additive, cutover].sort());
+    assert.deepEqual(before.map(r => r.name), [...historical, ...additive, cutover].sort(compareCodeUnits));
     assert.match(cli(), /No migrations were executed/);
     assert.deepEqual((await c.query('SELECT name FROM SequelizeMeta ORDER BY name'))[0], before);
     await backup(c, 'final-empty');
-    artifact('migrations.json', { applied: before, normalSecondRun: 'No migrations were executed', tables: [...business, 'SequelizeMeta'].sort() });
+    artifact('migrations.json', { applied: before, normalSecondRun: 'No migrations were executed', tables: [...business, 'SequelizeMeta'].sort(compareCodeUnits) });
   } finally { await c.end(); }
 }
 
@@ -219,16 +221,16 @@ async function resumeCutover() {
   assert(fs.existsSync(path.join(artifactDirectory, 'before-cutover.sql')));
   const c = await connect('ecommerce_migrator');
   try {
-    assert.deepEqual((await c.query('SELECT name FROM SequelizeMeta ORDER BY name'))[0].map(r => r.name), [...historical, ...additive].sort());
-    const tables = (await c.query('SHOW TABLES'))[0].map(r => Object.values(r)[0]).sort();
-    assert.deepEqual(tables, [...business, 'roles', 'files', 'SequelizeMeta'].sort());
+    assert.deepEqual((await c.query('SELECT name FROM SequelizeMeta ORDER BY name'))[0].map(r => r.name), [...historical, ...additive].sort(compareCodeUnits));
+    const tables = (await c.query('SHOW TABLES'))[0].map(r => Object.values(r)[0]).sort(compareCodeUnits);
+    assert.deepEqual(tables, [...business, 'roles', 'files', 'SequelizeMeta'].sort(compareCodeUnits));
     await assertEmpty(c, tables);
     await backup(c, 'before-cutover-resume');
     cli(['--migrations-path', 'migrations/cutover', '--to', cutover]);
-    const afterTables = (await c.query('SHOW TABLES'))[0].map(r => Object.values(r)[0]).sort();
-    assert.deepEqual(afterTables, [...business, 'SequelizeMeta'].sort());
+    const afterTables = (await c.query('SHOW TABLES'))[0].map(r => Object.values(r)[0]).sort(compareCodeUnits);
+    assert.deepEqual(afterTables, [...business, 'SequelizeMeta'].sort(compareCodeUnits));
     const history = (await c.query('SELECT name FROM SequelizeMeta ORDER BY name'))[0];
-    assert.deepEqual(history.map(r => r.name), [...historical, ...additive, cutover].sort());
+    assert.deepEqual(history.map(r => r.name), [...historical, ...additive, cutover].sort(compareCodeUnits));
     assert.match(cli(), /No migrations were executed/);
     assert.deepEqual((await c.query('SELECT name FROM SequelizeMeta ORDER BY name'))[0], history);
     await backup(c, 'final-empty');
