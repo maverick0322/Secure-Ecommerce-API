@@ -73,7 +73,7 @@ async function reconcile(task, completedUpload = false) {
 async function settle(task, completedUpload = false) {
   try { await reconcile(task, completedUpload); } catch {
     // The fsynced record survives transient provider/database failures and process restarts.
-    console.error('La limpieza de una imagen quedó pendiente de reintento.');
+    require('./structured-logger.service').log('image.cleanup.pending');
   }
 }
 
@@ -89,15 +89,15 @@ async function recover() {
         if (!Number.isInteger(task.productId) || task.productId < 1 || typeof task.publicId !== 'string' ||
           !Number.isFinite(task.notBefore) || path.basename(recordPath(task.publicId)) !== file) throw new Error('Invalid cleanup record');
         await settle(task);
-      } catch { console.error('Un registro de limpieza de imágenes requiere revisión.'); }
+      } catch { require('./structured-logger.service').log('image.cleanup.invalid'); }
     }
   } finally { recovering = false; }
 }
 
 function startRecovery() {
   if (timer) return;
-  void recover().catch(() => console.error('No se pudo recuperar la limpieza de imágenes.'));
-  timer = setInterval(() => { void recover().catch(() => console.error('No se pudo recuperar la limpieza de imágenes.')); }, 60000);
+  void recover().catch(() => require('./structured-logger.service').log('image.recovery.failed'));
+  timer = setInterval(() => { void recover().catch(() => require('./structured-logger.service').log('image.recovery.failed')); }, 60000);
   timer.unref();
 }
 

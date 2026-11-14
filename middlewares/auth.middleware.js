@@ -30,6 +30,8 @@ function authorize(profiles, { allowUnapprovedSeller = false } = {}) {
       // Denied permissions still validate Redis, but cannot extend inactivity.
       await sessions.check({ userId: account.id, sessionId: decoded.sid,
         credentialVersion: versions.derive(account.passwordHash), touch: permittedProfile && permittedSeller });
+      // Logging identity only; never grants permissions or bypasses next checks.
+      req.authenticatedActorId=account.id;
       if (!permittedProfile) return deny(req, res, new AccountError(403, 'Acceso prohibido para esta cuenta.'), account.id);
       if (!permittedSeller) {
         return deny(req,res, new AccountError(403, 'La cuenta de vendedor debe estar aprobada.'),account.id);

@@ -87,6 +87,8 @@ isolated('Stage 3A isolated MySQL account workflows', () => {
     expect(accounts.accountType(row)).toBe(results.find(result => result.status === 201).body.profile);
     expect(row.passwordHash).toBeUndefined();
     expect(await models.User.count({ where: { email } })).toBe(1);
+    const [registrationAudit]=await db.query('SELECT actorUserId FROM audit_logs WHERE action=? AND targetId=?',['usuarios.crear',row.id]);
+    expect(registrationAudit).toEqual([{actorUserId:null}]);
     const [columns] = await db.query('SHOW COLUMNS FROM users');
     expect(columns.map(column=>column.Field)).not.toContain('roleId');
   });

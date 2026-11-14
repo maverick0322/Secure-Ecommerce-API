@@ -102,7 +102,9 @@ async function createPublicAccount({ email, name, password, profile, storeName }
       } else {
         await Buyer.create({ userId }, { transaction });
       }
-      await require('./audit.service').business(userId, 'usuarios.crear', 'user', userId, transaction, context);
+      // Public registration has no authenticated actor; the new account is the
+      // target, never an identity inferred from the submitted registration data.
+      await require('./audit.service').business(null, 'usuarios.crear', 'user', userId, transaction, context);
       return serializeAccount(account, profile, 'PENDING');
     });
   } catch (error) {
@@ -127,7 +129,8 @@ async function reviewSeller(actorId, userId, status, rejectionReason, remoteIp) 
     await seller.update({ status, rejectionReason, reviewedAt: now, reviewedByUserId: actorId }, { transaction });
     const ipAddress = isIP(remoteIp || '') ? remoteIp : null;
     const event = { actorUserId: actorId, action: status === 'APPROVED' ? 'seller.approved' : 'seller.rejected',
-      targetType: 'seller', targetId: userId, ipAddress, outcome: 'SUCCESS', occurredAt: now };
+      targetType: 'seller', targetId: userId, ipAddress, outcome: 'SUCCESS', occurredAt: now,
+      details:{previousStatus:'PENDING',status,reason:rejectionReason} };
     await require('./audit.service').write(event,{transaction});
     return { userId, status, rejectionReason, reviewedAt: now, reviewedByUserId: actorId };
   });

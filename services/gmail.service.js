@@ -62,7 +62,7 @@ function mimeMessage(from, to, subject, text) {
     'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',body,''].join('\r\n')).toString('base64url');
 }
 function createGmailSender({ google = require('googleapis').google, load = loadConfiguration,
-  warn = () => console.error('GMAIL_REAUTH_REQUIRED: ejecute npm run gmail:authorize') } = {}) {
+  warn = () => require('./structured-logger.service').log('gmail.reauthorization.required') } = {}) {
   let current;
   return Object.freeze({ async send({ to, subject, text }) {
     const config = load();

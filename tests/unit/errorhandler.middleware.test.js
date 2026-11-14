@@ -15,6 +15,12 @@ describe('Pruebas Unitarias: errorhandler.middleware.js (Manejo Seguro y Fuga CW
     };
     next = jest.fn();
   });
+  it('closes a partial response without delegating a sensitive error to the Express default logger',()=>{
+    res.headersSent=true;res.destroy=jest.fn();
+    errorHandler(new Error('synthetic-private-provider-error'),req,res,next);
+    expect(res.destroy).toHaveBeenCalledTimes(1);expect(next).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+  });
   afterEach(() => {
     process.env.NODE_ENV = originalEnv;
   });

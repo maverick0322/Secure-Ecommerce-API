@@ -10,6 +10,11 @@ dotenv.config();
 
 // 2. Seguridad defensiva: suprimir cabecera de tecnología subyacente (CWE-200)
 app.disable('x-powered-by');
+// No proxy headers are trusted implicitly. Changing this requires a reviewed
+// deployment-specific proxy allowlist, never an unrestricted boolean true.
+app.set('trust proxy', false);
+app.use(require('./middlewares/http-logging.middleware'));
+app.use(require('./middlewares/audit-logs.middleware'));
 
 // 3. Procesamiento de cuerpos de petición (JSON y URL-encoded)
 app.use(express.json());
@@ -50,7 +55,6 @@ if (fs.existsSync(swaggerFilePath)) {
 }
 
 // 6. Middleware global de bitácora y auditoría
-app.use(require("./middlewares/audit-logs.middleware"));
 
 // 7. Enrutamiento de recursos de la API
 app.use("/api/categories", require("./routes/categories.routes"));
@@ -84,10 +88,10 @@ if (require.main === module) {
     await require('./services/auth-runtime.service').getRuntime();
     await require('./services/database.service').verifyConnection(require('./models').sequelize);
     require('./services/product-images.service').startRecovery();
-    app.listen(PORT,process.env.SERVER_HOST||'127.0.0.1',()=>console.log(`API conectada a secure_ecommerce; puerto ${PORT}.`));
+    app.listen(PORT,process.env.SERVER_HOST||'127.0.0.1',()=>require('./services/structured-logger.service').log('api.started'));
   }).catch(async()=>{
     require('./services/auth-runtime.service').close();
-    console.error('No se pudo verificar la conexión segura. La API no se inició.');
+    require('./services/structured-logger.service').log('api.start.failed');
     await require('./models').sequelize.close();process.exitCode=1;
   });
 }
