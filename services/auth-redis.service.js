@@ -1,4 +1,6 @@
 'use strict';
+const { compareCodeUnits } = require('./canonical-order');
+
 const { readConfigFile } = require('./secure-config-file.service');
 const { loadRedisCa } = require('./redis-tls-config.service');
 const net = require('node:net');
@@ -38,7 +40,7 @@ function loadRedisConfiguration(env = process.env) {
       configured(!generation && !expectedRunId);
       const state = JSON.parse(readConfigFile(env.AUTH_REDIS_STATE_PATH, 1024, env).replace(/^\uFEFF/, ''));
       configured(state && state.namespace === env.AUTH_REDIS_NAMESPACE && state.version === 1 &&
-        Object.keys(state).sort().join(',') === 'expectedRunId,generation,namespace,version');
+        Object.keys(state).sort(compareCodeUnits).join(',') === 'expectedRunId,generation,namespace,version');
       generation = state.generation; expectedRunId = state.expectedRunId;
     }
     return validateConfiguration({ host: env.AUTH_REDIS_HOST, port: Number(env.AUTH_REDIS_PORT),
@@ -106,7 +108,7 @@ function createAuthRedisConnection(configuration, { poolFactory = createClientPo
         },
         async time() {
           const reply = await send(['TIME']);
-          const now = Array.isArray(reply) ? Number(reply[0]) * 1000 + Math.floor(Number(reply[1]) / 1000) : NaN;
+          const now = Array.isArray(reply) ? Number(reply[0]) * 1000 + Math.floor(Number(reply[1]) / 1000) : Number.NaN;
           if (!Number.isSafeInteger(now) || now <= 0) { poison(); throw new SessionStoreUnavailableError(); }
           return now;
         },

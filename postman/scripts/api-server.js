@@ -1,4 +1,6 @@
 'use strict';
+const { compareCodeUnits } = require('../../services/canonical-order');
+
 // Test-only launcher. Never imported by index.js and never deployed as the API.
 const path=require('node:path');
 const crypto=require('node:crypto');
@@ -40,8 +42,8 @@ async function main(){
   }
   await databaseBarrier();
   const [tables]=await models.sequelize.query('SELECT TABLE_NAME n FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()');
-  const expected=Object.values(models.sequelize.models).map(m=>m.tableName).sort();
-  ensure(expected.length===14&&JSON.stringify(tables.map(t=>t.n).sort())===JSON.stringify(expected),'SCHEMA_BARRIER');
+  const expected=Object.values(models.sequelize.models).map(m=>m.tableName).sort(compareCodeUnits);
+  ensure(expected.length===14&&JSON.stringify(tables.map(t=>t.n).sort(compareCodeUnits))===JSON.stringify(expected),'SCHEMA_BARRIER');
   const mailbox=new Map();
   const mail=require(path.join(workspace,'services/registration-email.service'));
   mail.sendVerificationCode=async(email,code)=>{mailbox.set(email,code);};

@@ -5,31 +5,11 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { createClient } = require('redis');
-const { docker } = require('../../postman/scripts/isolation');
+const { docker, redisTestStartup: startup } = require('../../postman/scripts/isolation');
 const { createAuthRedisConnection } = require('../../services/auth-redis.service');
 const { createSessionService } = require('../../services/auth-session.service');
 
-function inspectOwned(info, fixture, beforeStart = false) {
-  assert(/^[a-f0-9]{64}$/.test(fixture.id) && info.Id === fixture.id);
-  assert.equal(info.Name, '/' + fixture.name); assert(fixture.name.startsWith('secure-ecommerce-redis-test-'));
-  assert.equal(info.Config.Hostname, fixture.name);
-  assert.equal(info.Config.Labels['secure-ecommerce.redis-test'], fixture.runId);
-  assert.equal(info.Config.Image, 'redis:8.2'); if (fixture.imageId) assert.equal(info.Image, fixture.imageId);
-  assert(info.Mounts.every(m => m.Type === 'tmpfs' && m.Destination === '/data'));
-  assert.equal(info.HostConfig.Tmpfs['/data'], 'rw'); assert(!info.HostConfig.Binds?.length);
-  assert(!info.HostConfig.Mounts?.length);
-  const configured = info.HostConfig.PortBindings['6379/tcp'];
-  assert.equal(configured.length, 1); assert.equal(configured[0].HostIp, '127.0.0.1');
-  if (configured[0].HostPort) {
-    const bound = Number(configured[0].HostPort);
-    assert(Number.isInteger(bound) && bound > 1024 && ![6379, 3306, 3307].includes(bound));
-  }
-  if (beforeStart) return null;
-  const published = info.NetworkSettings.Ports['6379/tcp'];
-  assert.equal(published.length, 1); assert.equal(published[0].HostIp, '127.0.0.1');
-  const port = Number(published[0].HostPort);
-  assert(Number.isInteger(port) && port > 1024 && ![6379, 3306, 3307].includes(port)); return port;
-}
+const { inspectOwned } = require('../../postman/scripts/redis-test-metadata');
 const inspect = fixture => JSON.parse(docker(['inspect', fixture.id]))[0];
 const outcome = async promise => { try { await promise; return 'OK'; } catch (error) { return error.code; } };
 async function main({ exercise } = {}) {
@@ -73,7 +53,6 @@ async function main({ exercise } = {}) {
     const context = JSON.parse(docker(['context', 'inspect', ...(process.platform === 'win32' ? ['desktop-linux'] : [])]))[0];
     assert(/^(unix:|npipe:)/.test(context.Endpoints.docker.Host));
     // Password stays out of argv; redis.conf and log are in the new tmpfs only.
-    const startup = 'umask 077\nprintf \'bind 0.0.0.0\\nport 6379\\nprotected-mode yes\\nsave ""\\nappendonly no\\nmaxmemory 64mb\\nmaxmemory-policy noeviction\\nlogfile /data/redis.log\\nunixsocket /data/redis.sock\\nunixsocketperm 700\\nrequirepass %s\\n\' "$REDIS_TEST_PASSWORD" > /data/redis.conf\nexec redis-server /data/redis.conf';
     fixture.id = docker(['create', '--pull', 'never', '--name', fixture.name, '--hostname', fixture.name,
       '--label', 'secure-ecommerce.redis-test=' + runId, '--publish', '127.0.0.1::6379', '--tmpfs', '/data:rw',
       '--env', 'REDIS_TEST_PASSWORD', '--entrypoint', 'sh', 'redis:8.2', '-c', startup], { env: { REDIS_TEST_PASSWORD: rootPassword } });

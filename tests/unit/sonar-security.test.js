@@ -55,6 +55,18 @@ it('rejects linked private files before any deletion', () => {
   fs.linkSync(path.join(outside, 'sentinel'), path.join(directory, 'private.postman_environment.json'));
   expect(() => openRun(reports, runId).cleanFiles({ runId })).toThrow('UNSAFE_REPORT_FILE');
 });
+it.each(['private.postman_environment.json','workspace'])('stops cleanup when metadata access is denied: %s',name=>{
+  const original=fs.lstatSync;
+  jest.spyOn(fs,'lstatSync').mockImplementation(target=>{
+    if(target===path.join(directory,name))throw Object.assign(new Error('Synthetic access denial'),{code:'EACCES'});
+    return original(target);
+  });
+  expect(()=>openRun(reports,runId).cleanFiles({runId})).toThrow('Synthetic access denial');
+});
+it('accepts an empty real workspace without assuming node_modules exists',()=>{
+  fs.mkdirSync(path.join(directory,'workspace'));openRun(reports,runId).cleanFiles({runId,status:'cleaned'});
+  expect(fs.existsSync(path.join(directory,'workspace'))).toBe(true);
+});
 it('rejects a workspace junction instead of deleting external node_modules', () => {
   fs.symlinkSync(outside, path.join(directory, 'workspace'), process.platform === 'win32' ? 'junction' : 'dir');
   expect(() => openRun(reports, runId).cleanFiles({ runId })).toThrow('UNSAFE_WORKSPACE');

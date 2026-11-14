@@ -1,4 +1,6 @@
 'use strict';
+const { compareCodeUnits } = require('../../services/canonical-order');
+
 // Activates only local configuration; every operation on habitual MySQL is a read.
 const fs=require('node:fs');
 const crypto=require('node:crypto');
@@ -22,7 +24,7 @@ async function main(){
     const all=Object.values(models.sequelize.models);assert.equal(all.length,14);
     const [columns]=await models.sequelize.query('SELECT TABLE_NAME AS t,COLUMN_NAME AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE()');
     for(const model of all){
-      assert.deepEqual(Object.keys(model.rawAttributes).sort(),columns.filter(r=>r.t===model.tableName).map(r=>r.c).sort(),model.tableName);
+      assert.deepEqual(Object.keys(model.rawAttributes).sort(compareCodeUnits),columns.filter(r=>r.t===model.tableName).map(r=>r.c).sort(compareCodeUnits),model.tableName);
     }
     await models.Product.findAll({limit:1});await models.User.findAll({limit:1});
     let auditReadConfigured=true;
@@ -36,7 +38,7 @@ async function main(){
     const base=`http://127.0.0.1:${server.address().port}`;
     assert.equal((await fetch(`${base}/swagger`)).status,200);
     assert.equal((await fetch(`${base}/api/nonexistent-read-probe`)).status,404);
-    const result={verifiedAt:new Date().toISOString(),identity,models:all.map(m=>m.tableName).sort(),columnsCompared:columns.filter(r=>r.t!=='SequelizeMeta').length,
+    const result={verifiedAt:new Date().toISOString(),identity,models:all.map(m=>m.tableName).sort(compareCodeUnits),columnsCompared:columns.filter(r=>r.t!=='SequelizeMeta').length,
       configurationActivated:true,httpStartVerified:true,habitualOperations:'read only',auditReadConfigured};
     fs.mkdirSync('log/stage5',{recursive:true});fs.writeFileSync('log/stage5/activation.json',JSON.stringify(result,null,2)+'\n');
     console.log(JSON.stringify(result));

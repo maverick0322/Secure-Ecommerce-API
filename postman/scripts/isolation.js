@@ -1,4 +1,7 @@
 'use strict';
+const { compareCodeUnits } = require('../../services/canonical-order');
+const { inspectOwned: inspectRedisTest } = require('./redis-test-metadata');
+
 const path=require('node:path');
 const fs=require('node:fs');
 const {spawnSync}=require('node:child_process');
@@ -11,11 +14,32 @@ const ownerLabel='secure-ecommerce.test-suite';
 const runLabel='secure-ecommerce.test-run';
 function ensure(condition,code){if(!condition){const e=new Error(code);e.safe=true;throw e;}}
 const dockerArgs=process.platform==='win32'?['--context','desktop-linux']:[];
+// Fixed test-only script; the generated password is passed via the environment.
+const redisTestStartup='umask 077\nprintf \'bind 0.0.0.0\\nport 6379\\nprotected-mode yes\\nsave ""\\nappendonly no\\nmaxmemory 64mb\\nmaxmemory-policy noeviction\\nlogfile /data/redis.log\\nunixsocket /data/redis.sock\\nunixsocketperm 700\\nrequirepass %s\\n\' "$REDIS_TEST_PASSWORD" > /data/redis.conf\nexec redis-server /data/redis.conf';
+const redisTestInfo='export REDISCLI_AUTH="$REDIS_TEST_PASSWORD"; exec redis-cli -s /data/redis.sock INFO server';
+function validateRedisDockerArgs(args){
+  ensure(Array.isArray(args)&&args.every(a=>typeof a==='string'&&!a.includes('\0')),'INVALID_REDIS_DOCKER_ARGUMENTS');
+  const id=value=>/^[a-f0-9]{64}$/.test(value);
+  if(args[0]==='create'){
+    const runId=args[8]?.slice('secure-ecommerce.redis-test='.length);validateRunId(runId);
+    const name='secure-ecommerce-redis-test-'+runId.slice(0,8);
+    ensure(JSON.stringify(args)===JSON.stringify(['create','--pull','never','--name',name,'--hostname',name,
+      '--label','secure-ecommerce.redis-test='+runId,'--publish','127.0.0.1::6379','--tmpfs','/data:rw',
+      '--env','REDIS_TEST_PASSWORD','--entrypoint','sh','redis:8.2','-c',redisTestStartup]),'INVALID_REDIS_CREATE');
+  }else if(['start','restart'].includes(args[0]))ensure(args.length===2&&id(args[1]),'INVALID_REDIS_TARGET');
+  else if(args[0]==='stop')ensure(args.length===4&&args[1]==='--time'&&args[2]==='5'&&id(args[3]),'INVALID_REDIS_TARGET');
+  else ensure(args.length===5&&args[0]==='exec'&&id(args[1])&&args[2]==='sh'&&args[3]==='-c'&&args[4]===redisTestInfo,'INVALID_REDIS_EXEC');
+}
+function isRedisTestCommand(args){
+  return Array.isArray(args)&&(['create','start','restart'].includes(args[0])||
+    (args[0]==='exec'&&args[4]===redisTestInfo)||(args[0]==='stop'&&args[2]==='5'));
+}
 function validateRunId(runId){
   ensure(typeof runId==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(runId),'INVALID_RUN_ID');
   return runId;
 }
 function validateDockerArgs(args){
+  if(isRedisTestCommand(args)){validateRedisDockerArgs(args);return;}
   ensure(Array.isArray(args)&&args.every(a=>typeof a==='string'&&!/[\0\r\n]/.test(a)),'INVALID_DOCKER_ARGUMENTS');
   const id=value=>/^[a-f0-9]{64}$/.test(value);
   const equal=value=>JSON.stringify(args)===JSON.stringify(value);
@@ -44,6 +68,17 @@ function docker(args,{input,env={},allowMissing=false}={}){
   validateDockerArgs(args);
   ensure(!process.env.DOCKER_HOST||/^(?:unix:|npipe:)/.test(process.env.DOCKER_HOST),'REMOTE_DOCKER_HOST_FORBIDDEN');
   ensure(!Object.hasOwn(env,'DOCKER_HOST')&&!Object.hasOwn(env,'DOCKER_CONTEXT'),'DOCKER_ENDPOINT_OVERRIDE_FORBIDDEN');
+  if(isRedisTestCommand(args)){
+    assertLocalContext();
+    if(args[0]!=='create'){
+      const id=args[0]==='stop'?args[3]:args[1];
+      const info=JSON.parse(docker(['inspect',id]))[0];
+      const runId=info.Config?.Labels?.['secure-ecommerce.redis-test'];validateRunId(runId);
+      // Reuse the runner's independent, complete ownership/port/mount barrier.
+      inspectRedisTest(info,
+        {id,name:'secure-ecommerce-redis-test-'+runId.slice(0,8),runId},!info.State?.Running);
+    }
+  }
   const result=spawnSync('docker',[...dockerArgs,...args],{encoding:'utf8',input,
     env:{...process.env,...env},shell:false,windowsHide:true,timeout:60000,maxBuffer:4*1024*1024});
   if(allowMissing&&result.status!==0)return null;
@@ -141,8 +176,8 @@ async function provision(fixture,admin){
   const tables=['users','admins','sellers','buyers','user_addresses','categories','products','product_categories',
     'carts','cart_items','orders','order_items','order_status_history','audit_logs','SequelizeMeta'];
   for(const table of tables)await connection.query(schema.ddl[table]);
-  const migrations=fs.readdirSync(path.join(root,'migrations')).filter(n=>/^\d+.*\.js$/.test(n))
-    .concat(fs.readdirSync(path.join(root,'migrations/cutover')).filter(n=>/^\d+.*\.js$/.test(n))).sort();
+  const migrations=fs.readdirSync(path.join(root,'migrations')).filter(isMigrationFile)
+    .concat(fs.readdirSync(path.join(root,'migrations/cutover')).filter(isMigrationFile)).sort(compareCodeUnits);
   ensure(migrations.length===11,'FIXTURE_MIGRATIONS_MISMATCH');
   for(const migration of migrations)await connection.query('INSERT INTO SequelizeMeta (name) VALUES (?)',[migration]);
   await verify(fixture,connection);
@@ -171,5 +206,9 @@ function destroy(fixture){
   assertMetadata(JSON.parse(raw)[0],fixture,{cleanup:true});
   docker(['stop','--time','10',fixture.containerId]);docker(['rm',fixture.containerId]);
 }
-module.exports={root,appRequire,ensure,docker,create,provision,verify,destroy,assertMetadata,assertIdentity,
+function isMigrationFile(name){
+  return typeof name==='string'&&name.length<=255&&name[0]>='0'&&name[0]<='9'&&
+    name.endsWith('.js')&&!/[\r\n\u2028\u2029]/u.test(name);
+}
+module.exports={root,appRequire,ensure,docker,create,provision,verify,destroy,assertMetadata,assertIdentity,isMigrationFile,redisTestStartup,
   identitySql,protectedSnapshot,protectedUuid,protectedVolume,validateRunId,validateDockerArgs,assertLocalContext};

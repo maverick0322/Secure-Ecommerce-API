@@ -1,5 +1,6 @@
 'use strict';
 const {test}=require('node:test');
+// node:test owns and reports callback rejections; void applies only to registration.
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
 const http=require('node:http');
@@ -14,13 +15,13 @@ function fixture(){
   const row={uuid:f.uuid,host:name,port:3306,version:'8.0.46',db:f.database,account:'ecommerce_app@%',mode:'STRICT_TRANS_TABLES',fks:1};
   return {f,info,row};
 }
-test('accepts only an owned disposable server and a distinct test database',()=>{
+void test('accepts only an owned disposable server and a distinct test database',()=>{
   const {f,info,row}=fixture();iso.assertMetadata(info,f);iso.assertIdentity(row,f,{account:'ecommerce_app'});
 });
-test('accepts Docker tmpfs declarations that are absent from Mounts',()=>{
+void test('accepts Docker tmpfs declarations that are absent from Mounts',()=>{
   const {f,info}=fixture();info.Mounts=[];info.HostConfig={Tmpfs:{'/var/lib/mysql':'rw'}};iso.assertMetadata(info,f);
 });
-test('rejects additional persistent mounts even with a valid tmpfs',()=>{
+void test('rejects additional persistent mounts even with a valid tmpfs',()=>{
   const {f,info}=fixture();info.HostConfig={Binds:['foreign:/other']};assert.throws(()=>iso.assertMetadata(info,f));
 });
 for(const [name,modify]of [
@@ -33,7 +34,7 @@ for(const [name,modify]of [
   ['wrong ownership label',x=>{x.info.Config.Labels['secure-ecommerce.test-run']=crypto.randomUUID();}],
   ['foreign container id',x=>{x.info.Id='c'.repeat(64);}],
   ['public SQL publication',x=>{x.info.NetworkSettings.Ports['3306/tcp'][0].HostIp='0.0.0.0';}]
-])test('refuses '+name+' before SQL writes',()=>{const x=fixture();modify(x);assert.throws(()=>iso.assertMetadata(x.info,x.f));});
+])void test('refuses '+name+' before SQL writes',()=>{const x=fixture();modify(x);assert.throws(()=>iso.assertMetadata(x.info,x.f));});
 for(const [name,modify]of [
   ['protected UUID',x=>{x.row.uuid=iso.protectedUuid;}],
   ['unexpected UUID',x=>{x.row.uuid=crypto.randomUUID();}],
@@ -42,8 +43,8 @@ for(const [name,modify]of [
   ['foreign hostname',x=>{x.row.host='ecommerce_db';}],
   ['disabled FK checks',x=>{x.row.fks=0;}],
   ['non-strict session',x=>{x.row.mode='';}]
-])test('rejects connection with '+name,()=>{const x=fixture();modify(x);assert.throws(()=>iso.assertIdentity(x.row,x.f,{account:'ecommerce_app'}));});
-test('blocks vulnerable dynamic templates without suppressing the dependency advisory',()=>{
+])void test('rejects connection with '+name,()=>{const x=fixture();modify(x);assert.throws(()=>iso.assertIdentity(x.row,x.f,{account:'ecommerce_app'}));});
+void test('blocks vulnerable dynamic templates without suppressing the dependency advisory',()=>{
   const runtime=require('./newman-runtime');runtime.load();const faker=require('../node_modules/@faker-js/faker');
   assert.throws(()=>faker.fake('{{name.firstName}}'),/disabled/);
   assert.throws(()=>faker.helpers.fake('{{name.firstName}}'),/disabled/);
@@ -57,14 +58,14 @@ function runGuard(environment){
     environment:{values:Object.entries(environment).map(([key,value])=>({key,value:String(value)}))},reporters:[],silent:true,bail:true,ignoreRedirects:true,
     timeoutRequest:3000,timeoutScript:5000},(error,summary)=>error?reject(error):resolve(summary)));
 }
-test('collection guard sends no HTTP request to a mismatched origin',async()=>{
+void test('collection guard sends no HTTP request to a mismatched origin',async()=>{
   let hits=0;const server=http.createServer((req,res)=>{hits++;res.end('{}');});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   try{const summary=await runGuard({apiPort:3001,baseUrl:'http://127.0.0.1:'+server.address().port});
     assert.equal(hits,0);assert(summary.run.failures.length>0);
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
-test('collection guard refuses a wrong server UUID after a read-only probe',async()=>{
+void test('collection guard refuses a wrong server UUID after a read-only probe',async()=>{
   const f=fixture().f;let probes=0,writes=0;
   const server=http.createServer((req,res)=>{
     if(req.url==='/__postman/isolation'){probes++;res.setHeader('Content-Type','application/json');

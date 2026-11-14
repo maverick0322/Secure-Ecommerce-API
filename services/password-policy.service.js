@@ -18,7 +18,7 @@ const common = new Set([
 ]);
 
 function validBcryptInput(value) {
-  return typeof value === 'string' && value.length > 0 &&
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_BYTES &&
     Buffer.byteLength(value, 'utf8') <= MAX_BYTES && !value.includes('\0') &&
     !/\p{Surrogate}/u.test(value);
 }
@@ -27,7 +27,10 @@ function acceptable(value) {
   if (!validBcryptInput(value) || [...value].length < MIN_CHARACTERS) return false;
   // Normalize only the denylist comparison; bcrypt always receives the original.
   const comparable = value.normalize('NFKC').toLowerCase().replace(/[\s_-]/gu, '');
-  const base = comparable.replace(/[\p{N}\p{P}\p{S}]+$/gu, '');
+  const characters = [...comparable];
+  let end = characters.length;
+  while (end > 0 && /^[\p{N}\p{P}\p{S}]$/u.test(characters[end - 1])) end--;
+  const base = characters.slice(0, end).join('');
   return !common.has(comparable) && !common.has(base) &&
     new Set(comparable).size >= 5 && !/^(.{1,8})\1+$/u.test(comparable) && !/^\p{N}+$/u.test(comparable);
 }

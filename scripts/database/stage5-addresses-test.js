@@ -229,7 +229,12 @@ async function main() {
       await root.query('INSERT INTO admins (userId) VALUES (?)',[adminFixture]);
       await root.query("INSERT INTO categories (id,name,protected,createdAt,updatedAt) VALUES (1,'Synthetic protected category',1,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))");
     }
-    const child=spawnSync(process.execPath,['node_modules/jest/bin/jest.js','--runInBand','--runTestsByPath','tests/database/accounts.mysql.test.js','tests/database/catalog.mysql.test.js','tests/database/account-session-security.mysql.test.js'],{
+    assert(!(process.env.STAGE5_CATALOG_ONLY==='1'&&process.env.STAGE5_ACCOUNTS_ONLY==='1'),'Select only one focused suite');
+    const testPaths=process.env.STAGE5_ACCOUNTS_ONLY==='1'?['tests/database/accounts.mysql.test.js']:
+      process.env.STAGE5_CATALOG_ONLY==='1'?['tests/database/catalog.mysql.test.js']:
+      ['tests/database/accounts.mysql.test.js','tests/database/catalog.mysql.test.js','tests/database/account-session-security.mysql.test.js'];
+    const reporterArgs=process.env.STAGE3A_TIMINGS==='1'?['--reporters=default','--reporters=./tests/support/setup-timing-reporter.cjs']:[];
+    const child=spawnSync(process.execPath,['node_modules/jest/bin/jest.js','--runInBand',...reporterArgs,'--runTestsByPath',...testPaths],{
       encoding:'utf8',timeout:180000,maxBuffer:8*1024*1024,windowsHide:true,
       env:{...process.env,NODE_ENV:'test',STAGE3A_MYSQL_UUID:identity.uuid,STAGE3A_TEST_PASSWORD:appPassword,
         STAGE3A_TEST_HOSTNAME:name,STAGE3A_TEST_PORT:String(port),STAGE3B_MYSQL_UUID:identity.uuid,

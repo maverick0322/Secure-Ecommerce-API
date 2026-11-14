@@ -42,6 +42,36 @@ const login = user => request(app).post('/api/auth').send({ email: user.email, p
 const refresh = token => request(app).post('/api/auth/refresh').send({ refreshToken: token });
 const time = token => request(app).get('/api/auth/time').set('Authorization', `Bearer ${token}`);
 
+it('keeps category assignment authorized when another request touches the same session between reads',async()=>{
+  delete buyer.buyer;buyer.seller={userId:buyer.id,status:'APPROVED'};
+  const session=await services.sessions.create({userId:buyer.id,credentialVersion:services.versions.derive(buyer.passwordHash)});
+  const first={jwt:services.tokens.sign({sub:buyer.id,sid:session.sessionId})},claims=services.tokens.verify(first.jwt);
+  const category=jest.spyOn(require('../../services/catalog.service'),'changeCategory').mockResolvedValue();
+  const client=server.clients[0],send=client.sendCommand;
+  let injected=false;
+  client.sendCommand=async args=>{
+    if(!injected&&args[0]==='GET'&&args[1]===connection.prefix+'alive:'+claims.sid){
+      injected=true;
+      await services.sessions.check({userId:buyer.id,sessionId:claims.sid,
+        credentialVersion:services.versions.derive(buyer.passwordHash),touch:true});
+    }
+    return send(args);
+  };
+  const response=await request(app).post('/api/products/1/categories').set('Authorization',`Bearer ${first.jwt}`).send({categoryId:1});
+  expect(response.status).toBe(204);expect(category).toHaveBeenCalledTimes(1);
+  expect(injected).toBe(true);expect(server.conflicts).toBe(1);
+});
+it('still returns 503 before the catalog for stable corrupted session revisions',async()=>{
+  delete buyer.buyer;buyer.seller={userId:buyer.id,status:'APPROVED'};
+  const session=await services.sessions.create({userId:buyer.id,credentialVersion:services.versions.derive(buyer.passwordHash)});
+  const token=services.tokens.sign({sub:buyer.id,sid:session.sessionId});
+  const category=jest.spyOn(require('../../services/catalog.service'),'changeCategory').mockResolvedValue();
+  server.command(['SET',connection.prefix+'alive:'+session.sessionId,crypto.randomUUID(),'PXAT',String(session.idleExpiresAt)]);
+  const writes=server.writes;
+  const response=await request(app).post('/api/products/1/categories').set('Authorization',`Bearer ${token}`).send({categoryId:1});
+  expect(response.status).toBe(503);expect(category).not.toHaveBeenCalled();expect(server.writes).toBe(writes);
+});
+
 it('issues five-minute RS256/opaque refresh, rotates and immediately rejects both tokens after logout', async () => {
   const first = await login(buyer); expect(first.status).toBe(200);
   const claims = services.tokens.verify(first.body.jwt);

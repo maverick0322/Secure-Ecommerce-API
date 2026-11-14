@@ -1,11 +1,13 @@
 'use strict';
+const { compareCodeUnits } = require('../../services/canonical-order');
+
 
 // Docker mount and port-binding lists have no semantic ordering. Retain every
 // value and duplicate; normalize only those lists and JSON object key order.
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
+    return Object.fromEntries(Object.keys(value).sort(compareCodeUnits).map(key => [key, canonical(value[key])]));
   }
   return value;
 }

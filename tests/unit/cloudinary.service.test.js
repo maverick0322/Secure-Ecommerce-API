@@ -4,6 +4,24 @@ const cloud = require('../../services/cloudinary.service');
 
 afterEach(() => jest.restoreAllMocks());
 
+it.each([new Error('Synthetic failure'), {message:'provider payload'}, 'provider payload'])('rejects callback and stream failures as Error instances %#', async failure => {
+  jest.replaceProperty(process,'env',{...process.env,CLOUDINARY_CLOUD_NAME:'synthetic',CLOUDINARY_API_KEY:'synthetic',CLOUDINARY_API_SECRET:'synthetic'});
+  for(const viaStream of [false,true]){
+    jest.spyOn(sdk.uploader,'upload_stream').mockImplementation((options,callback)=>{
+      const stream=new PassThrough();
+      stream.on('data',()=>{});
+      stream.on('end',()=>viaStream?stream.emit('error',failure):callback(failure));
+      return stream;
+    });
+    await expect(cloud.upload(Buffer.from('synthetic'),'synthetic',1)).rejects.toBeInstanceOf(Error);
+  }
+});
+it('normalizes a synchronous non-Error SDK throw without copying provider details',async()=>{
+  jest.replaceProperty(process,'env',{...process.env,CLOUDINARY_CLOUD_NAME:'synthetic',CLOUDINARY_API_KEY:'synthetic',CLOUDINARY_API_SECRET:'synthetic'});
+  jest.spyOn(sdk.uploader,'upload_stream').mockImplementation(()=>{throw {message:'private provider payload'};});
+  await expect(cloud.upload(Buffer.from('synthetic'),'synthetic',1)).rejects.toThrow('Image upload failed.');
+});
+
 it('uses the official signed stream upload with server-owned options', async () => {
   jest.replaceProperty(process, 'env', { ...process.env, CLOUDINARY_CLOUD_NAME: 'synthetic-cloud', CLOUDINARY_API_KEY: 'synthetic-key', CLOUDINARY_API_SECRET: 'synthetic-secret' });
   const upload = jest.spyOn(sdk.uploader, 'upload_stream').mockImplementation((options, callback) => {

@@ -12,7 +12,8 @@ const bootstrap=spawnSync('tar',['-rf',target,'bd.sql','.env.example','.env.migr
 assert.equal(bootstrap.status,0,'Could not include the public legacy bootstrap');
 const listing=spawnSync('tar',['-tf',target],{encoding:'utf8'});assert.equal(listing.status,0);
 const examples=new Set(['.env.example','.env.migration.example','.env.secure-ecommerce.example']);
-assert(!listing.stdout.split('\n').some(n=>!examples.has(n.replace(/^\.\//,''))&&/(^|\/)\.env(?:\.[^/]*)?$|\.local$|^\.\/(log|uploads|node_modules|\.git|\.aws|\.codex|\.agents|\.secrets)\//.test(n)),'Unsafe verification archive');
+const entries=listing.stdout.split(/\r?\n/).map(name=>name.replace(/^\.\//,''));
+assert(!entries.some(n=>!examples.has(n)&&/(^|\/)\.env(?:\.[^/]*)?$|\.local$|^(log|uploads|node_modules|\.git|\.aws|\.codex|\.agents|\.secrets|postman\/reports|postman\/node_modules)\//.test(n)),'Unsafe verification archive');
 const result=spawnSync('docker',[...(process.platform==='win32'?['--context','desktop-linux']:[]),'build','--file','scripts/database/Dockerfile.node20-verify','--tag','secure-ecommerce-stage5-node20:local','-'],{
   input:fs.readFileSync(target),encoding:'utf8',timeout:600000,windowsHide:true,maxBuffer:16*1024*1024
 });
