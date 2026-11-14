@@ -51,10 +51,19 @@ function sanitize(details) {
 }
 function write({actorUserId,action,targetType=null,targetId=null,ipAddress=null,outcome='SUCCESS',details=null},options={}) {
   if (typeof action !== 'string' || !/^[\w.-]{1,80}$/.test(action) || !['SUCCESS','DENIED','ERROR'].includes(outcome)) throw new AccountError(400,'Evento de auditoría inválido.');
-  return AuditLog.create({actorUserId:isUuid(actorUserId) ? actorUserId : null,action,
+  const failed=error=>{
+    require('./structured-logger.service').log('audit.write.failed',
+      {action,transactional:Boolean(options.transaction),critical:outcome==='SUCCESS'});
+    throw error;
+  };
+  const requestId=require('./structured-logger.service').context.getStore()?.requestId;
+  const metadata=sanitize(details);
+  const safeDetails=isUuid(requestId)?{...metadata,requestId}:metadata;
+  try {return Promise.resolve(AuditLog.create({actorUserId:isUuid(actorUserId) ? actorUserId : null,action,
     targetType:typeof targetType === 'string' ? targetType.slice(0,40) : null,
     targetId:targetId == null ? null : String(targetId).slice(0,64),
-    ipAddress:isIP(ipAddress || '') ? ipAddress : null,outcome,details:sanitize(details),occurredAt:new Date()},options);
+    ipAddress:isIP(ipAddress || '') ? ipAddress : null,outcome,details:safeDetails,occurredAt:new Date()},options)).catch(failed);
+  } catch(error) {return failed(error);}
 }
 async function list(query={}) {
   if (Object.keys(query).some(key => !['before','limit'].includes(key))) throw new AccountError(400,'Consulta inválida.');

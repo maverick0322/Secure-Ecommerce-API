@@ -42,6 +42,37 @@ const login = user => request(app).post('/api/auth').send({ email: user.email, p
 const refresh = token => request(app).post('/api/auth/refresh').send({ refreshToken: token });
 const time = token => request(app).get('/api/auth/time').set('Authorization', `Bearer ${token}`);
 
+it.each(['login','refresh'])('does not persist a successful %s audit when token signing fails',async operation=>{
+  const error=new Error('Synthetic signer failure');
+  const revoke=jest.fn((...args)=>services.sessions.revoke(...args));
+  let created;
+  const sessions={...services.sessions,revoke,create:async input=>{created=await services.sessions.create(input);return created;}};
+  let input={email:buyer.email,password};
+  if(operation==='refresh'){
+    created=await services.sessions.create({userId:buyer.id,credentialVersion:services.versions.derive(buyer.passwordHash)});
+    input={refreshToken:created.refreshToken};
+  }
+  runtime.getRuntime.mockResolvedValue({...services,sessions,tokens:{sign:()=>{throw error;}}});
+  await expect(require('../../services/authentication.service')[operation](input)).rejects.toBe(error);
+  expect(AuditLog.create).not.toHaveBeenCalled();
+  expect(revoke).toHaveBeenCalledWith({userId:buyer.id,sessionId:created.sessionId});
+  await expect(services.sessions.check({userId:buyer.id,sessionId:created.sessionId,
+    credentialVersion:services.versions.derive(buyer.passwordHash)})).rejects.toMatchObject({code:'SESSION_REVOKED'});
+});
+
+it('attributes a permission denial only after successful signature, account and Redis validation',async()=>{
+  const records=[];
+  jest.spyOn(require('../../services/structured-logger.service'),'log').mockImplementation((event,data)=>records.push({event,...data}));
+  // This case tests permissions, not login; issue an isolated fixture session
+  // without spending another shared limiter entry in the existing login suite.
+  const session=await services.sessions.create({userId:buyer.id,credentialVersion:services.versions.derive(buyer.passwordHash)});
+  const token=services.tokens.sign({sub:buyer.id,sid:session.sessionId});
+  const response=await request(app).get('/api/users').set('Authorization',`Bearer ${token}`);
+  expect(response.status).toBe(403);
+  expect(records.find(row=>row.statusCode===403)).toMatchObject({userId:buyer.id,route:'/api/users/'});
+  expect(AuditLog.create).toHaveBeenCalledWith(expect.objectContaining({actorUserId:buyer.id,outcome:'DENIED'}),{});
+});
+
 it('keeps category assignment authorized when another request touches the same session between reads',async()=>{
   delete buyer.buyer;buyer.seller={userId:buyer.id,status:'APPROVED'};
   const session=await services.sessions.create({userId:buyer.id,credentialVersion:services.versions.derive(buyer.passwordHash)});

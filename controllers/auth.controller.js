@@ -37,6 +37,7 @@ async function register(req, res) {
 async function login(req, res) {
   try {
     const result = await authentication.login(req.body, { ipAddress: req.ip });
+    req.account={id:result.id}; // Server-validated identity for request logging.
     res.set('Cache-Control', 'no-store'); res.set('Pragma', 'no-cache');
     return res.status(200).json(result);
   } catch (error) {
@@ -47,6 +48,7 @@ async function login(req, res) {
 async function refresh(req, res) {
   try {
     const result = await authentication.refresh(req.body, { ipAddress: req.ip });
+    req.account={id:result.id};
     res.set('Cache-Control', 'no-store'); res.set('Pragma', 'no-cache');
     return res.status(200).json(result);
   } catch (error) {

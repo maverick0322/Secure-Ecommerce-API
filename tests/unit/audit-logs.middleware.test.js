@@ -70,12 +70,18 @@ describe('Pruebas unitarias: audit-logs.middleware.js (Auditoría e Inmutabilida
       actorUserId: null
     }), {});
   });
+  it('does not establish identity from a syntactically valid actor override',async()=>{
+    const create=jest.spyOn(auditLog,'create').mockResolvedValue({});
+    auditLogger(req,res,next);
+    await req.logAudit('access.denied',null,'00000000-0000-4000-8000-000000000001','DENIED');
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({actorUserId:null}),{});
+  });
   it('resiliencia: si AuditLog.create falla, debe atrapar el error sin interrumpir el flujo', async () => {
-    const spyError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const spyError = jest.spyOn(require('../../services/structured-logger.service'), 'log').mockImplementation(() => {});
     jest.spyOn(auditLog, 'create').mockRejectedValue(new Error('Conexión perdida a base de datos de auditoría'));
     auditLogger(req, res, next);
     await expect(req.logAudit('fallo.test', 1)).resolves.not.toThrow();
-    expect(spyError).toHaveBeenCalled();
+    expect(spyError).toHaveBeenCalledWith('audit.write.failed',expect.objectContaining({transactional:false,critical:true}));
     spyError.mockRestore();
   });
 });

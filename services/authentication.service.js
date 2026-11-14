@@ -38,9 +38,12 @@ async function login(input, context = {}) {
     const current = validAccount(await accounts.findAccountById(account.id, { withPassword: true }));
     if (current.passwordHash !== account.passwordHash) throw new AccountError(401, 'Usuario o contraseña incorrectos.');
     await sessions.check({ userId: current.id, sessionId: session.sessionId, credentialVersion: versions.derive(current.passwordHash) });
+    // Signing/serialization can fail. Do not persist a successful login before
+    // the complete response has been prepared; compensation below is unchanged.
+    const response=result(current,session,tokens);
     await require('./audit.service').write({ actorUserId: current.id, action: 'usuario.login',
       targetType: 'user', targetId: current.id, ipAddress: context.ipAddress });
-    return result(current, session, tokens);
+    return response;
   } catch (error) {
     // Do not return a token pair when audit or final account validation fails.
     await sessions.revoke({ userId: account.id, sessionId: session.sessionId }); throw error;
@@ -58,9 +61,10 @@ async function refresh(input, context = {}) {
   try {
     const current = validAccount(await accounts.findAccountById(account.id, { withPassword: true }));
     await sessions.check({ userId: current.id, sessionId: session.sessionId, credentialVersion: versions.derive(current.passwordHash) });
+    const response=result(current,session,tokens);
     await require('./audit.service').write({ actorUserId: current.id, action: 'auth.refresh', targetType: 'user',
       targetId: current.id, ipAddress: context.ipAddress });
-    return result(current, session, tokens);
+    return response;
   } catch (error) { await sessions.revoke({ userId: account.id, sessionId: session.sessionId }); throw error; }
 }
 async function logout(account, claims, context = {}) {

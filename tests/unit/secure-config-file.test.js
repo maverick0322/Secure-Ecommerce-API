@@ -34,7 +34,12 @@ it('roots relative paths at the project independently of cwd and accepts either 
 it.each(['../.secrets/value','.secrets/../value','.secrets/test/../../value','config/value','/etc/passwd',
   'https://example.invalid/key','file:///etc/passwd','C:relative.key','\\\\server\\share\\key','//server/share/key',
   '.secrets/value:stream','.secrets/value\0',' .secrets/value','',undefined])('rejects unsafe paths before reading %#',value=>{
-  const read=jest.spyOn(fs,'readFileSync');expect(()=>readConfigFile(value,128,{})).toThrow();expect(read).not.toHaveBeenCalled();
+  const read=jest.spyOn(fs,'readFileSync');let failure,calls;
+  try {readConfigFile(value,128,{});}catch(error){failure=error;}
+  finally {calls=read.mock.calls.slice();read.mockRestore();}
+  // Assert after restoring: Jest's lazy stack/source-map rendering may itself
+  // read dependency files. Only reads during the guarded operation are relevant.
+  expect(failure).toBeInstanceOf(Error);expect(calls).toEqual([]);
 });
 it('allows explicit managed roots but never uses them to escape through a relative path',()=>{
   const file=path.join(external,'value');fs.writeFileSync(file,'managed');

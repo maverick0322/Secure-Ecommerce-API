@@ -20,7 +20,22 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
   const categoryResponse=await auth(request(app).post('/api/categories')).send({name:`Security ${crypto.randomUUID()}`});
   assert.equal(categoryResponse.status,201);const categoryId=categoryResponse.body.categoryId;
   const body={recipientName:'Synthetic recipient',street:'Test street',exteriorNumber:'1',neighborhood:'Test',city:'Test',state:'Test',postalCode:'01000'};
-  const address=await buyer(request(app).post('/api/addresses')).send(body);assert.equal(address.status,201);
+  const logger=require('../../services/structured-logger.service'),originalLog=logger.log,requestLogs=[];
+  logger.log=(event,data)=>{if(event==='http.request')requestLogs.push(data);return originalLog(event,data);};
+  let address;
+  try {
+    address=await buyer(request(app).post('/api/addresses')).send(body);assert.equal(address.status,201);
+    const created=requestLogs.find(record=>record.method==='POST'&&record.route==='/api/addresses/');
+    assert(created&&created.userId===buyerId);
+    const [[persisted]]=await root.query("SELECT actorUserId,details FROM audit_logs WHERE action='address.create' AND targetId=?",[address.body.id]);
+    const metadata=typeof persisted.details==='string'?JSON.parse(persisted.details):persisted.details;
+    assert.equal(persisted.actorUserId,buyerId);assert.equal(metadata.requestId,created.requestId);
+    requestLogs.length=0;
+    assert.equal((await buyer(request(app).get('/api/addresses'))).status,200);
+    assert.equal(requestLogs.length,1);
+    const [[reads]]=await root.query("SELECT COUNT(*) n FROM audit_logs WHERE JSON_UNQUOTE(JSON_EXTRACT(details,'$.requestId'))=?",[requestLogs[0].requestId]);
+    assert.equal(reads.n,0,'Read-only address listing must not create SQL audit events');
+  } finally {logger.log=originalLog;}
   const addressId=address.body.id;
 
   async function fault(action,work){
