@@ -11,7 +11,7 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "(function collectionGuard(){\n  function deny(){\n    pm.test('Isolation barrier accepted the target',function(){pm.expect(false).to.eql(true);});\n    if(pm.execution&&typeof pm.execution.skipRequest==='function')pm.execution.skipRequest();\n    else pm.request.url.update('blocked://isolation.invalid');\n    throw new Error('Isolation barrier rejected the target; no business request authorized.');\n  }\n  const port=Number(pm.environment.get('apiPort'));\n  const base=pm.environment.get('baseUrl');\n  const origin='http://127.0.0.1:'+port;\n  const database=pm.environment.get('expectedDatabase')||'';\n  const uuid=pm.environment.get('expectedServerUuid')||'';\n  const run=pm.environment.get('isolationRunId')||'';\n  const key=pm.environment.get('isolationKey')||'';\n  const resolved=pm.variables.replaceIn(pm.request.url.toString());\n  if(!Number.isInteger(port)||port<3001||port>3099||base!==origin||!resolved.startsWith(origin+'/')||\n    !/^secure_ecommerce_postman_[a-f0-9]{32}$/.test(database)||\n    !/^[a-f0-9-]{36}$/.test(uuid)||uuid==='b68c7b62-dc02-11f1-b706-caca74da477e'||\n    !/^[a-f0-9-]{36}$/.test(run)||!/^[a-f0-9]{64}$/.test(key))return deny();\n  pm.request.headers.upsert({key:'X-Postman-Isolation-Key',value:key});\n  pm.sendRequest({url:origin+'/__postman/isolation',method:'GET',\n    header:{'X-Postman-Isolation-Key':key}},function(error,response){\n    if(error||response.code!==200)return deny();\n    let identity;try{identity=response.json();}catch{return deny();}\n    if(identity.isolated!==true||identity.runId!==run||identity.database!==database||identity.serverUuid!==uuid||identity.storage!=='tmpfs')return deny();\n    pm.test('Isolation barrier accepted the target',function(){pm.expect(true).to.eql(true);});\n  });\n})();"
+          "(function collectionGuard(){\r\n  function deny(){\r\n    pm.test('Isolation barrier accepted the target',function(){pm.expect(false).to.eql(true);});\r\n    if(pm.execution&&typeof pm.execution.skipRequest==='function')pm.execution.skipRequest();\r\n    else pm.request.url.update('blocked://isolation.invalid');\r\n    throw new Error('Isolation barrier rejected the target; no business request authorized.');\r\n  }\r\n  const port=Number(pm.environment.get('apiPort'));\r\n  const base=pm.environment.get('baseUrl');\r\n  const origin='http://127.0.0.1:'+port;\r\n  const database=pm.environment.get('expectedDatabase')||'';\r\n  const uuid=pm.environment.get('expectedServerUuid')||'';\r\n  const run=pm.environment.get('isolationRunId')||'';\r\n  const key=pm.environment.get('isolationKey')||'';\r\n  const resolved=pm.variables.replaceIn(pm.request.url.toString());\r\n  if(!Number.isInteger(port)||port<3001||port>3099||base!==origin||!resolved.startsWith(origin+'/')||\r\n    !/^secure_ecommerce_postman_[a-f0-9]{32}$/.test(database)||\r\n    !/^[a-f0-9-]{36}$/.test(uuid)||uuid==='b68c7b62-dc02-11f1-b706-caca74da477e'||\r\n    !/^[a-f0-9-]{36}$/.test(run)||!/^[a-f0-9]{64}$/.test(key))return deny();\r\n  pm.request.headers.upsert({key:'X-Postman-Isolation-Key',value:key});\r\n  pm.sendRequest({url:origin+'/__postman/isolation',method:'GET',\r\n    header:{'X-Postman-Isolation-Key':key}},function(error,response){\r\n    if(error||response.code!==200)return deny();\r\n    let identity;try{identity=response.json();}catch{return deny();}\r\n    if(identity.isolated!==true||identity.runId!==run||identity.database!==database||identity.serverUuid!==uuid||identity.storage!=='tmpfs')return deny();\r\n    pm.test('Isolation barrier accepted the target',function(){pm.expect(true).to.eql(true);});\r\n  });\r\n})();"
         ]
       }
     },
@@ -615,7 +615,7 @@
             "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
             "body": {
               "mode": "raw",
-              "raw": "{\"email\":\"{{registrationEmail}}\"}",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"name\":\"Postman registered BUYER\",\"password\":\"{{registrationPassword}}\",\"profile\":\"BUYER\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -673,7 +673,7 @@
             "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
             "body": {
               "mode": "raw",
-              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{wrongCode}}\",\"name\":\"Postman registered BUYER\",\"password\":\"{{registrationPassword}}\",\"profile\":\"BUYER\"}",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{wrongCode}}\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -705,11 +705,11 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/api/auth/register/verify",
+            "url": "{{baseUrl}}/api/auth/register",
             "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
             "body": {
               "mode": "raw",
-              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{verificationCode}}\",\"name\":\"Postman registered BUYER\",\"password\":\"Password123456!\",\"profile\":\"BUYER\"}",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"name\":\"Postman registered BUYER\",\"password\":\"Password123456!\",\"profile\":\"BUYER\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -732,7 +732,7 @@
           ]
         },
         {
-          "name": "Limite bcrypt sin truncamiento",
+          "name": "Limite 128 caracteres",
           "request": {
             "method": "POST",
             "header": [
@@ -741,11 +741,11 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/api/auth/register/verify",
+            "url": "{{baseUrl}}/api/auth/register",
             "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
             "body": {
               "mode": "raw",
-              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{verificationCode}}\",\"name\":\"Postman registered BUYER\",\"password\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"profile\":\"BUYER\"}",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"name\":\"Postman registered BUYER\",\"password\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"profile\":\"BUYER\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -781,7 +781,7 @@
             "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
             "body": {
               "mode": "raw",
-              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{verificationCode}}\",\"name\":\"Postman registered BUYER\",\"password\":\"{{registrationPassword}}\",\"profile\":\"BUYER\"}",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{verificationCode}}\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -817,7 +817,7 @@
             "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
             "body": {
               "mode": "raw",
-              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{verificationCode}}\",\"name\":\"Postman registered BUYER\",\"password\":\"{{registrationPassword}}\",\"profile\":\"BUYER\"}",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{verificationCode}}\"}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -834,6 +834,374 @@
                   "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
                   "const b=pm.response.code===204?{}:pm.response.json();",
                   "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login de cuenta personal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"password\":\"{{registrationPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.variables.set('personalToken',b.jwt); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar password propia",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{personalToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/me/password",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"currentPassword\":\"{{registrationPassword}}\",\"newPassword\":\"{{wrongPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambio revoca sesion anterior",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{personalToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401',function(){pm.expect(pm.response.code).to.eql(401);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===401) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login con password nueva",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"password\":\"{{wrongPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.variables.set('personalToken',b.jwt); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Solicitar recuperacion simulada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/password/forgot",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 202',function(){pm.expect(pm.response.code).to.eql(202);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===202) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer OTP de recuperacion local",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/__postman/mailbox?email={{registrationEmail}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.variables.set('recoveryCode',b.code); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No cruzar OTP de recuperacion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register/verify",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{recoveryCode}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recuperar password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/password/reset",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{recoveryCode}}\",\"newPassword\":\"{{registrationPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recuperacion revoca sesion anterior",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{personalToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401',function(){pm.expect(pm.response.code).to.eql(401);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===401) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recuperacion no permite replay",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/password/reset",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"code\":\"{{recoveryCode}}\",\"newPassword\":\"{{registrationPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login tras recuperacion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"password\":\"{{registrationPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) {  }"
                 ]
               }
             }
@@ -871,6 +1239,113 @@
     {
       "name": "02 Usuarios",
       "item": [
+        {
+          "name": "Consultar perfil propio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Own profile',()=>pm.expect(b.id).to.eql(pm.variables.get('buyerId'))); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Actualizar perfil propio",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Postman owner\",\"phoneNumber\":\"+52 555 1234567\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No escalar perfil propio",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"profile\":\"ADMIN\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400',function(){pm.expect(pm.response.code).to.eql(400);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===400) {  }"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "ADMIN lista cuentas",
           "request": {

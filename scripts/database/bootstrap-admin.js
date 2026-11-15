@@ -4,7 +4,7 @@ const readline=require('node:readline/promises');
 const {Writable}=require('node:stream');
 const {randomInt,randomBytes,createHmac,timingSafeEqual,randomUUID}=require('node:crypto');
 const {Sequelize}=require('sequelize');
-const bcrypt=require('bcrypt');
+const hashes=require('../../services/password-hash.service');
 require('dotenv').config();
 require('dotenv').config({path:'.env.admin-bootstrap.local'});
 async function createVerifiedAdmin(connection,{id,email,name,passwordHash,verifiedAt}){
@@ -30,7 +30,7 @@ async function main(){
     const email=await accounts.normalizeEmail(await input.question('Correo real a verificar: '));
     const name=accounts.text(await input.question('Nombre: '),120,'Nombre inválido.');
     process.stdout.write('Contraseña (entrada oculta): ');muted=true;
-    const password=accounts.newPassword(await input.question(''));muted=false;process.stdout.write('\n');
+    const passwordHash=await hashes.hash(accounts.newPassword(await input.question('')));muted=false;process.stdout.write('\n');
     const code=String(randomInt(1000000)).padStart(6,'0');const key=randomBytes(32);
     const digest=value=>createHmac('sha256',key).update(value).digest();const expected=digest(code);const expires=Date.now()+600000;
     await require('../../services/registration-email.service').sendVerificationCode(email,code);
@@ -44,7 +44,7 @@ async function main(){
     connection=new Sequelize('secure_ecommerce',BOOTSTRAP_DB_USER,BOOTSTRAP_DB_PASSWORD,{host:process.env.BOOTSTRAP_DB_HOST||'127.0.0.1',port:Number(process.env.BOOTSTRAP_DB_PORT||3307),dialect:'mysql',timezone:'+00:00',logging:false});
     const [[identity]]=await connection.query('SELECT DATABASE() AS db,CURRENT_USER() AS account,@@server_uuid AS uuid,@@session.foreign_key_checks AS fks,@@session.sql_mode AS mode');
     if(identity.db!=='secure_ecommerce'||!identity.account.startsWith('ecommerce_admin_bootstrap@')||identity.uuid!==BOOTSTRAP_DB_UUID||Number(identity.fks)!==1||!/STRICT_(TRANS|ALL)_TABLES/.test(identity.mode))throw new Error('Destino inválido.');
-    await createVerifiedAdmin(connection,{id:randomUUID(),email,name,passwordHash:await bcrypt.hash(password,12),verifiedAt:new Date()});
+    await createVerifiedAdmin(connection,{id:randomUUID(),email,name,passwordHash,verifiedAt:new Date()});
     console.log('Cuenta administrativa verificada y creada atómicamente.');
   }finally{muted=false;input.close();if(connection)await connection.close();}
 }

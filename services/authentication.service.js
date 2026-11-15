@@ -1,5 +1,5 @@
 'use strict';
-const bcrypt = require('bcrypt');
+const hashes = require('./password-hash.service');
 const accounts = require('./accounts.service');
 const runtime = require('./auth-runtime.service');
 const { AccountError } = accounts;
@@ -26,7 +26,7 @@ async function login(input, context = {}) {
   const email = await accounts.normalizeEmail(address);
   if (!accounts.validPassword(password)) throw new AccountError(400, 'La contraseña no es válida.');
   const account = await accounts.findAccountByEmail(email, true);
-  const matched = await bcrypt.compare(password, account?.passwordHash || DUMMY_HASH);
+  const matched = await hashes.verify(password, account?.passwordHash || DUMMY_HASH);
   if (!account || !matched || !accounts.isActive(account) || !accounts.accountType(account)) {
     throw new AccountError(401, 'Usuario o contraseña incorrectos.');
   }

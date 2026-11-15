@@ -1,5 +1,5 @@
 'use strict';
-const { createHash } = require('node:crypto');
+const { createHash,randomBytes } = require('node:crypto');
 const { readConfigFile, resolveConfigPath } = require('./secure-config-file.service');
 const SCOPE = 'https://www.googleapis.com/auth/gmail.send';
 const REDIRECT_URI = 'http://localhost:3001/oauth2/callback';
@@ -52,19 +52,28 @@ function createOAuthClient(config, google = require('googleapis').google) {
 function isInvalidGrant(error) {
   return error?.response?.data?.error === 'invalid_grant' || error?.code === 'invalid_grant' || error?.message === 'invalid_grant';
 }
-function mimeMessage(from, to, subject, text) {
+function mimeMessage(from, to, subject, text,html) {
   requireValid(validMailbox(from) && validMailbox(to), 'GMAIL_INPUT_INVALID');
   requireValid(typeof subject === 'string' && subject.length <= 120 && !/[\r\n\u0000-\u001f\u007f]/.test(subject), 'GMAIL_INPUT_INVALID');
   requireValid(typeof text === 'string' && Buffer.byteLength(text) <= 8192 && !text.includes('\0'), 'GMAIL_INPUT_INVALID');
   const encodedSubject = '=?UTF-8?B?' + Buffer.from(subject).toString('base64') + '?=';
   const body = Buffer.from(text).toString('base64').match(/.{1,76}/g)?.join('\r\n') || '';
+  if(html!==undefined){
+    requireValid(typeof html==='string'&&Buffer.byteLength(html)<=32768&&!html.includes('\0'),'GMAIL_INPUT_INVALID');
+    const boundary='secure_ecommerce_'+randomBytes(24).toString('hex');
+    const htmlBody=Buffer.from(html).toString('base64').match(/.{1,76}/g)?.join('\r\n')||'';
+    return Buffer.from([`From: ${from}`,`To: ${to}`,`Subject: ${encodedSubject}`,'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,'',`--${boundary}`,
+      'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',body,
+      `--${boundary}`,'Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64','',htmlBody,`--${boundary}--`,''].join('\r\n')).toString('base64url');
+  }
   return Buffer.from([`From: ${from}`,`To: ${to}`,`Subject: ${encodedSubject}`,'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',body,''].join('\r\n')).toString('base64url');
 }
 function createGmailSender({ google = require('googleapis').google, load = loadConfiguration,
   warn = () => require('./structured-logger.service').log('gmail.reauthorization.required') } = {}) {
   let current;
-  return Object.freeze({ async send({ to, subject, text }) {
+  return Object.freeze({ async send({ to, subject, text,html }) {
     const config = load();
     const fingerprint = createHash('sha256').update(JSON.stringify([config.clientId,config.clientSecret,config.refreshToken,config.sender])).digest('hex');
     if (!current || current.fingerprint !== fingerprint) {
@@ -74,7 +83,7 @@ function createGmailSender({ google = require('googleapis').google, load = loadC
     }
     const active = current;
     if (active.blocked) throw new GmailError('GMAIL_REAUTH_REQUIRED');
-    const raw = mimeMessage(config.sender,to,subject,text);
+    const raw = mimeMessage(config.sender,to,subject,text,html);
     try {
       // google-auth-library caches and refreshes expiring access tokens in memory.
       // Only the refresh token is persisted by the explicit authorization tool.

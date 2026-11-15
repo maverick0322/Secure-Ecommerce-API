@@ -9,6 +9,8 @@ router.post('/refresh', rateLimit, auth.refresh);
 router.post('/logout', rateLimit, authorize('ADMIN, BUYER, SELLER', { allowUnapprovedSeller: true }), auth.logout);
 router.post('/register', rateLimit, auth.requestRegistrationCode);
 router.post('/register/verify', rateLimit, auth.register);
+router.post('/password/forgot',rateLimit,require('../controllers/personal-account.controller').forgot);
+router.post('/password/reset',rateLimit,require('../controllers/personal-account.controller').reset);
 
 // GET: api/auth/time
 router.get('/time', authorize('ADMIN, BUYER, SELLER', { allowUnapprovedSeller: true }), auth.time);

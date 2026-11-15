@@ -1,6 +1,6 @@
 const { randomUUID } = require('node:crypto');
 const { isIP } = require('node:net');
-const bcrypt = require('bcrypt');
+const hashes = require('./password-hash.service');
 const validator = require('express-validator').body;
 const passwords = require('./password-policy.service');
 const { isUuid } = require('../validators/uuid');
@@ -21,7 +21,7 @@ class AccountError extends Error {
 }
 
 function respondError(res, error) {
-  if (['SESSION_STORE_UNAVAILABLE', 'AUTH_REDIS_CONFIGURATION_INVALID', 'RS256_CONFIGURATION_INVALID', 'SESSION_CONFLICT'].includes(error?.code)) {
+  if (['PASSWORD_SERVICE_BUSY','SESSION_STORE_UNAVAILABLE', 'AUTH_REDIS_CONFIGURATION_INVALID', 'RS256_CONFIGURATION_INVALID', 'SESSION_CONFLICT'].includes(error?.code)) {
     return res.status(503).json({ status: 503, message: 'El servicio de autenticación no está disponible.' });
   }
   if (error?.name === 'AuthSessionError' || error?.code === 'INVALID_ACCESS_TOKEN') {
@@ -46,12 +46,12 @@ function text(value, max, message) {
 }
 
 function validPassword(value) {
-  return passwords.validBcryptInput(value);
+  return passwords.validInput(value);
 }
 
 function newPassword(value) {
   if (!passwords.acceptable(value)) throw new AccountError(400,
-    'Use una contraseña de al menos 15 caracteres y hasta 72 bytes, que no sea común ni repetitiva.');
+    'Use una contraseña de 8 a 128 caracteres, que no sea común ni repetitiva.');
   return value;
 }
 
@@ -88,13 +88,20 @@ async function insertUser(account, transaction) {
   return User.create(account, { transaction });
 }
 
-async function createPublicAccount({ email, name, password, profile, storeName }, context = {}) {
+async function createPublicAccount({ email, name, password, profile, storeName,phoneNumber=null }, context = {}) {
   if (profile !== 'BUYER' && profile !== 'SELLER') throw new AccountError(400, 'Seleccione el perfil BUYER o SELLER.');
-  const passwordHash = await bcrypt.hash(newPassword(password), 12);
+  const passwordHash=await hashes.hash(newPassword(password));
+  return createVerifiedRegistration({email,name,passwordHash,profile,storeName,phoneNumber},context);
+}
+// Internal only: the HTTP form validator rejects passwordHash; only a pending
+// server-side registration can call this with its previously generated hash.
+async function createVerifiedRegistration({email,name,passwordHash,profile,storeName,phoneNumber=null},context={}){
+  if (profile !== 'BUYER' && profile !== 'SELLER') throw new AccountError(400, 'Seleccione el perfil BUYER o SELLER.');
+  if(!hashes.isEncodedHash(passwordHash))throw new Error('Invalid pending registration.');
   const now = new Date();
   try {
     return await sequelize.transaction(async transaction => {
-      const account = await insertUser({ id: randomUUID(), email, name, passwordHash, status: 'ACTIVE',
+      const account = await insertUser({ id: randomUUID(), email, name, passwordHash,phoneNumber, status: 'ACTIVE',
         emailVerifiedAt: now, createdAt: now, updatedAt: now }, transaction);
       const { id: userId } = account;
       if (profile === 'SELLER') {
@@ -182,7 +189,7 @@ async function updateAccount(actorId, email, body, context = {}) {
     if (!['ACTIVE','SUSPENDED','DISABLED'].includes(body.status)) throw new AccountError(400,'Estado de cuenta no válido.');
     changes.status = body.status;
   }
-  if (body.password !== undefined) changes.passwordHash = await bcrypt.hash(newPassword(body.password),12);
+  if (body.password !== undefined) changes.passwordHash = await hashes.hash(newPassword(body.password));
   return withAdmin(actorId, async transaction => {
     const { account, admin } = await lockedTarget(email, transaction);
     if (admin && (actorId !== account.id || (changes.status !== undefined && changes.status !== 'ACTIVE'))) {
@@ -216,4 +223,4 @@ function removeAccount(actorId, email, context = {}) {
 
 module.exports = { AccountError, respondError, normalizeEmail, text, validPassword, newPassword, accountType, isActive,
   serializeAccount, findAccountById, findAccountByEmail, listAccounts, createPublicAccount, reviewSeller,
-  suspendSeller, updateAccount, removeAccount };
+  suspendSeller, updateAccount, removeAccount,createVerifiedRegistration };
