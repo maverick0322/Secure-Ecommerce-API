@@ -78,8 +78,9 @@ async function main(){
   });
   app.get('/__postman/isolation',(req,res)=>res.json({isolated:true,runId:fixture.runId,
     database:fixture.database,serverUuid:fixture.uuid,storage:'tmpfs',email:'memory',cloudinary:'memory'}));
-  app.get('/__postman/mailbox',(req,res)=>{
+  app.get('/__postman/mailbox',async(req,res)=>{
     if(typeof req.query.email!=='string'||!req.query.email.endsWith('@example.invalid'))return res.status(400).json({message:'Synthetic address required.'});
+    await require(path.join(workspace,'services/personal-account.service')).whenRecoveryIdle();
     const code=mailbox.get(req.query.email);return code?res.json({code}):res.status(404).json({message:'No test message.'});
   });
   isolatedAuth=await require('../../tests/support/isolated-auth').start({applicationRoot:workspace});

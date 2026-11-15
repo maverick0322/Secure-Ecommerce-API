@@ -5,7 +5,7 @@ const {writeSync}=require('node:fs');
 const {isUuid}=require('../validators/uuid');
 const context=new AsyncLocalStorage();
 const events=new Set(['http.request','logging.failed','audit.write.failed','api.started','api.start.failed',
-  'image.cleanup.pending','image.cleanup.invalid','image.recovery.failed','gmail.reauthorization.required']);
+  'image.cleanup.pending','image.cleanup.invalid','image.recovery.failed','gmail.reauthorization.required','auth.recovery.delivery.failed']);
 
 // Allowlisted metadata only: never serialize a request, response or Error.
 function createLogger({sink,fallback}={}) {

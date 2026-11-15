@@ -131,8 +131,8 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
   const changed=crypto.randomBytes(24).toString('base64');
   assert.equal((await auth(request(app).put(`/api/users/${seller.email}`)).send({password:changed})).status,204);
   const [[stored]]=await root.query('SELECT passwordHash FROM users WHERE id=?',[seller.id]);
-  assert.equal(require('bcrypt').getRounds(stored.passwordHash),12);
-  assert.equal(await require('bcrypt').compare(changed,stored.passwordHash),true);
+  assert(stored.passwordHash.startsWith('$scrypt$v1$32768$8$3$'));
+  assert.equal(await require('../../services/password-hash.service').verify(changed,stored.passwordHash),true);
   const loginResponse=await request(app).post('/api/auth').send({email:seller.email,password:changed});
   assert.equal(loginResponse.status,200,'New credentials must allow a fresh session');
   token=loginResponse.body.jwt;
@@ -159,8 +159,8 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
   mail.sendVerificationCode=async(email,value)=>{code=value;};
   try{
     const email=`${crypto.randomUUID()}@example.invalid`;
-    assert.equal((await request(app).post('/api/auth/register').send({email})).status,202);
-    const verify=()=>request(app).post('/api/auth/register/verify').send({email,code,name:'Atomic registration',password:secret,profile:'BUYER'});
+    assert.equal((await request(app).post('/api/auth/register').send({email,name:'Atomic registration',password:secret,profile:'BUYER'})).status,202);
+    const verify=()=>request(app).post('/api/auth/register/verify').send({email,code});
     assert.equal((await request(app).post('/api/auth/register/verify').send({email,code,name:'Weak candidate',password:'Password123456!',profile:'BUYER'})).status,400);
     assert.equal((await fault('usuarios.crear',verify)).status,500);
     const [[n]]=await root.query('SELECT COUNT(*) AS n FROM users WHERE email=?',[email]);assert.equal(n.n,0);

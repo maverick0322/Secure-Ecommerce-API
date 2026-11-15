@@ -3,6 +3,30 @@ const mailer = require('../../services/registration-email.service');
 
 afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
 
+it('keeps registration and recovery purposes separate, including expiry and replay',async()=>{
+  jest.useFakeTimers();const send=jest.spyOn(mailer,'sendVerificationCode').mockResolvedValue();
+  const email='purpose@example.invalid';await verification.issue(email,{userId:'server-only'},'recovery');
+  const code=send.mock.calls[0][1],work=jest.fn();
+  await expect(verification.verify(email,code,work,'registration')).rejects.toMatchObject({status:400});
+  expect(work).not.toHaveBeenCalled();jest.advanceTimersByTime(600001);
+  await expect(verification.verify(email,code,work,'recovery')).rejects.toMatchObject({status:400});
+});
+it('serializes two simultaneous recovery confirmations without admitting two mutations',async()=>{
+  const send=jest.spyOn(mailer,'sendVerificationCode').mockResolvedValue();const email='race-reset@example.invalid';
+  await verification.issue(email,{userId:'server-only'},'recovery');const code=send.mock.calls[0][1];let release;
+  const gate=new Promise(resolve=>{release=resolve;}),work=jest.fn(async()=>{await gate;return 'done';});
+  const first=verification.verify(email,code,work,'recovery');
+  await expect(verification.verify(email,code,work,'recovery')).rejects.toMatchObject({status:400});
+  release();await expect(first).resolves.toBe('done');expect(work).toHaveBeenCalledTimes(1);
+});
+it('limits pending storage globally without contacting real mail providers',async()=>{
+  jest.useFakeTimers();jest.advanceTimersByTime(1200000);
+  jest.spyOn(mailer,'sendVerificationCode').mockResolvedValue();
+  for(let i=0;i<1000;i++)await verification.issue('capacity-'+i+'@example.invalid',null,'registration');
+  await expect(verification.issue('overflow@example.invalid')).rejects.toMatchObject({status:429});
+  jest.advanceTimersByTime(600001);await expect(verification.issue('after-capacity@example.invalid')).resolves.toBeUndefined();
+});
+
 it('expires a code after ten minutes and limits delivery during the cooldown', async () => {
   jest.useFakeTimers();
   const send = jest.spyOn(mailer, 'sendVerificationCode').mockResolvedValue();

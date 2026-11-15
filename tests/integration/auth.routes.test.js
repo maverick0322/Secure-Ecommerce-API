@@ -54,13 +54,13 @@ it('returns a generic error for a database failure', async () => {
 it('sends the code privately and creates only once, after validation', async () => {
   const email = 'register@example.invalid';
   const send = jest.spyOn(mailer, 'sendVerificationCode').mockResolvedValue();
-  const create = jest.spyOn(accounts, 'createPublicAccount').mockResolvedValue({ email, profile: 'SELLER', sellerStatus: 'PENDING' });
-  const issued = await request(app).post('/api/auth/register').send({ email });
+  const create = jest.spyOn(accounts, 'createVerifiedRegistration').mockResolvedValue({ email, profile: 'SELLER', sellerStatus: 'PENDING' });
+  const issued = await request(app).post('/api/auth/register').send({ email,password:secret,name:'Synthetic seller',profile:'SELLER',storeName:'Synthetic shop' });
   expect(issued.status).toBe(202);
   expect(issued.body).toEqual({ message: expect.any(String) });
   expect(create).not.toHaveBeenCalled();
   const code = send.mock.calls[0][1];
-  const payload = { email, code, password: secret, name: 'Synthetic seller', profile: 'SELLER', storeName: 'Synthetic shop' };
+  const payload = { email, code };
   expect((await request(app).post('/api/auth/register/verify').send({ ...payload, profile: 'ADMIN' })).status).toBe(400);
   const results = await Promise.all([1, 2].map(() => request(app).post('/api/auth/register/verify').send(payload)));
   expect(results.map(result => result.status).sort()).toEqual([201, 400]);

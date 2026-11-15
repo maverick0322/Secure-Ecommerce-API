@@ -9,7 +9,7 @@ function createCredentialVersionService(key) {
   if (!Buffer.isBuffer(key) || key.length < 32 || key.length > 128) throw new RedisConfigurationError();
   const secret = Buffer.from(key);
   return Object.freeze({ derive(passwordHash) {
-    if (typeof passwordHash !== 'string' || !/^\$2[aby]\$(0[4-9]|[12]\d|3[01])\$[./A-Za-z0-9]{53}$/.test(passwordHash)) {
+    if (!require('./password-hash.service').isEncodedHash(passwordHash)) {
       throw new RedisConfigurationError();
     }
     return crypto.createHmac('sha256', secret).update('secure-ecommerce-credentials-v1\0').update(passwordHash).digest('hex');

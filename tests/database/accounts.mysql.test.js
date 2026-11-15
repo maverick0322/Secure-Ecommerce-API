@@ -63,16 +63,16 @@ isolated('Stage 3A isolated MySQL account workflows', () => {
   const login = email => request(app).post('/api/auth').send({ email, password });
   const reviewPath = userId => `/api/users/sellers/${userId}/review`;
 
-  async function issue(email) {
+  async function issue(email,profile='BUYER') {
     const send = jest.spyOn(mailer, 'sendVerificationCode').mockResolvedValue();
-    expect((await request(app).post('/api/auth/register').send({ email })).status).toBe(202);
+    expect((await request(app).post('/api/auth/register').send({email,password,name:'Synthetic account',profile,...(profile==='SELLER'?{storeName:'Synthetic shop'}:{})})).status).toBe(202);
     const code = send.mock.calls.at(-1)[1];
     expect(code).toMatch(/^\d{6}$/);
     return code;
   }
 
   function verify(email, code, profile = 'BUYER') {
-    return request(app).post('/api/auth/register/verify').send({ email, code, password, name: 'Synthetic account', profile, storeName: 'Synthetic shop' });
+    return request(app).post('/api/auth/register/verify').send({email,code,...(profile==='ADMIN'?{profile}:{})});
   }
 
   it('creates one verified exclusive profile under concurrent verification without a role column', async () => {
@@ -133,7 +133,7 @@ isolated('Stage 3A isolated MySQL account workflows', () => {
 
   it('serializes seller reviews, audits the decision and gates commerce on current approval', async () => {
     const email = 'seller@example.invalid';
-    const seller = await verify(email, await issue(email), 'SELLER');
+    const seller = await verify(email, await issue(email,'SELLER'), 'SELLER');
     expect(seller.status).toBe(201);
     expect(seller.body.sellerStatus).toBe('PENDING');
     const session = await login(email);
@@ -152,7 +152,7 @@ isolated('Stage 3A isolated MySQL account workflows', () => {
 
   it('stores the rejection reason and denies commerce to a rejected seller', async () => {
     const email = 'rejected@example.invalid';
-    const seller = await verify(email, await issue(email), 'SELLER');
+    const seller = await verify(email, await issue(email,'SELLER'), 'SELLER');
     const admin = await login(adminEmail);
     const reviewed = await request(app).put(reviewPath(seller.body.id)).set('Authorization', token(admin.body.jwt))
       .send({ status: 'REJECTED', rejectionReason: 'Fixture incompleto' });
@@ -170,4 +170,49 @@ isolated('Stage 3A isolated MySQL account workflows', () => {
     await expect(db.query("UPDATE audit_logs SET outcome='ERROR' WHERE id=1")).rejects.toThrow();
     await expect(db.query('DELETE FROM audit_logs WHERE id=1')).rejects.toThrow();
   });
+  it('persists own profile and password changes with real session revocation and purpose-isolated recovery',async()=>{
+    const email='personal-owner@example.invalid';
+    const account=await accounts.createPublicAccount({email,name:'Personal owner',password,profile:'SELLER',storeName:'Pending shop'});
+    let jwt=await isolatedAuth.issue(account);
+    const own=req=>req.set('Authorization',token(jwt));
+    const profile=await own(request(app).get('/api/users/me'));expect(profile.status).toBe(200);expect(profile.body.sellerStatus).toBe('PENDING');
+    expect((await own(request(app).put('/api/users/me')).send({name:'Owner edited',phoneNumber:'+52 555 1234567',storeName:'Edited shop'})).status).toBe(200);
+    expect((await accounts.findAccountByEmail(email)).phoneNumber).toBe('+52 555 1234567');
+    expect((await own(request(app).put('/api/users/me')).send({profile:'ADMIN'})).status).toBe(400);
+    const original=(await accounts.findAccountByEmail(email,true)).passwordHash;
+    const runtime=require('../../services/auth-runtime.service'),realRuntime=await runtime.getRuntime();
+    const unavailable=jest.spyOn(runtime,'getRuntime').mockResolvedValue({...realRuntime,sessions:{...realRuntime.sessions,
+      revokeAll:async()=>{throw new (require('../../services/auth-session-errors').SessionStoreUnavailableError)();}}});
+    try {
+      expect((await own(request(app).put('/api/users/me/password')).send({currentPassword:password,newPassword:'Brisa7!?'})).status).toBe(503);
+      expect((await accounts.findAccountByEmail(email,true)).passwordHash).toBe(original);
+    } finally {unavailable.mockRestore();}
+    expect((await own(request(app).get('/api/users/me'))).status).toBe(200);
+    jest.spyOn(models.AuditLog,'create').mockRejectedValueOnce(new Error('Synthetic personal audit failure'));
+    expect((await own(request(app).put('/api/users/me/password')).send({currentPassword:password,newPassword:'Brisa7!?'})).status).toBe(500);
+    expect((await accounts.findAccountByEmail(email,true)).passwordHash).toBe(original);
+    expect((await own(request(app).get('/api/users/me'))).status).toBe(401);
+    jest.restoreAllMocks();jwt=await isolatedAuth.issue(account);
+    const unicode=Array.from({length:128},(_,i)=>String.fromCodePoint(0x400+i)).join('');
+    expect((await own(request(app).put('/api/users/me/password')).send({currentPassword:password,newPassword:unicode})).status).toBe(204);
+    expect((await own(request(app).get('/api/users/me'))).status).toBe(401);
+    const logged=await request(app).post('/api/auth').send({email,password:unicode});expect(logged.status).toBe(200);jwt=logged.body.jwt;
+    const send=jest.spyOn(mailer,'sendVerificationCode').mockResolvedValue();
+    expect((await request(app).post('/api/auth/password/forgot').send({email})).status).toBe(202);
+    await require('../../services/personal-account.service').whenRecoveryIdle();
+    const code=send.mock.calls.at(-1)[1];expect(send.mock.calls.at(-1)[2]).toBe('recovery');
+    expect((await request(app).post('/api/auth/register/verify').send({email,code})).status).toBe(400);
+    const reset={email,code,newPassword:'Viento8?'};
+    const beforeReset=(await accounts.findAccountByEmail(email,true)).passwordHash;
+    jest.spyOn(models.AuditLog,'create').mockRejectedValueOnce(new Error('Synthetic reset audit failure'));
+    expect((await request(app).post('/api/auth/password/reset').send(reset)).status).toBe(500);
+    expect((await accounts.findAccountByEmail(email,true)).passwordHash).toBe(beforeReset);
+    jest.restoreAllMocks();
+    expect((await request(app).post('/api/auth/password/reset').send(reset)).status).toBe(204);
+    expect((await own(request(app).get('/api/users/me'))).status).toBe(401);
+    expect((await request(app).post('/api/auth/password/reset').send(reset)).status).toBe(400);
+    expect((await request(app).post('/api/auth').send({email,password:'Viento8?'})).status).toBe(200);
+    const [events]=await db.query('SELECT action FROM audit_logs WHERE targetId=? AND action IN (?,?) ORDER BY action',[account.id,'password.change','password.reset']);
+    expect(events.map(event=>event.action)).toEqual(['password.change','password.reset']);
+  },15000); // New multi-step HTTP scenario includes several real memory-hard KDF operations.
 });

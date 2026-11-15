@@ -5,7 +5,7 @@ afterEach(()=>jest.restoreAllMocks());
 it('preserves the OTP message, subject and expiry with the Gmail adapter',async()=>{
   const send=jest.spyOn(gmail,'sendMessage').mockResolvedValue();
   await sendVerificationCode('buyer@example.invalid','123456');
-  expect(send).toHaveBeenCalledWith({to:'buyer@example.invalid',subject:'Verifica tu correo',text:'Tu código de verificación es 123456. Caduca en 10 minutos.'});
+  expect(send).toHaveBeenCalledWith({to:'buyer@example.invalid',...require('../../services/email-template.service').verification({code:'123456'})});
 });
 it.each(['GMAIL_CONFIGURATION_INVALID','GMAIL_REAUTH_REQUIRED','GMAIL_SEND_FAILED'])('preserves the generic HTTP 503 contract for %s',async code=>{
   jest.spyOn(gmail,'sendMessage').mockRejectedValue(new gmail.GmailError(code));

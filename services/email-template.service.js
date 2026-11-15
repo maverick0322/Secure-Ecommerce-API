@@ -1,0 +1,12 @@
+'use strict';
+const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+function verification({code,purpose='registration',name=''}={}){
+  if(typeof code!=='string'||!/^\d{6}$/.test(code)||!['registration','recovery'].includes(purpose)||typeof name!=='string'||[...name].length>120)throw new TypeError('Invalid email template input.');
+  const explanation=purpose==='registration'?'Confirma tu correo para completar tu registro.':'Recibimos una solicitud para restablecer tu contraseña.';
+  const greeting=name?'Hola, '+name:'Hola';
+  const subject=purpose==='registration'?'Verifica tu correo — Secure Ecommerce':'Recupera tu contraseña — Secure Ecommerce';
+  const text=`${greeting}.\n\n${explanation}\n\n${code}\n\nEste código caduca en 10 minutos. No compartas este código con nadie.\nSi no hiciste esta solicitud, ignora este mensaje.\n\nSecure Ecommerce`;
+  const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;padding:0;background-color:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#1e293b"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#ffffff;border-radius:12px;border:1px solid #e2e8f0"><tr><td style="padding:28px 24px;background-color:#102b4e;color:#ffffff;font-size:24px;font-weight:bold">Secure Ecommerce</td></tr><tr><td style="padding:32px 24px;font-size:16px;line-height:1.6"><p style="margin:0 0 16px">${escape(greeting)}.</p><p style="margin:0 0 24px">${escape(explanation)}</p><p style="margin:0 0 24px;padding:20px 8px;background-color:#eff6ff;text-align:center;font-size:36px;letter-spacing:8px;font-weight:bold;color:#102b4e">${code}</p><p style="margin:0 0 12px">Este código caduca en <strong>10 minutos</strong>.</p><p style="margin:0 0 16px">No compartas este código con nadie.</p><p style="margin:0;font-size:14px;color:#64748b">Si no hiciste esta solicitud, ignora este mensaje.</p></td></tr><tr><td style="padding:20px 24px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;text-align:center">Secure Ecommerce · Mensaje de seguridad</td></tr></table></td></tr></table></body></html>`;
+  return {subject,text,html};
+}
+module.exports={verification,escape};

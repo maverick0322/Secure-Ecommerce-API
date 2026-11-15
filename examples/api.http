@@ -9,14 +9,14 @@
 @orderId = 1
 
 # Contraseñas: variables privadas, nunca credenciales reales guardadas en Git.
-# Altas y cambios: mínimo 15 caracteres Unicode y máximo 72 bytes UTF-8.
+# Altas y cambios: 8–128 puntos de código Unicode, máximo 512 bytes UTF-8.
 # Se rechazan candidatos comunes y repetitivos localmente, sin consultar terceros.
 
 ### Solicitar verificación de correo
 POST {{baseUrl}}/auth/register
 Content-Type: application/json
 
-{"email":"{{email}}"}
+{"email":"{{email}}","password":"{{password}}","name":"Cuenta de ejemplo","profile":"SELLER","storeName":"Tienda de ejemplo"}
 
 ### Suspender un vendedor APPROVED (solo JWT de ADMIN; conserva pedidos)
 PUT {{baseUrl}}/users/sellers/{{sellerId}}/suspend
@@ -29,7 +29,37 @@ Content-Type: application/json
 POST {{baseUrl}}/auth/register/verify
 Content-Type: application/json
 
-{"email":"{{email}}","code":"{{verificationCode}}","password":"{{password}}","name":"Cuenta de ejemplo","profile":"SELLER","storeName":"Tienda de ejemplo"}
+{"email":"{{email}}","code":"{{verificationCode}}"}
+
+### Perfil propio (incluye vendedores pendientes)
+GET {{baseUrl}}/users/me
+Authorization: Bearer {{token}}
+
+### Editar perfil propio
+PUT {{baseUrl}}/users/me
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"name":"Nombre actualizado","phoneNumber":null}
+
+### Cambiar contraseña propia; después iniciar sesión nuevamente
+PUT {{baseUrl}}/users/me/password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"currentPassword":"{{password}}","newPassword":"REEMPLAZAR_EN_PRIVADO"}
+
+### Solicitar recuperación (respuesta genérica)
+POST {{baseUrl}}/auth/password/forgot
+Content-Type: application/json
+
+{"email":"{{email}}"}
+
+### Restablecer usando exclusivamente el OTP de recuperación
+POST {{baseUrl}}/auth/password/reset
+Content-Type: application/json
+
+{"email":"{{email}}","code":"{{verificationCode}}","newPassword":"{{password}}"}
 
 ### Iniciar sesión: RS256 de 5 minutos y refresh opaco, conservar solo en privado
 POST {{baseUrl}}/auth

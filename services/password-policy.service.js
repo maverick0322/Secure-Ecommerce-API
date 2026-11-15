@@ -1,7 +1,8 @@
 'use strict';
 
-const MIN_CHARACTERS = 15;
-const MAX_BYTES = 72;
+const MIN_CHARACTERS = 8;
+const MAX_CHARACTERS = 128;
+const MAX_BYTES = 512;
 // Public, deliberately limited offline denylist. No password or digest is sent
 // to a provider. This is not a complete database of compromised passwords.
 const common = new Set([
@@ -13,18 +14,19 @@ const common = new Set([
   'letmein', 'letmeinletmein', 'iloveyou', 'iloveyouiloveyou', 'welcome',
   'welcomehome', 'changeme', 'changemepassword', 'default', 'secret',
   'monkey', 'dragon', 'football', 'baseball', 'superman', 'princess',
+  'abc', 'abcdefgh', '1qaz2wsx', 'qazwsx', 'zaq12wsx', 'trustno1', 'trustno',
   'sunshine', 'summer', 'winter', 'spring', 'autumn', 'verano', 'invierno',
   'correcthorsebatterystaple', '123456789012345', '12345678901234567890'
 ]);
 
-function validBcryptInput(value) {
-  return typeof value === 'string' && value.length > 0 && value.length <= MAX_BYTES &&
+function validInput(value) {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256 && [...value].length<=MAX_CHARACTERS &&
     Buffer.byteLength(value, 'utf8') <= MAX_BYTES && !value.includes('\0') &&
     !/\p{Surrogate}/u.test(value);
 }
 
 function acceptable(value) {
-  if (!validBcryptInput(value) || [...value].length < MIN_CHARACTERS) return false;
+  if (!validInput(value) || [...value].length < MIN_CHARACTERS) return false;
   // Normalize only the denylist comparison; bcrypt always receives the original.
   const comparable = value.normalize('NFKC').toLowerCase().replace(/[\s_-]/gu, '');
   const characters = [...comparable];
@@ -35,4 +37,4 @@ function acceptable(value) {
     new Set(comparable).size >= 5 && !/^(.{1,8})\1+$/u.test(comparable) && !/^\p{N}+$/u.test(comparable);
 }
 
-module.exports = { acceptable, validBcryptInput, MIN_CHARACTERS, MAX_BYTES };
+module.exports = { acceptable, validInput, validBcryptInput:validInput, MIN_CHARACTERS, MAX_CHARACTERS, MAX_BYTES };

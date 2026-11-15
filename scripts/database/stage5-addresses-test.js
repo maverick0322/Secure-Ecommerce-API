@@ -176,8 +176,8 @@ async function main() {
     mail.sendVerificationCode=async(email,value)=>{code=value;};
     const email=`${crypto.randomUUID()}@example.invalid`;const accountPassword=crypto.randomBytes(24).toString('base64');
     try{
-      assert.equal((await request(app).post('/api/auth/register').send({email})).status,202);
-      const registered=await request(app).post('/api/auth/register/verify').send({email,code,name:'Synthetic merchant',password:accountPassword,profile:'SELLER',storeName:'Synthetic shop'});
+      assert.equal((await request(app).post('/api/auth/register').send({email,name:'Synthetic merchant',password:accountPassword,profile:'SELLER',storeName:'Synthetic shop'})).status,202);
+      const registered=await request(app).post('/api/auth/register/verify').send({email,code});
       assert.equal(registered.status,201,JSON.stringify(registered.body));assert(!registered.body.passwordHash);
       const logged=await request(app).post('/api/auth').send({email,password:accountPassword});assert.equal(logged.status,200);
       const sellerHeader=`Bearer ${logged.body.jwt}`;

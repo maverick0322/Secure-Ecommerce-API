@@ -1,6 +1,11 @@
 const router = require('express').Router();
 const users = require("../controllers/users.controller");
 const authorize = require('../middlewares/auth.middleware');
+const personal=require('../controllers/personal-account.controller');
+const own=authorize('ADMIN,SELLER,BUYER',{allowUnapprovedSeller:true});
+router.get('/me',own,personal.get);
+router.put('/me',own,personal.update);
+router.put('/me/password',require('../middlewares/auth-rate-limit.middleware')({max:10}),own,personal.changePassword);
 
 // GET: api/users
 router.get('/', authorize('ADMIN'), users.getAll);
