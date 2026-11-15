@@ -18,10 +18,11 @@ function positiveId(value) {
 
 function productInput(body, creating = false) {
   if (!body || Array.isArray(body) || typeof body !== 'object' || !Object.keys(body).length ||
-    Object.keys(body).some(key => !['title', 'description', 'price', 'stock'].includes(key))) {
-    throw new AccountError(400, 'Solo se admiten title, description, price y stock.');
+    Object.keys(body).some(key => !['title', 'description', 'price', 'stock', ...(creating ? ['categoryId'] : [])].includes(key))) {
+    throw new AccountError(400, creating ? 'Solo se admiten title, description, price, stock y categoryId.' : 'Solo se admiten title, description, price y stock.');
   }
   const result = {};
+  if(creating && Object.hasOwn(body,'categoryId')) result.categoryId=positiveId(body.categoryId);
   if (creating || Object.hasOwn(body, 'title')) {
     if (typeof body.title !== 'string' || !body.title.trim() || [...body.title.trim()].length > 255) {
       throw new AccountError(400, 'El título debe tener entre 1 y 255 caracteres.');
@@ -96,7 +97,19 @@ function createProduct(account, input, context = {}) {
   return sequelize.transaction(async transaction => {
     await lockActor(account, transaction, 'SELLER');
     await checkPricePrecision(input.price, transaction);
-    const product = await Product.create({ ...input, sellerId: account.id }, { transaction });
+    const {categoryId,...values}=input;
+    let category;
+    if(categoryId!==undefined){
+      category=await Category.findByPk(positiveId(categoryId),{transaction,lock:transaction.LOCK.UPDATE});
+      if(!category || category.deletedAt) throw new AccountError(404,'Categoría no encontrada.');
+    }
+    const product = await Product.create({ ...values, sellerId: account.id }, { transaction });
+    if(category){
+      await sequelize.getQueryInterface().bulkInsert('product_categories',
+        [{productId:product.id,categoryId:category.id,createdAt:new Date()}],{transaction},ProductCategory.rawAttributes);
+      // Serialize the exact locked category participating in this transaction.
+      product.categories=[category];
+    }
     await require('./audit.service').business(account.id,'producto.crear','product',product.id,transaction,context);
     return product;
   });

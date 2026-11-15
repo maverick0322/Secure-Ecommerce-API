@@ -9,7 +9,7 @@ const audit=require('../../services/audit.service');
 module.exports=async function securityChecks({root,models,app,admin,adminHeader,buyerId,buyerHeader,isolatedAuth}) {
   const auth=req=>req.set('Authorization',adminHeader);
   const buyer=req=>req.set('Authorization',buyerHeader);
-  const secret=crypto.randomBytes(32).toString('hex');
+  const secret=crypto.randomBytes(32).toString('hex')+'A1!';
   const seller=await accounts.createPublicAccount({email:`${crypto.randomUUID()}@example.invalid`,
     name:'Synthetic security seller',password:secret,profile:'SELLER',storeName:'Isolated shop'});
   await accounts.reviewSeller(admin,seller.id,'APPROVED',null,'127.0.0.1');
@@ -122,13 +122,13 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
   // Compare hashes as booleans, never print them.
   const [[beforeHash]]=await root.query('SELECT passwordHash FROM users WHERE id=?',[seller.id]);
   await fault('usuarios.editar',async()=>{
-    assert.equal((await auth(request(app).put(`/api/users/${seller.email}`)).send({password:crypto.randomBytes(24).toString('base64')})).status,500);
+    assert.equal((await auth(request(app).put(`/api/users/${seller.email}`)).send({password:crypto.randomBytes(24).toString('base64')+'A1!'})).status,500);
   });
   const [[afterHash]]=await root.query('SELECT passwordHash FROM users WHERE id=?',[seller.id]);
   assert.equal(beforeHash.passwordHash===afterHash.passwordHash,true);
   assert.equal((await merchant(request(app).get('/api/auth/time'))).status,401,'SQL rollback must not restore revoked sessions');
-  assert.equal((await auth(request(app).put(`/api/users/${seller.email}`)).send({password:'Password123456!'})).status,400);
-  const changed=crypto.randomBytes(24).toString('base64');
+  assert.equal((await auth(request(app).put(`/api/users/${seller.email}`)).send({password:'MissingNumber!'})).status,400);
+  const changed=crypto.randomBytes(24).toString('base64')+'A1!';
   assert.equal((await auth(request(app).put(`/api/users/${seller.email}`)).send({password:changed})).status,204);
   const [[stored]]=await root.query('SELECT passwordHash FROM users WHERE id=?',[seller.id]);
   assert(stored.passwordHash.startsWith('$scrypt$v1$32768$8$3$'));

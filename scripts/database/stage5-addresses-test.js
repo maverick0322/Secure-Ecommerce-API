@@ -174,7 +174,7 @@ async function main() {
     const adminHeader=`Bearer ${adminLogin.body.jwt}`;
     const mail=require('../../services/registration-email.service');const originalMail=mail.sendVerificationCode;let code;
     mail.sendVerificationCode=async(email,value)=>{code=value;};
-    const email=`${crypto.randomUUID()}@example.invalid`;const accountPassword=crypto.randomBytes(24).toString('base64');
+    const email=`${crypto.randomUUID()}@example.invalid`;const accountPassword=crypto.randomBytes(24).toString('base64')+'A1!';
     try{
       assert.equal((await request(app).post('/api/auth/register').send({email,name:'Synthetic merchant',password:accountPassword,profile:'SELLER',storeName:'Synthetic shop'})).status,202);
       const registered=await request(app).post('/api/auth/register/verify').send({email,code});
@@ -218,7 +218,7 @@ async function main() {
       buyerId:buyers[0],buyerHeader:headers[0],isolatedAuth});
     // Re-run the pre-existing account/catalog scenarios against independent final-schema fixtures.
     const adminFixture='00000000-0000-4000-8000-000000000003';
-    const fixtureHash=await require('bcrypt').hash('synthetic-stage3a-password',10);
+    const fixtureHash=await require('bcrypt').hash('synthetic-stage3a-password-7!',10);
     for(const database of ['secure_ecommerce_3a_test','secure_ecommerce_3b_final_test','secure_ecommerce_3b_repeat_test']){
       await root.query(`CREATE DATABASE \`${database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
       await root.changeUser({database});

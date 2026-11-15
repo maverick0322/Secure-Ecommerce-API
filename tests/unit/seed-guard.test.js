@@ -15,7 +15,7 @@ it('retains historical isolated seeding without overwriting existing records',as
 it('never provisions historical fixture users with a default or weak password',async()=>{
   const seed=require('../../seeders/20240101000004-seed-users');
   const query={select:jest.fn(),bulkInsert:jest.fn()};
-  for(const password of ['', 'Password123456!']){
+  for(const password of ['', 'MissingNumber!']){
     jest.replaceProperty(process,'env',{...process.env,LEGACY_SEED_USER_PASSWORD:password});
     await expect(seed.up(query,Sequelize)).rejects.toMatchObject({status:400});
   }

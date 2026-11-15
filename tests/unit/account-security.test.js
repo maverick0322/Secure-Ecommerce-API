@@ -51,7 +51,7 @@ it('sanitizes sensitive-looking material in a suspension reason',()=>{
 
 it('validates account changes before hashing or entering a transaction',async()=>{
   fixture();
-  for(const body of [null,[],{}, {profile:'ADMIN'}, {status:'INVALID'}, {name:''}, {password:'Password123456!'}]){
+  for(const body of [null,[],{}, {profile:'ADMIN'}, {status:'INVALID'}, {name:''}, {password:'MissingNumber!'}]){
     await expect(accounts.updateAccount(actor,'target@example.invalid',body)).rejects.toMatchObject({status:400});
   }
   expect(db.sequelize.transaction).not.toHaveBeenCalled();

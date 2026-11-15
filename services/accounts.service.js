@@ -51,7 +51,7 @@ function validPassword(value) {
 
 function newPassword(value) {
   if (!passwords.acceptable(value)) throw new AccountError(400,
-    'Use una contraseña de 8 a 128 caracteres, que no sea común ni repetitiva.');
+    'Use una contraseña de 8 a 128 caracteres Unicode con al menos una letra, un número y un carácter especial.');
   return value;
 }
 

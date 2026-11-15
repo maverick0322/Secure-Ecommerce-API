@@ -10,7 +10,7 @@
 
 # Contraseñas: variables privadas, nunca credenciales reales guardadas en Git.
 # Altas y cambios: 8–128 puntos de código Unicode, máximo 512 bytes UTF-8.
-# Se rechazan candidatos comunes y repetitivos localmente, sin consultar terceros.
+# Al menos una letra, un número y un símbolo/puntuación; sin exigir mayúsculas.
 
 ### Solicitar verificación de correo
 POST {{baseUrl}}/auth/register

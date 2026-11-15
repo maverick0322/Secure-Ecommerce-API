@@ -40,7 +40,7 @@ if(pm.response.code===${status}) { ${tests} }`;
   add(auth,'Leer buzon exclusivamente local','GET','/__postman/mailbox?email={{registrationEmail}}',200,{tests:"pm.test('Six digit test code',()=>pm.expect(/^\\d{6}$/.test(b.code)).to.eql(true));pm.variables.set('verificationCode',b.code);pm.variables.set('wrongCode',b.code==='000000'?'000001':'000000');"});
   const registration={email:'{{registrationEmail}}',code:'{{verificationCode}}'};
   add(auth,'Codigo incorrecto','POST','/api/auth/register/verify',400,{body:{...registration,code:'{{wrongCode}}'}});
-  add(auth,'Password comun rechazado','POST','/api/auth/register',400,{body:{...registrationForm,password:'Password123456!'}});
+  add(auth,'Password sin numero rechazado','POST','/api/auth/register',400,{body:{...registrationForm,password:'MissingNumber!'}});
   add(auth,'Limite 128 caracteres','POST','/api/auth/register',400,{body:{...registrationForm,password:'x'.repeat(129)}});
   add(auth,'Registrar comprador con verificacion real del codigo','POST','/api/auth/register/verify',201,{body:registration,
     tests:"pm.test('BUYER created',()=>pm.expect(b.profile).to.eql('BUYER'));pm.variables.set('registeredBuyerId',b.id);"});

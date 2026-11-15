@@ -7,7 +7,7 @@ const isolated=process.env.STAGE3A_MYSQL_UUID?describe:describe.skip;
 isolated('Account session security with isolated MySQL and Redis',()=>{
   jest.setTimeout(60000);
   let app,models,accounts,auth,db,reader,adminHeader;
-  const password=crypto.randomBytes(24).toString('base64url');
+  const password=crypto.randomBytes(24).toString('base64url')+'A1!';
   beforeAll(async()=>{
     const port=Number(process.env.STAGE3A_TEST_PORT);
     expect(Number.isInteger(port)&&port>1024&&port!==3307).toBe(true);

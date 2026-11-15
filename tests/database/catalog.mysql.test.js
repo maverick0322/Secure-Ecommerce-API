@@ -6,7 +6,7 @@ const request = require('supertest');
 
 const isolated = process.env.STAGE3B_MYSQL_UUID ? describe : describe.skip;
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
-const password = 'synthetic-stage3a-password';
+const password = 'synthetic-stage3a-password-7!';
 
 isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s columns', variant => {
   let app;
@@ -113,6 +113,39 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     const large = await request(app).put(product()).set('Authorization', auth(seller)).send({ price: '9999999999.99' });
     expect(large.status).toBe(204);
     expect((await request(app).put(product()).set('Authorization', auth(seller)).send({ price: '12.50', stock: 0 })).status).toBe(204);
+  });
+
+  it('creates an optional Unicode category atomically and rolls back association/audit failures',async()=>{
+    const name='Electrónica';
+    const category=await request(app).post('/api/categories').set('Authorization',auth(admin)).send({name});
+    expect(category.status).toBe(201);
+    const id=category.body.categoryId;
+    const [[stored]]=await db.query('SELECT name,HEX(name) AS bytes FROM categories WHERE id=?',[id]);
+    expect(stored.name).toBe(name);expect(stored.bytes).toBe(Buffer.from(name,'utf8').toString('hex').toUpperCase());
+    const [[encoding]]=await db.query('SELECT @@character_set_client AS client,@@character_set_connection AS connection,@@character_set_results AS results');
+    expect(encoding).toEqual({client:'utf8mb4',connection:'utf8mb4',results:'utf8mb4'});
+    const create=extra=>request(app).post('/api/products').set('Authorization',auth(seller)).send({title:'Unicode creation',price:'249.99',stock:15,...extra});
+    const before=await models.Product.count({paranoid:false});
+    expect((await create({categoryId:2147483647})).status).toBe(404);
+    expect(await models.Product.count({paranoid:false})).toBe(before);
+    const result=await create({categoryId:id});expect(result.status).toBe(201);
+    expect(result.body.categories).toEqual([{categoryId:id,name,protected:false}]);
+    expect(await models.ProductCategory.count({where:{productId:result.body.productId,categoryId:id}})).toBe(1);
+    const listed=await request(app).get('/api/products').set('Authorization',auth(buyer));
+    expect(listed.body.find(p=>p.productId===result.body.productId).categories).toEqual(result.body.categories);
+    const qi=models.sequelize.getQueryInterface(),original=qi.bulkInsert.bind(qi);
+    const insert=jest.spyOn(qi,'bulkInsert').mockImplementation((table,...args)=>{
+      if(table==='product_categories')throw new Error('synthetic association failure');
+      return original(table,...args);
+    });
+    const count=await models.Product.count({paranoid:false}),links=await models.ProductCategory.count({paranoid:false});
+    expect((await create({categoryId:id})).status).toBe(500);insert.mockRestore();
+    expect(await models.Product.count({paranoid:false})).toBe(count);expect(await models.ProductCategory.count({paranoid:false})).toBe(links);
+    const audit=jest.spyOn(require('../../services/audit.service'),'business').mockRejectedValue(new Error('synthetic audit failure'));
+    expect((await create({categoryId:id})).status).toBe(500);audit.mockRestore();
+    expect(await models.Product.count({paranoid:false})).toBe(count);expect(await models.ProductCategory.count({paranoid:false})).toBe(links);
+    expect((await request(app).delete('/api/categories/'+id).set('Authorization',auth(admin))).status).toBe(204);
+    expect((await create({categoryId:id})).status).toBe(404);expect(await models.Product.count({paranoid:false})).toBe(count);
   });
 
   it('reuses one category link across concurrent assignment, removal and reactivation', async () => {

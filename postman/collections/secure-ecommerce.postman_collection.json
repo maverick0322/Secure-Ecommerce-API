@@ -696,7 +696,7 @@
           ]
         },
         {
-          "name": "Password comun rechazado",
+          "name": "Password sin numero rechazado",
           "request": {
             "method": "POST",
             "header": [
@@ -709,7 +709,7 @@
             "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
             "body": {
               "mode": "raw",
-              "raw": "{\"email\":\"{{registrationEmail}}\",\"name\":\"Postman registered BUYER\",\"password\":\"Password123456!\",\"profile\":\"BUYER\"}",
+              "raw": "{\"email\":\"{{registrationEmail}}\",\"name\":\"Postman registered BUYER\",\"password\":\"MissingNumber!\",\"profile\":\"BUYER\"}",
               "options": {
                 "raw": {
                   "language": "json"

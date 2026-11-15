@@ -70,6 +70,19 @@ it('validates category assignment and uses logical product mutations', async () 
   expect(remove).toHaveBeenCalledWith(expect.objectContaining({id:seller.account.id}),1,{ipAddress:expect.any(String)});
 });
 
+it('accepts a category only during creation and serializes its Unicode name',async()=>{
+  const create=jest.spyOn(catalog,'createProduct').mockResolvedValue({...sample,categories:[{id:5,name:'Electrónica',protected:false}]});
+  const result=await request(app).post('/api/products').set('Authorization',header(seller)).send({title:'Teclado mecánico',price:'249.99',stock:15,categoryId:5});
+  expect(result.status).toBe(201);expect(result.body.categories).toEqual([{categoryId:5,name:'Electrónica',protected:false}]);
+  expect(create).toHaveBeenCalledWith(expect.any(Object),{title:'Teclado mecánico',price:'249.99',stock:15,categoryId:5},expect.any(Object));
+  expect((await request(app).put('/api/products/1').set('Authorization',header(seller)).send({categoryId:5})).status).toBe(400);
+});
+it.each([null,0,-1,1.5,'bad',{},[],true,2147483648])('rejects an invalid initial category %# before creating',async categoryId=>{
+  const create=jest.spyOn(catalog,'createProduct');
+  expect((await request(app).post('/api/products').set('Authorization',header(seller)).send({title:'Fixture',price:'1.00',categoryId})).status).toBe(400);
+  expect(create).not.toHaveBeenCalled();
+});
+
 it('uploads one image after checking ownership and exposes only a public identifier and URL', async () => {
   const owner = jest.spyOn(catalog, 'ownedProduct').mockResolvedValue(sample);
   const replace = jest.spyOn(images, 'replace').mockResolvedValue('managed-image');
