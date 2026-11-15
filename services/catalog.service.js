@@ -16,6 +16,21 @@ function positiveId(value) {
   return Number(value);
 }
 
+function productPrice(price) {
+  if (!['string', 'number'].includes(typeof price) || !/^(0|[1-9]\d{0,9})(\.\d{1,2})?$/.test(String(price))) {
+    throw new AccountError(400, 'El precio debe ser no negativo y tener como máximo dos decimales.');
+  }
+  const [integer, fraction = ''] = String(price).split('.');
+  return `${integer}.${fraction.padEnd(2, '0')}`;
+}
+
+function productStock(stock) {
+  if (!Number.isInteger(stock) || stock < 0 || stock > 4294967295) {
+    throw new AccountError(400, 'El inventario debe ser un entero entre 0 y 4294967295.');
+  }
+  return stock;
+}
+
 function productInput(body, creating = false) {
   if (!body || Array.isArray(body) || typeof body !== 'object' || !Object.keys(body).length ||
     Object.keys(body).some(key => !['title', 'description', 'price', 'stock', ...(creating ? ['categoryId'] : [])].includes(key))) {
@@ -36,18 +51,10 @@ function productInput(body, creating = false) {
     result.description = body.description;
   }
   if (creating || Object.hasOwn(body, 'price')) {
-    const price = body.price;
-    if (!['string', 'number'].includes(typeof price) || !/^(0|[1-9]\d{0,9})(\.\d{1,2})?$/.test(String(price))) {
-      throw new AccountError(400, 'El precio debe ser no negativo y tener como máximo dos decimales.');
-    }
-    const [integer, fraction = ''] = String(price).split('.');
-    result.price = `${integer}.${fraction.padEnd(2, '0')}`;
+    result.price = productPrice(body.price);
   }
   if (Object.hasOwn(body, 'stock')) {
-    if (!Number.isInteger(body.stock) || body.stock < 0 || body.stock > 4294967295) {
-      throw new AccountError(400, 'El inventario debe ser un entero entre 0 y 4294967295.');
-    }
-    result.stock = body.stock;
+    result.stock = productStock(body.stock);
   }
   return result;
 }
