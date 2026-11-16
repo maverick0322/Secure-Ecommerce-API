@@ -12,6 +12,7 @@ beforeEach(()=>{
   jest.spyOn(db.sequelize,'transaction').mockImplementation(work=>work(tx));
   jest.spyOn(db.Seller,'findByPk').mockImplementation(async id=>id===seller.account.id?seller.account.seller:null);
   jest.spyOn(mail,'sendVerificationCode').mockResolvedValue();
+  jest.spyOn(db.User,'findOne').mockResolvedValue(null);
   sessions.revokeAll.mockClear();
 });
 afterEach(async()=>{await personal.whenRecoveryIdle();jest.restoreAllMocks();});
@@ -38,6 +39,28 @@ it('edits only the authenticated owner and prevents mass assignment',async()=>{
   for(const fields of [{id:seller.account.id},{status:'ACTIVE'},{profile:'ADMIN'},{emailVerifiedAt:new Date()},{storeName:'Buyer shop'},{phoneNumber:42}])expect((await auth(request(app).put('/api/users/me')).send(fields)).status).toBeGreaterThanOrEqual(400);
   expect(seller.account.update).not.toHaveBeenCalled();expect((await request(app).get('/api/users/me')).status).toBe(401);
 });
+
+it.each([false,true])('rejects duplicate email before hashing, OTP or delivery, including deleted accounts: %s',async deleted=>{
+  db.User.findOne.mockResolvedValue({id:buyer.account.id,deletedAt:deleted?new Date():null});
+  const issue=jest.spyOn(require('../../services/email-verification.service'),'issue');
+  const hash=jest.spyOn(hashes,'hash');
+  const result=await request(app).post('/api/auth/register').send({email:' DUPLICATE@EXAMPLE.INVALID ',name:'Persona',password:'contraseña123?',profile:'BUYER'});
+  expect(result.status).toBe(409);expect(result.body.message).toBe('El correo electrónico ya está registrado.');
+  expect(db.User.findOne).toHaveBeenCalledWith({where:{email:'duplicate@example.invalid'},paranoid:false});
+  expect(hash).not.toHaveBeenCalled();expect(issue).not.toHaveBeenCalled();expect(mail.sendVerificationCode).not.toHaveBeenCalled();
+});
+it('fails closed before OTP on lookup failure and preserves final UNIQUE conflict handling',async()=>{
+  const issue=jest.spyOn(require('../../services/email-verification.service'),'issue');
+  db.User.findOne.mockRejectedValue(new Error('private SQL failure'));
+  const body={email:'lookup-failure@example.invalid',name:'Persona',password:'contraseña123?',profile:'BUYER'};
+  expect((await request(app).post('/api/auth/register').send(body)).status).toBe(500);expect(issue).not.toHaveBeenCalled();
+  db.User.findOne.mockResolvedValue(null);
+  expect((await request(app).post('/api/auth/register').send(body)).status).toBe(202);
+  const code=mail.sendVerificationCode.mock.calls[0][1];
+  jest.spyOn(db.User,'create').mockRejectedValue(new db.Sequelize.UniqueConstraintError({errors:[]}));
+  const verified=await request(app).post('/api/auth/register/verify').send({email:body.email,code});
+  expect(verified.status).toBe(409);expect(verified.body.message).toBe('El correo electrónico ya está registrado.');
+});
 it('allows a pending seller to change own password, validates the old one and revokes before SQL update',async()=>{
   const auth=req=>req.set('Authorization','Bearer '+seller.token);
   expect((await auth(request(app).put('/api/users/me/password')).send({currentPassword:'wrong',newPassword:'Nueva72!?'})).status).toBe(400);
@@ -51,6 +74,7 @@ it('uses a purpose-isolated recovery OTP and gives the same request response to 
   jest.spyOn(accounts,'findAccountByEmail').mockImplementation(async email=>email===buyer.account.email?buyer.account:null);
   const known=await request(app).post('/api/auth/password/forgot').send({email:buyer.account.email});
   const unknown=await request(app).post('/api/auth/password/forgot').send({email:'unknown@example.invalid'});expect(known.status).toBe(202);expect(unknown.body).toEqual(known.body);
+  expect(known.body.message).toBe('Revisa tu correo electrónico. Si existe una cuenta asociada a esta dirección, recibirás un código para restablecer tu contraseña.');
   await personal.whenRecoveryIdle();
   const code=mail.sendVerificationCode.mock.calls[0][1];expect(mail.sendVerificationCode.mock.calls[0][2]).toBe('recovery');
   expect((await request(app).post('/api/auth/register/verify').send({email:buyer.account.email,code})).status).toBe(400);

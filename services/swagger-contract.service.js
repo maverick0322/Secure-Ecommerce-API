@@ -178,7 +178,7 @@ function addCatalogOperations(paths) {
     [{ name: 's', in: 'query', type: 'string', maxLength: 255 }], 200, { type: 'array', items: ref('Product') });
   define('/api/products/{id}', 'get', 'Consulta un producto activo.', [id('id')], 200, ref('Product'), [404]);
   define('/api/products', 'post', 'Crea un producto del vendedor autenticado y aprobado.',
-    [body(productBody, ['title', 'price'])], 201, ref('Product'), [409]);
+    [body({...productBody,categoryId:{type:'integer',minimum:1,maximum:2147483647,description:'Categoría activa opcional; se asocia en la misma transacción.'}}, ['title', 'price'])], 201, ref('Product'), [404,409]);
   define('/api/products/{id}', 'put', 'Edita precio, inventario o contenido de un producto propio.',
     [id('id'), body(productBody)], 204, null, [404, 409]);
   define('/api/products/{id}', 'delete', 'Oculta un producto propio mediante borrado lógico.', [id('id')], 204, null, [404]);
@@ -210,7 +210,7 @@ function addAccountOperations(paths) {
   const email = { type: 'string', format: 'email', maxLength: 254 };
   const password = { type: 'string', format: 'password' };
   const newPassword = { ...password, minLength: 8, maxLength: 128,
-    description: '8–128 caracteres Unicode; hasta 512 bytes UTF-8. scrypt versionado, sin truncamiento ni normalización. Compatibilidad bcrypt para cuentas existentes. Lista local de contraseñas comunes.',
+    description: '8–128 caracteres Unicode; al menos una letra, un número y un carácter especial (puntuación o símbolo). No exige mayúsculas. Hasta 512 bytes UTF-8; sin truncamiento ni normalización. scrypt versionado y compatibilidad bcrypt para cuentas existentes.',
     'x-max-utf8-bytes':512 };
   const name = { type: 'string', maxLength: 120 };
   const response = (status, schema) => ({ description: RESPONSE_DESCRIPTIONS[status],
@@ -233,8 +233,8 @@ function addAccountOperations(paths) {
   paths['/api/auth/refresh'].post.parameters[0].schema.additionalProperties = false;
   define('/api/auth/logout','post','Revoca solo la sesión del Bearer RS256 vigente, sin cuerpo ni identificadores ajenos. Access y refresh dejan de funcionar. Repetir con sesión revocada devuelve 401.',[],204,null,[400,429,503]);
   const phoneNumber={type:'string',maxLength:20,'x-nullable':true,pattern:'^\\+?[0-9][0-9 ()-]{5,19}$'};
-  define('/api/auth/register', 'post', 'Valida primero el formulario completo; guarda solo el hash y datos pendientes. SELLER exige storeName; BUYER lo prohíbe. ADMIN prohibido. OTP 6 dígitos, 10 minutos, 5 intentos, reenvío 60 segundos.',
-    [body({email,name,password:newPassword,phoneNumber,storeName:name,profile:{type:'string',enum:['BUYER','SELLER']}},['profile','name','email','password'])], 202, 'VerificationRequested', [400, 429, 503], false);
+  define('/api/auth/register', 'post', 'Valida primero el formulario completo; correo duplicado devuelve 409 sin generar OTP ni enviar correo (enumeración intencional). Guarda solo el hash y datos pendientes. SELLER exige storeName; BUYER lo prohíbe. ADMIN prohibido. OTP 6 dígitos, 10 minutos, 5 intentos, reenvío 60 segundos.',
+    [body({email,name,password:newPassword,phoneNumber,storeName:name,profile:{type:'string',enum:['BUYER','SELLER']}},['profile','name','email','password'])], 202, 'VerificationRequested', [400,409,429,503], false);
   paths['/api/auth/register'].post.parameters[0].schema.additionalProperties=false;
   define('/api/auth/register/verify', 'post', 'Verifica el OTP y crea exclusivamente la identidad y perfil pendientes; no admite modificar formulario ni hashes.',
     [body({ email, code: { type: 'string', pattern: '^\\d{6}$' } }, ['email', 'code'])],

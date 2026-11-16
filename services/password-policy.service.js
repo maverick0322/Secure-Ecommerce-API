@@ -3,21 +3,6 @@
 const MIN_CHARACTERS = 8;
 const MAX_CHARACTERS = 128;
 const MAX_BYTES = 512;
-// Public, deliberately limited offline denylist. No password or digest is sent
-// to a provider. This is not a complete database of compromised passwords.
-const common = new Set([
-  'password', 'passwordpassword', 'password123456789', 'passw0rd', 'p@ssw0rd',
-  'securepassword', 'strongpassword', 'mypassword', 'thisisapassword',
-  'contraseña', 'contrasena', 'contraseñasegura', 'contrasenasegura',
-  'admin', 'administrator', 'administrador', 'administradorseguro',
-  'qwerty', 'qwertyuiop', 'qwertyuiopasdfgh', 'asdfghjkl', 'zxcvbnm',
-  'letmein', 'letmeinletmein', 'iloveyou', 'iloveyouiloveyou', 'welcome',
-  'welcomehome', 'changeme', 'changemepassword', 'default', 'secret',
-  'monkey', 'dragon', 'football', 'baseball', 'superman', 'princess',
-  'abc', 'abcdefgh', '1qaz2wsx', 'qazwsx', 'zaq12wsx', 'trustno1', 'trustno',
-  'sunshine', 'summer', 'winter', 'spring', 'autumn', 'verano', 'invierno',
-  'correcthorsebatterystaple', '123456789012345', '12345678901234567890'
-]);
 
 function validInput(value) {
   return typeof value === 'string' && value.length > 0 && value.length <= 256 && [...value].length<=MAX_CHARACTERS &&
@@ -27,14 +12,9 @@ function validInput(value) {
 
 function acceptable(value) {
   if (!validInput(value) || [...value].length < MIN_CHARACTERS) return false;
-  // Normalize only the denylist comparison; bcrypt always receives the original.
-  const comparable = value.normalize('NFKC').toLowerCase().replace(/[\s_-]/gu, '');
-  const characters = [...comparable];
-  let end = characters.length;
-  while (end > 0 && /^[\p{N}\p{P}\p{S}]$/u.test(characters[end - 1])) end--;
-  const base = characters.slice(0, end).join('');
-  return !common.has(comparable) && !common.has(base) &&
-    new Set(comparable).size >= 5 && !/^(.{1,8})\1+$/u.test(comparable) && !/^\p{N}+$/u.test(comparable);
+  // Test the original string; never trim or normalize password bytes.
+  // Whitespace is permitted but does not count as punctuation/a symbol.
+  return /\p{L}/u.test(value) && /\p{N}/u.test(value) && /[\p{P}\p{S}]/u.test(value);
 }
 
 module.exports = { acceptable, validInput, validBcryptInput:validInput, MIN_CHARACTERS, MAX_CHARACTERS, MAX_BYTES };

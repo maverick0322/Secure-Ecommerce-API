@@ -66,11 +66,11 @@ it('bounds audit work by Unicode characters before copying or redacting large re
   expect(audit.sanitize({reason}).reason).toBe('🙂'.repeat(255));
   expect(audit.sanitize({reason:'.'.repeat(1000000)+'@'}).reason).toBe('.'.repeat(255));
 });
-it('preserves password suffix semantics and never transforms the password passed to bcrypt',()=>{
+it('accepts composition-valid former denylist candidates without transforming their bytes',()=>{
   for(const base of ['password','administrator','qwertyuiop','contrasenasegura']){
     for(const suffix of ['123456789!?','１２３４５６７８９!?','12345678🙂!?']){
       const value=base+suffix;
-      expect(policy.acceptable(value)).toBe(false);
+      expect(policy.acceptable(value)).toBe(true);
     }
   }
   const value='  Brisa y montañas 726!  ';

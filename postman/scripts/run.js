@@ -8,7 +8,7 @@ const accountNames=['admin','buyer','buyerOther','seller','sellerOther'];
 function publicFixture(f){return {runId:f.runId,name:f.name,containerId:f.containerId,database:f.database,
   uuid:f.uuid,port:f.port,deniedUuids:f.deniedUuids,protectedContainerId:f.protectedContainerId};}
 function makeAccounts(runId){return Object.fromEntries(accountNames.map(name=>[name,{
-  id:crypto.randomUUID(),email:name.toLowerCase()+'-'+runId+'@example.invalid',password:crypto.randomBytes(24).toString('base64url')
+  id:crypto.randomUUID(),email:name.toLowerCase()+'-'+runId+'@example.invalid',password:crypto.randomBytes(24).toString('base64url')+'A1!'
 }]));}
 async function freePort(port){
   await new Promise((resolve,reject)=>{const server=net.createServer();server.once('error',()=>reject(Object.assign(new Error('API_PORT_BUSY'),{safe:true})));
@@ -58,8 +58,8 @@ function environmentFor(fixture,accounts,key,port){
   const values={baseUrl:'http://127.0.0.1:'+port,apiPort:String(port),isolationRunId:fixture.runId,
     expectedDatabase:fixture.database,expectedServerUuid:fixture.uuid,isolationKey:key,
     imageFile:'scripts/fixtures/product.png',registrationEmail:'registered-'+fixture.runId+'@example.invalid',
-    registrationPassword:crypto.randomBytes(24).toString('base64url'),unknownEmail:'absent-'+fixture.runId+'@example.invalid',
-    wrongPassword:crypto.randomBytes(24).toString('base64url')};
+    registrationPassword:crypto.randomBytes(24).toString('base64url')+'A1!',unknownEmail:'absent-'+fixture.runId+'@example.invalid',
+    wrongPassword:crypto.randomBytes(24).toString('base64url')+'A1!'};
   for(const [name,a]of Object.entries(accounts)){values[name+'Email']=a.email;values[name+'Password']=a.password;}
   return {id:fixture.runId,name:'LOCAL PRIVATE - '+fixture.runId,_postman_variable_scope:'environment',values:Object.entries(values).map(([key,value])=>({
     key,value,type:/Password$|isolationKey/.test(key)?'secret':'default',enabled:true}))};

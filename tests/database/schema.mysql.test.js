@@ -50,7 +50,7 @@ databaseTests('Migración y contratos con MySQL 8 real', () => {
         ...process.env, TEST_DB_HOST: url.hostname, TEST_DB_PORT: url.port || '3306',
         TEST_DB_USER: decodeURIComponent(url.username), TEST_DB_PASSWORD: decodeURIComponent(url.password),
         TEST_DB_DATABASE: databaseName,
-        LEGACY_SEED_USER_PASSWORD: require('node:crypto').randomBytes(32).toString('hex')
+        LEGACY_SEED_USER_PASSWORD: require('node:crypto').randomBytes(32).toString('hex') + 'Aa1!'
       },
       timeout: 60000, stdio: 'pipe'
     });

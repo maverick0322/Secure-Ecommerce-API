@@ -44,7 +44,7 @@ describe('Contrato HTTP normalizado al inglés', () => {
 
   it('documenta los campos de catálogo administrados por el vendedor', () => {
     const properties = specification.paths['/api/products'].post.parameters[0].schema.properties;
-    expect(Object.keys(properties).sort()).toEqual(['description', 'price', 'stock', 'title']);
+    expect(Object.keys(properties).sort()).toEqual(['categoryId', 'description', 'price', 'stock', 'title']);
     expect(specification.definitions.Product.properties).not.toHaveProperty('fileId');
   });
 

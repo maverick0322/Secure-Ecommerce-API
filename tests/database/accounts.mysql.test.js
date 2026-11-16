@@ -5,7 +5,7 @@ const {performance}=require('node:perf_hooks');
 const {fixtureLifecycle}=require('../support/fixture-lifecycle');
 
 const isolated = process.env.STAGE3A_MYSQL_UUID ? describe : describe.skip;
-const password = 'synthetic-stage3a-password';
+const password = 'synthetic-stage3a-password-7!';
 const adminEmail = 'admin@example.invalid';
 const adminId = '00000000-0000-4000-8000-000000000003';
 
@@ -193,7 +193,8 @@ isolated('Stage 3A isolated MySQL account workflows', () => {
     expect((await accounts.findAccountByEmail(email,true)).passwordHash).toBe(original);
     expect((await own(request(app).get('/api/users/me'))).status).toBe(401);
     jest.restoreAllMocks();jwt=await isolatedAuth.issue(account);
-    const unicode=Array.from({length:128},(_,i)=>String.fromCodePoint(0x400+i)).join('');
+    const unicode=String.fromCodePoint(0x10400,0x1d7d9,0x1f642)+Array.from({length:125},(_,i)=>String.fromCodePoint(0x1f300+i)).join('');
+    expect([...unicode]).toHaveLength(128);expect(Buffer.byteLength(unicode,'utf8')).toBe(512);
     expect((await own(request(app).put('/api/users/me/password')).send({currentPassword:password,newPassword:unicode})).status).toBe(204);
     expect((await own(request(app).get('/api/users/me'))).status).toBe(401);
     const logged=await request(app).post('/api/auth').send({email,password:unicode});expect(logged.status).toBe(200);jwt=logged.body.jwt;

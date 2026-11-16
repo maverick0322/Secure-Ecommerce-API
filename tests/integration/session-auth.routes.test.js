@@ -127,7 +127,7 @@ it('detects reuse and concurrent refresh while preserving an independent session
 });
 it('revokes all current sessions on password change, and permits a new login', async () => {
   const first = (await login(buyer)).body, second = (await login(buyer)).body, administrator = (await login(admin)).body;
-  const nextPassword = crypto.randomBytes(24).toString('base64url');
+  const nextPassword = crypto.randomBytes(24).toString('base64url')+'A1!';
   expect((await request(app).put(`/api/users/${buyer.email}`).set('Authorization', `Bearer ${administrator.jwt}`)
     .send({ password: nextPassword })).status).toBe(204);
   expect((await time(first.jwt)).status).toBe(401); expect((await refresh(second.refreshToken)).status).toBe(401);
@@ -139,7 +139,7 @@ it('fails password mutation closed before SQL writes if Redis revocation is unav
   const revokeAll = jest.fn(async () => { throw new (require('../../services/auth-session-errors').SessionStoreUnavailableError)(); });
   runtime.getRuntime.mockResolvedValue({ ...services, sessions: { ...services.sessions, revokeAll } });
   const response = await request(app).put(`/api/users/${buyer.email}`).set('Authorization', `Bearer ${administrator.jwt}`)
-    .send({ password: crypto.randomBytes(24).toString('base64url') });
+    .send({ password: crypto.randomBytes(24).toString('base64url')+'A1!' });
   expect(response.status).toBe(503); expect(revokeAll).toHaveBeenCalledWith({ userId: buyer.id });
   expect(buyer.update).not.toHaveBeenCalled();
 });

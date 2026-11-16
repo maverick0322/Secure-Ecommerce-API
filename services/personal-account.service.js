@@ -28,6 +28,10 @@ function startRecoveryWorkers(){
 function whenRecoveryIdle(){return recoveryPending.size?new Promise(resolve=>recoveryIdle.push(resolve)):Promise.resolve();}
 async function beginRegistration(body){
   const form=await input.registration(body),{password,...data}=form;
+  // Include soft-deleted accounts: their email is still protected by UNIQUE.
+  if(await db.User.findOne({where:{email:data.email},paranoid:false})){
+    throw new accounts.AccountError(409,'El correo electrónico ya está registrado.');
+  }
   const pending=Object.freeze({...data,passwordHash:await hashes.hash(password)});
   await otp.issue(pending.email,pending,'registration');
 }

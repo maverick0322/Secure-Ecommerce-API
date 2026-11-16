@@ -28,3 +28,14 @@ it('restricts category administration and validates the name', async () => {
   expect((await request(app).delete('/api/categories/2').set('Authorization', header(admin))).status).toBe(204);
   expect(write).toHaveBeenLastCalledWith(expect.any(Object), 2, undefined, true,{ipAddress:expect.any(String)});
 });
+
+it('preserves UTF-8 input and output without replacing accented characters',async()=>{
+  const write=jest.spyOn(catalog,'mutateCategory').mockResolvedValue({id:3,name:'Electrónica',protected:false});
+  const result=await request(app).post('/api/categories').set('Authorization',header(admin))
+    .set('Content-Type','application/json; charset=utf-8').send(JSON.stringify({name:'Electrónica'}));
+  expect(result.status).toBe(201);expect(result.body.name).toBe('Electrónica');
+  expect(write).toHaveBeenCalledWith(expect.any(Object),null,'Electrónica',false,expect.any(Object));
+  jest.spyOn(Category,'findAll').mockResolvedValue([{id:3,name:'Electrónica',protected:false}]);
+  const listed=await request(app).get('/api/categories').set('Authorization',header(buyer));
+  expect(listed.body[0].name).toBe('Electrónica');expect(listed.headers['content-type']).toContain('charset=utf-8');
+});

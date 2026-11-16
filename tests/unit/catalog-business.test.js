@@ -48,6 +48,28 @@ it('requires an existing category and propagates transactional audit failures',a
   audit.business.mockRejectedValue(new Error('Synthetic audit failure'));
   await expect(catalog.removeProduct({id:'seller'},1)).rejects.toThrow('Synthetic audit failure');
 });
+
+it('creates the optional association and audit using the same transaction',async()=>{
+  const insert=jest.spyOn(db.sequelize.getQueryInterface(),'bulkInsert').mockResolvedValue();
+  const result=await catalog.createProduct({id:'seller'},{title:'Fixture',price:'1.00',categoryId:2});
+  expect(db.Category.findByPk).toHaveBeenCalledWith(2,{transaction:tx,lock:tx.LOCK.UPDATE});
+  expect(db.Product.create).toHaveBeenCalledWith({title:'Fixture',price:'1.00',sellerId:'seller'},{transaction:tx});
+  expect(insert).toHaveBeenCalledWith('product_categories',[expect.objectContaining({productId:1,categoryId:2})],{transaction:tx},db.ProductCategory.rawAttributes);
+  expect(result.categories).toEqual([category]);
+  expect(audit.business).toHaveBeenCalledWith('seller','producto.crear','product',1,tx,{});
+});
+it.each([null,{id:2,deletedAt:new Date()}])('does not create a product for an unavailable category %#',async missing=>{
+  db.Category.findByPk.mockResolvedValue(missing);
+  await expect(catalog.createProduct({id:'seller'},{price:'1.00',categoryId:2})).rejects.toMatchObject({status:404});
+  expect(db.Product.create).not.toHaveBeenCalled();expect(audit.business).not.toHaveBeenCalled();
+});
+it('propagates association and audit failures to the transaction owner',async()=>{
+  const insert=jest.spyOn(db.sequelize.getQueryInterface(),'bulkInsert').mockRejectedValue(new Error('association failure'));
+  await expect(catalog.createProduct({id:'seller'},{price:'1.00',categoryId:2})).rejects.toThrow('association failure');
+  expect(audit.business).not.toHaveBeenCalled();
+  insert.mockResolvedValue();audit.business.mockRejectedValue(new Error('audit failure'));
+  await expect(catalog.createProduct({id:'seller'},{price:'1.00',categoryId:2})).rejects.toThrow('audit failure');
+});
 it('keeps admin-only category mutations, uniqueness and protected-category policy',async()=>{
   await catalog.mutateCategory({id:'admin'},null,'New category');
   expect(db.Category.create).toHaveBeenCalledWith({name:'New category',protected:false},{transaction:tx});

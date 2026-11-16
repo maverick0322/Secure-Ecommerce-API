@@ -51,7 +51,17 @@ it('returns a generic error for a database failure', async () => {
   expect(response.text).not.toContain('sensitive');
 });
 
+it('keeps login working with a historical password missing the new composition requirements',async()=>{
+  const password='historical lowercase password';
+  const account=makeAccount('BUYER',{passwordHash:await bcrypt.hash(password,4)});
+  const findOne=jest.fn().mockResolvedValue(account);
+  jest.spyOn(User,'unscoped').mockReturnValue({findOne,findByPk:async()=>account});
+  const result=await request(app).post('/api/auth').send({email:account.email,password});
+  expect(result.status).toBe(200);expect(result.body.jwt).toEqual(expect.any(String));
+});
+
 it('sends the code privately and creates only once, after validation', async () => {
+  jest.spyOn(User,'findOne').mockResolvedValue(null);
   const email = 'register@example.invalid';
   const send = jest.spyOn(mailer, 'sendVerificationCode').mockResolvedValue();
   const create = jest.spyOn(accounts, 'createVerifiedRegistration').mockResolvedValue({ email, profile: 'SELLER', sellerStatus: 'PENDING' });
