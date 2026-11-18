@@ -93,6 +93,7 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
   const fs=require('node:fs/promises');const filesPath=require('node:path');const os=require('node:os');
   const directory=await fs.mkdtemp(filesPath.join(os.tmpdir(),'security-images-'));
   const oldDirectory=process.env.CLOUDINARY_CLEANUP_DIR;
+  const oldCloudName=process.env.CLOUDINARY_CLOUD_NAME;
   const originalCloud={credentials:cloud.credentials,upload:cloud.upload,inspect:cloud.inspect,destroy:cloud.destroy};
   const remote=new Map();process.env.CLOUDINARY_CLEANUP_DIR=directory;
   cloud.credentials=()=>({});
@@ -102,6 +103,8 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
   };
   cloud.inspect=async id=>remote.get(id)||null;cloud.destroy=async id=>{remote.delete(id);};
   try{
+    // Ownership and upload-response validation use the cloud name even with a mocked SDK.
+    process.env.CLOUDINARY_CLOUD_NAME='synthetic-cloud';
     const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGPUaLrDwMDAxAAGABG+AYoOO5YVAAAAAElFTkSuQmCC','base64');
     const upload=()=>merchant(request(app).put(`/api/products/${productId}/image`)).attach('image',png,'synthetic.png');
     await rollback('producto.imagen',upload,'SELECT imagePublicId FROM products WHERE id=?',[productId]);
@@ -114,6 +117,7 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
     assert.equal(remote.size,0);
   }finally{
     Object.assign(cloud,originalCloud);
+    if(oldCloudName===undefined)delete process.env.CLOUDINARY_CLOUD_NAME;else process.env.CLOUDINARY_CLOUD_NAME=oldCloudName;
     if(oldDirectory===undefined)delete process.env.CLOUDINARY_CLEANUP_DIR;else process.env.CLOUDINARY_CLEANUP_DIR=oldDirectory;
     for(const file of await fs.readdir(directory))await fs.unlink(filesPath.join(directory,file));await fs.rmdir(directory);
   }
