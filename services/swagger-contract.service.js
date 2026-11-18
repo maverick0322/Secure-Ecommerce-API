@@ -2,7 +2,7 @@ const RESPONSE_DESCRIPTIONS = {
   200: 'Solicitud procesada correctamente.', 201: 'Recurso creado correctamente.', 202: 'Solicitud recibida.',
   204: 'Solicitud procesada sin contenido de respuesta.', 400: 'Solicitud inválida.',
   401: 'Autenticación requerida o credenciales inválidas.', 403: 'Acceso prohibido.',
-  404: 'Recurso no encontrado.', 409: 'Conflicto con el estado del recurso.', 410: 'Operación histórica retirada.',
+  404: 'Recurso no encontrado.', 408: 'Tiempo de recepción agotado.', 409: 'Conflicto con el estado del recurso.', 410: 'Operación histórica retirada.',
   413: 'La imagen supera el tamaño permitido.', 429: 'Límite de solicitudes alcanzado.',
   500: 'No se ha podido procesar la petición.', 502: 'Fallo del proveedor de imágenes.', 503: 'Servicio temporalmente no disponible.'
 };
@@ -186,11 +186,12 @@ function addCatalogOperations(paths) {
     [id('id'), body({ categoryId: { type: 'integer', minimum: 1 } }, ['categoryId'])], 204, null, [404, 409]);
   define('/api/products/{id}/categories/{categoryId}', 'delete', 'Desasocia lógicamente una categoría.',
     [id('id'), id('categoryId')], 204, null, [404]);
-  define('/api/products/{id}/image', 'put', 'Reemplaza la imagen de un producto propio. JPEG, PNG o WebP, hasta 2 MB.',
+  define('/api/products/{id}/image', 'put', 'Reemplaza la imagen de un producto propio. JPEG, PNG o WebP estático; hasta 2 MiB, 4096 píxeles por lado y 8 millones de píxeles. Se valida y recodifica sin metadatos EXIF/GPS. La imagen normalizada también debe caber en 2 MiB.',
     [id('id'), { name: 'image', in: 'formData', type: 'file', required: true }], 200,
-    { type: 'object', properties: { productId: { type: 'integer' }, imagePublicId: { type: 'string' }, imageUrl: { type: 'string', format: 'uri' } } }, [404, 409, 413, 502, 503]);
+    { type: 'object', properties: { productId: { type: 'integer' }, imagePublicId: { type: 'string' }, imageUrl: { type: 'string', format: 'uri' } } }, [404, 408, 409, 413, 429, 502, 503]);
+  paths['/api/products/{id}/image'].put.responses[429].headers = { 'Retry-After': { type: 'integer', description: 'Segundos antes de reintentar.' } };
   paths['/api/products/{id}/image'].put.consumes = ['multipart/form-data'];
-  define('/api/products/{id}/image', 'delete', 'Retira la referencia de imagen y programa su limpieza segura.', [id('id')], 204, null, [404]);
+  define('/api/products/{id}/image', 'delete', 'Retira la referencia de imagen y programa su limpieza segura.', [id('id')], 204, null, [404, 503]);
   define('/api/categories', 'get', 'Lista categorías activas.', [], 200, { type: 'array', items: ref('Category') });
   define('/api/categories/{id}', 'get', 'Consulta una categoría activa.', [id('id')], 200, ref('Category'), [404]);
   const category = body({ name: { type: 'string', minLength: 1, maxLength: 120 } }, ['name']);

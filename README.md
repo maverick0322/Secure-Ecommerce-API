@@ -78,6 +78,12 @@ En `feature/secure-ecommerce-db` consulte el [reporte de implementación de `sec
 
 El código de cuentas y catálogo requiere las 14 tablas definitivas. El catálogo usa Cloudinary y las variables `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` y `CLOUDINARY_API_SECRET`. El directorio persistente `log/cloudinary` conserva las limpiezas de imágenes pendientes. Las nuevas cargas se realizan en `PUT /api/products/:id/image` con una sola imagen JPEG, PNG o WebP de hasta 2 MB.
 
+Imágenes, fase 3A: [identidad de entornos, cierre durable y límites de recuperación](docs/security/cloudinary-stage3a.md). Conserve `.ownership.json` junto al diario. Los recursos históricos y las operaciones abandonadas sin resultado conocido no se eliminan automáticamente. No mezcle recuperadores de distintas versiones ni comparta la identidad entre entornos.
+
+Imágenes, fase 3B: [reintentos acotados y admisión con Redis](docs/security/cloudinary-stage3b.md). Las cargas tienen cuotas por vendedor/globales antes de Multer y requieren Redis disponible. Los pendientes inciertos se conservan para revisión al agotar el presupuesto; nunca se borran por antigüedad. Resultados: [informe de 3B](tests/security/images-phase3b-report.md).
+
+Imágenes, fase 3C: [integridad, normalización y contrato del proveedor](docs/security/cloudinary-stage3c.md). JPEG/PNG/WebP estáticos, hasta 2 MiB, 4096 píxeles por lado y 8 millones de píxeles; las cargas nuevas se recodifican sin EXIF/GPS. Requiere Node >=20.9.0 por sharp 0.35.5. No cambia imágenes históricas. Resultados: [informe 3C](tests/security/images-phase3c-report.md).
+
 El backend usa rutas y campos en inglés y mantiene los mensajes en español. El cambio de contrato requiere adaptar el frontend por separado: no se ofrecen alias de las rutas antiguas. Consulte el [mapa de renombres, despliegue y resultados](docs/backend-english-names.md) y los [ejemplos HTTP](examples/api.http).
 
 Para normalizar el esquema anterior en una instalación independiente, detenga la API, respalde sus datos y use `npm run migrate -- --to 20261108000001-normalize-english-schema.js`. Las siete migraciones históricas se conservan intactas y la normalización renombra tablas y columnas sin reiniciar la base. Conserve las entradas de `SequelizeMeta`. Los seeders anteriores completan registros faltantes y preservan las contraseñas existentes.

@@ -5,7 +5,7 @@ const {writeSync}=require('node:fs');
 const {isUuid}=require('../validators/uuid');
 const context=new AsyncLocalStorage();
 const events=new Set(['http.request','logging.failed','audit.write.failed','api.started','api.start.failed',
-  'image.cleanup.pending','image.cleanup.invalid','image.recovery.failed','gmail.reauthorization.required','auth.recovery.delivery.failed']);
+  'image.cleanup.pending','image.cleanup.invalid','image.recovery.failed','image.recovery.cycle','gmail.reauthorization.required','auth.recovery.delivery.failed']);
 
 // Allowlisted metadata only: never serialize a request, response or Error.
 function createLogger({sink,fallback}={}) {
@@ -42,6 +42,10 @@ function createLogger({sink,fallback}={}) {
         entry.completed=data.completed===true;
         if(!entry.completed||entry.statusCode>=500)entry.level='error';
         else if(entry.statusCode>=400)entry.level='warn';
+      } else if(event==='image.recovery.cycle') {
+        for(const key of ['processed','deferred','manual','invalid','failed']) {
+          if(Number.isSafeInteger(data[key])&&data[key]>=0)entry[key]=data[key];
+        }
       } else if(event==='audit.write.failed') {
         entry.action=typeof data.action==='string'&&/^[\w.-]{1,80}$/.test(data.action)?data.action:'unknown';
         entry.transactional=data.transactional===true;

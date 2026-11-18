@@ -26,3 +26,14 @@ it('preserves conflict and safe error responses',async()=>{
   transition.mockRejectedValue({original:{errno:1213}});expect((await send()).status).toBe(409);
   transition.mockRejectedValue(new Error('private database diagnostics'));const result=await send();expect(result.status).toBe(500);expect(result.text).not.toContain('private');
 });
+
+it('preserves a Unicode cancellation reason and returns Unicode history through GET',async()=>{
+  const reason='Cancelación: niño, envío a Peña 🙂 e\u0301';
+  const transition=jest.spyOn(orders,'transition').mockResolvedValue({id:'7',status:'CANCELED'});
+  const result=await request(app).put('/api/orders/7/status').set('Authorization','Bearer '+buyer.token)
+    .set('Content-Type','application/json; charset=utf-8').send(JSON.stringify({status:'CANCELED',reason}));
+  expect(result.status).toBe(200);expect(transition).toHaveBeenCalledWith(expect.any(Object),'7',{status:'CANCELED',reason},expect.any(String));
+  jest.spyOn(orders,'get').mockResolvedValue({id:'7',status:'CANCELED',history:[{reason}]});
+  const history=await request(app).get('/api/orders/7').set('Authorization','Bearer '+buyer.token);
+  expect(history.body.history[0].reason).toBe(reason);expect(history.headers['content-type']).toContain('charset=utf-8');
+});

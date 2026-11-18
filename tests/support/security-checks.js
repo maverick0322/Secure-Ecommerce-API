@@ -96,16 +96,16 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
   const originalCloud={credentials:cloud.credentials,upload:cloud.upload,inspect:cloud.inspect,destroy:cloud.destroy};
   const remote=new Map();process.env.CLOUDINARY_CLEANUP_DIR=directory;
   cloud.credentials=()=>({});
-  cloud.upload=async(buffer,publicId,id)=>{
-    remote.set(publicId,{context:{custom:{catalog_owner:'secure-ecommerce-api',product_id:String(id)}}});
-    return {public_id:publicId,format:'png'};
+  cloud.upload=async(buffer,publicId,id,scope)=>{
+    remote.set(publicId,{context:{custom:require('../../services/image-ownership.service').context(scope,id)}});
+    return require('./image-phase2-fixture').uploadResult(publicId,'png',scope,id);
   };
   cloud.inspect=async id=>remote.get(id)||null;cloud.destroy=async id=>{remote.delete(id);};
   try{
-    const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64');
+    const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGPUaLrDwMDAxAAGABG+AYoOO5YVAAAAAElFTkSuQmCC','base64');
     const upload=()=>merchant(request(app).put(`/api/products/${productId}/image`)).attach('image',png,'synthetic.png');
     await rollback('producto.imagen',upload,'SELECT imagePublicId FROM products WHERE id=?',[productId]);
-    assert.equal(remote.size,0);assert.equal((await fs.readdir(directory)).length,0);
+    assert.equal(remote.size,0);assert.equal((await fs.readdir(directory)).filter(name=>name!=='.ownership.json').length,0);
     assert.equal((await upload()).status,200);assert.equal(remote.size,1);
     await rollback('producto.imagen.retirar',()=>merchant(request(app).delete(`/api/products/${productId}/image`)),
       'SELECT imagePublicId FROM products WHERE id=?',[productId]);
@@ -115,7 +115,7 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
   }finally{
     Object.assign(cloud,originalCloud);
     if(oldDirectory===undefined)delete process.env.CLOUDINARY_CLEANUP_DIR;else process.env.CLOUDINARY_CLEANUP_DIR=oldDirectory;
-    for(const file of await fs.readdir(directory))await fs.unlink(path.join(directory,file));await fs.rmdir(directory);
+    for(const file of await fs.readdir(directory))await fs.unlink(filesPath.join(directory,file));await fs.rmdir(directory);
   }
 
   // SQL password/audit remains atomic; Redis revocation is never rolled back.

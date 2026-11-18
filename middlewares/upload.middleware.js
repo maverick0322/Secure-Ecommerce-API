@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('node:path');
 const { AccountError, respondError } = require('../services/accounts.service');
+const validation = require('../services/image-validation.service');
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const types = { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] };
@@ -19,17 +20,36 @@ function detectedType(buffer) {
   return null;
 }
 
-function validateImage(req, res, next) {
+async function validateImage(req, res, next) {
   if (!req.file || detectedType(req.file.buffer) !== req.file.mimetype) {
+    req.file = undefined;
     return respondError(res, new AccountError(400, 'El contenido no corresponde a una imagen permitida.'));
   }
-  return next();
+  const cancellation = new AbortController();
+  const abort = () => cancellation.abort();
+  res.once('close', abort);
+  try {
+    const format = { 'image/jpeg':'jpeg','image/png':'png','image/webp':'webp' }[req.file.mimetype];
+    const result = await validation.normalize(req.file.buffer, format, cancellation.signal);
+    if (res.destroyed || req.aborted) return;
+    req.file.buffer = result.buffer; req.file.size = result.buffer.length;
+    req.imageInfo = { format: result.format === 'jpeg' ? 'jpg' : result.format, width:result.width, height:result.height };
+    return next();
+  } catch (error) {
+    req.file = undefined;
+    if (res.destroyed || req.aborted) return;
+    if (error.status === 429) res.set('Retry-After',String(error.retryAfter));
+    return respondError(res,error);
+  } finally {res.removeListener('close',abort);}
 }
 
 function uploadErrorHandler(error, req, res, next) {
   if (!error) return next();
+  req.file = undefined;
   if (error instanceof multer.MulterError) return respondError(res, new AccountError(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400,
     'Envíe una sola imagen de hasta 2 MB en el campo image.'));
+  if (['Unexpected end of form','Unexpected end of file','Malformed part header','Multipart: Boundary not found',
+    'Malformed content type'].includes(error.message) || req.aborted) return respondError(res,new AccountError(400,'Solicitud multipart inválida.'));
   return respondError(res, error);
 }
 

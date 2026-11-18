@@ -14,8 +14,9 @@ module.exports=async function cancellationChecks({root,models,app,isolatedAuth,e
     return {id,header:'Bearer '+await isolatedAuth.issue({id})};
   }
   const buyer=await account('BUYER'),other=await account('BUYER'),seller=await account('SELLER'),secondSeller=await account('SELLER'),admin=await account('ADMIN');
-  const groups=[];const snapshot={recipientName:'Synthetic owner',street:'Original street',exteriorNumber:'1',interiorNumber:null,neighborhood:'Test',city:'City',state:'State',postalCode:'01000',country:'MX'};
-  const change=(id,actor,status='CANCELED',reason='Synthetic cancellation')=>request(app).put('/api/orders/'+id+'/status').set('Authorization',actor.header).send({status,...(reason===undefined?{}:{reason})});
+  const groups=[];const snapshot={recipientName:'María Muñoz 🙂',street:'Peña y José',exteriorNumber:'1',interiorNumber:null,neighborhood:'Niños Héroes',city:'Mérida',state:'Yucatán',postalCode:'01000',country:'MX'};
+  const cancellationReason='Cancelación: niño y envío a Peña 🙂 e\u0301';
+  const change=(id,actor,status='CANCELED',reason=cancellationReason)=>request(app).put('/api/orders/'+id+'/status').set('Authorization',actor.header).send({status,...(reason===undefined?{}:{reason})});
   async function fixture({status='PENDING',quantities=[2,3],stocks=[7,11]}={}){
     const products=[];
     for(let i=0;i<quantities.length;i++)products.push(await models.Product.create({sellerId:seller.id,title:'Original product '+i,price:'2.50',stock:stocks[i]}));
@@ -37,6 +38,9 @@ module.exports=async function cancellationChecks({root,models,app,isolatedAuth,e
     const f=await fixture({status}),before=await state(f);assert.equal((await change(f.order.id,actor)).status,200);const after=await state(f);
     assert.equal(after.order[0].status,'CANCELED');assert.equal(after.order[0].total,before.order[0].total);assert.deepEqual(after.order[0].deliveryAddressSnapshot,before.order[0].deliveryAddressSnapshot);assert.deepEqual(after.items,before.items);
     assert.deepEqual(after.products.map(p=>p.stock),[9,14]);assert.equal(after.history.length,before.history.length+1);assert.equal(after.audit.length,before.audit.length+1);
+    assert.equal(after.history.at(-1).reason,cancellationReason);
+    const [[encoded]]=await root.query('SELECT HEX(reason) AS bytes FROM order_status_history WHERE id=?',[after.history.at(-1).id]);assert.equal(encoded.bytes,Buffer.from(cancellationReason,'utf8').toString('hex').toUpperCase());
+    const read=await request(app).get('/api/orders/'+f.order.id).set('Authorization',actor.header);assert.equal(read.status,200);assert.equal(read.body.history.at(-1).reason,cancellationReason);
     assert.equal((await change(f.order.id,actor)).status,409);assert.deepEqual(await state(f),after);
   }groups.push('buyer/seller/admin permissions, PENDING/PREPARING, exact multi-product restock and replay 409');
   {
@@ -68,7 +72,13 @@ module.exports=async function cancellationChecks({root,models,app,isolatedAuth,e
     try{assert.equal((await change(f.order.id,admin)).status,failure==='overflow'?409:500);}finally{undo();}
     assert.deepEqual(await state(f),before);
   }groups.push('overflow and inventory/history/audit failures roll back every table');
-  async function address(actor){const r=await request(app).post('/api/addresses').set('Authorization',actor.header).send(snapshot);assert.equal(r.status,201);return r.body.id;}
+  async function address(actor){
+    const r=await request(app).post('/api/addresses').set('Authorization',actor.header).send(snapshot);assert.equal(r.status,201);
+    const listed=await request(app).get('/api/addresses').set('Authorization',actor.header);assert.equal(listed.status,200);const value=listed.body.find(row=>String(row.id)===String(r.body.id));
+    for(const key of ['recipientName','street','neighborhood','city','state'])assert.equal(value[key],snapshot[key]);
+    const [[stored]]=await root.query('SELECT recipientName,HEX(recipientName) AS bytes,street,city FROM user_addresses WHERE id=?',[r.body.id]);assert.equal(stored.recipientName,snapshot.recipientName);assert.equal(stored.bytes,Buffer.from(snapshot.recipientName,'utf8').toString('hex').toUpperCase());assert.equal(stored.street,snapshot.street);assert.equal(stored.city,snapshot.city);
+    return r.body.id;
+  }
   async function quote(actor,addressId,lines){
     for(const [productId,quantity] of lines)assert.equal((await request(app).post('/api/cart/items').set('Authorization',actor.header).send({productId,quantity})).status,200);
     const result=await request(app).post('/api/checkout/quote').set('Authorization',actor.header).send({addressId:String(addressId)});assert.equal(result.status,200);return result.body.quote;

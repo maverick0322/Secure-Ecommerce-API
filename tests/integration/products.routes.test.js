@@ -9,7 +9,7 @@ const { tokenFor, mockAccountLookups } = require('../support/auth-fixtures');
 const seller = tokenFor('SELLER', { seller: { status: 'APPROVED' } });
 const buyer = tokenFor('BUYER');
 const admin = tokenFor('ADMIN');
-const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGPUaLrDwMDAxAAGABG+AYoOO5YVAAAAAElFTkSuQmCC', 'base64');
 const header = fixture => `Bearer ${fixture.token}`;
 const sample = { id: 1, sellerId: seller.account.id, title: 'Fixture', description: null, price: '12.50', stock: 2, imagePublicId: null };
 
@@ -90,6 +90,8 @@ it('uploads one image after checking ownership and exposes only a public identif
   const result = await request(app).put('/api/products/1/image').set('Authorization', header(seller)).attach('image', png, 'fixture.png');
   expect(result.status).toBe(200);
   expect(owner).toHaveBeenCalledWith(1, seller.account.id);
-  expect(replace).toHaveBeenCalledWith(expect.objectContaining({ id: seller.account.id }), 1, png,{ipAddress:expect.any(String)});
+  expect(replace).toHaveBeenCalledWith(expect.objectContaining({ id: seller.account.id }), 1, expect.any(Buffer),
+    {ipAddress:expect.any(String), imagePermit:expect.objectContaining({check:expect.any(Function),release:expect.any(Function)}),
+      imageInfo:{format:'png',width:2,height:2}});
   expect(result.body).toEqual({ productId: 1, imagePublicId: 'managed-image', imageUrl: 'https://example.invalid/image' });
 });

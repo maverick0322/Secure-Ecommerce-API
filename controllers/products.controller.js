@@ -64,12 +64,14 @@ async function checkImageOwner(req, res, next) {
 }
 
 async function replaceImage(req, res) {
+  req.imageProcessing = true;
   try {
     if (!req.file || Object.keys(req.body || {}).length) throw new AccountError(400, 'Envíe únicamente una imagen en el campo image.');
     const id = catalog.positiveId(req.params.id);
-    const imagePublicId = await images.replace(req.account, id, req.file.buffer, {ipAddress:req.ip});
+    const imagePublicId = await images.replace(req.account, id, req.file.buffer, {ipAddress:req.ip, imagePermit: req.imagePermit, imageInfo: req.imageInfo});
     return res.json({ productId: id, imagePublicId, imageUrl: cloud.deliveryUrl(imagePublicId) });
   } catch (error) { return catalog.catalogError(res, error); }
+  finally { await req.imagePermit?.release().catch(() => {}); req.file = undefined; }
 }
 
 async function removeImage(req, res) {

@@ -20,7 +20,7 @@ async function start({ applicationRoot, poolFactory, onTiming=()=>{} } = {}) {
   let done, ready, rejectReady, handle;
   const opened = new Promise((resolve, reject) => { ready = resolve; rejectReady = reject; });
   const stop = new Promise(resolve => { done = resolve; });
-  const run = require('../../scripts/database/stage2-redis-test').withRedisFixture(async ({ config, assertOwned }) => {
+  const run = require('../../scripts/database/stage2-redis-test').withRedisFixture(async ({ config, assertOwned, admin }) => {
     assertOwned();
     onTiming('redis-fixture-ready',performance.now()-started);
     assert(config.namespace.startsWith('secure-ecommerce-auth-test-'));
@@ -31,10 +31,14 @@ async function start({ applicationRoot, poolFactory, onTiming=()=>{} } = {}) {
     const originals = { getTokens: targetRuntime.getTokens, getRuntime: targetRuntime.getRuntime };
     try {
       const connectStart=performance.now();
-      await store.connect(); const services = { ...cryptoServices, sessions: createSessionService(store) };
+      await store.connect(); const services = { ...cryptoServices, sessions: createSessionService(store),
+        imageLimits: require('../../services/image-limits.service').createImageLimits(store) };
       onTiming('redis-connect',performance.now()-connectStart);
       targetRuntime.getTokens = () => services.tokens; targetRuntime.getRuntime = async () => services;
-      handle = { ...services, config, async issue(account) {
+      handle = { ...services, config, async resetImageAdmission() {
+        assertOwned();
+        await admin.del(store.prefix + 'image-admission');
+      }, async issue(account) {
         const accounts = applicationRoot ? require(require('node:path').join(applicationRoot, 'services/accounts.service')) : require('../../services/accounts.service');
         const full = await accounts.findAccountById(account.id, { withPassword: true });
         const session = await services.sessions.create({ userId: full.id, credentialVersion: services.versions.derive(full.passwordHash) });
