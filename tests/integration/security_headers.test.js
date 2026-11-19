@@ -103,4 +103,20 @@ describe('Pruebas de Integración: Cabeceras de Seguridad y Enrutamiento Base', 
   it('CORS: rechaza comodín * al arrancar', () => {
     expect(() => loadAppWithEnv({ CORS_ORIGIN: '*' })).toThrow(/wildcard access is forbidden/i);
   });
+
+  it('SEC-06: /swagger responde 404 cuando NODE_ENV === production', async () => {
+    const prodApp = loadAppWithEnv({ NODE_ENV: 'production', CORS_ORIGIN: '' });
+    const res = await request(prodApp).get('/swagger');
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ message: 'Recurso no encontrado' });
+
+    const resSlash = await request(prodApp).get('/swagger/');
+    expect(resSlash.statusCode).toBe(404);
+  });
+
+  it('SEC-06: /swagger permanece disponible cuando NODE_ENV !== production', async () => {
+    const devApp = loadAppWithEnv({ NODE_ENV: 'development', CORS_ORIGIN: '' });
+    const res = await request(devApp).get('/swagger/');
+    expect([200, 503]).toContain(res.statusCode);
+  });
 });

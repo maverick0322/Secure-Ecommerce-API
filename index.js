@@ -79,19 +79,21 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// 5. Documentación OpenAPI / Swagger
-const swaggerFilePath = path.resolve(__dirname, './swagger-output.json');
-if (fs.existsSync(swaggerFilePath)) {
-  const swaggerUi = require('swagger-ui-express');
-  const swaggerFile = require(swaggerFilePath);
-  app.use('/swagger', swaggerUi.serve, swaggerUi.setup(swaggerFile));
-} else {
-  // Manejo resiliente: si aún no se ha ejecutado 'npm run swagger', no derribar la aplicación
-  app.get('/swagger', (req, res) => {
-    res.status(503).json({
-      message: 'La especificación Swagger aún no ha sido generada. Ejecute: npm run swagger'
+// 5. Documentación OpenAPI / Swagger (solo disponible fuera de producción, SEC-06 / CWE-200)
+if (process.env.NODE_ENV !== 'production') {
+  const swaggerFilePath = path.resolve(__dirname, './swagger-output.json');
+  if (fs.existsSync(swaggerFilePath)) {
+    const swaggerUi = require('swagger-ui-express');
+    const swaggerFile = require(swaggerFilePath);
+    app.use('/swagger', swaggerUi.serve, swaggerUi.setup(swaggerFile));
+  } else {
+    // Manejo resiliente: si aún no se ha ejecutado 'npm run swagger', no derribar la aplicación
+    app.get('/swagger', (req, res) => {
+      res.status(503).json({
+        message: 'La especificación Swagger aún no ha sido generada. Ejecute: npm run swagger'
+      });
     });
-  });
+  }
 }
 
 // 6. Middleware global de bitácora y auditoría
