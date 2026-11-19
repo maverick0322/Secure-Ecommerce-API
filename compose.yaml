@@ -8,13 +8,32 @@ services:
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-}
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
       MYSQL_ROOT_HOST: localhost
-    ports:
-      - "127.0.0.1:3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./bd.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+      - /var/run/mysqld:rw,noexec,nosuid,size=16m
+    secrets:
+      - db_root_password
+    networks:
+      - backend_internal
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    mem_limit: 1g
+    cpus: 1.5
+    pids_limit: 256
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "--host=127.0.0.1", "--user=mysql_healthcheck", "--silent"]
       interval: 10s
@@ -29,26 +48,27 @@ services:
     container_name: ecommerce_api
     restart: unless-stopped
     ports:
-      - "${SERVER_PORT:-3000}:3000"
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${SERVER_PORT:-3000}:3000"
     environment:
       - DB_HOST=${DOCKER_DB_HOST:-db}
       - DB_PORT=${DOCKER_DB_PORT:-3306}
       - DB_DATABASE=${DB_DATABASE:-secure_ecommerce}
       - DB_USER=${DB_USER:-ecommerce_app}
-      - DB_PASSWORD=${DB_PASSWORD:-}
+      - DB_PASSWORD_FILE=/run/secrets/db_password
       - DB_EXPECTED_UUID=${DB_EXPECTED_UUID:-}
       - SERVER_PORT=${SERVER_PORT:-3000}
       - SERVER_HOST=0.0.0.0
       - NODE_ENV=${NODE_ENV:-development}
-      - JWT_SECRET=${JWT_SECRET:-}
+      - TRUST_PROXY=${TRUST_PROXY:-false}
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
       - GMAIL_CLIENT_PATH=/run/secrets/gmail_client
       - GMAIL_TOKEN_PATH=/run/secrets/gmail_token
       - GMAIL_SENDER_EMAIL=${GMAIL_SENDER_EMAIL:-}
       - GMAIL_REDIRECT_URI=http://localhost:3001/oauth2/callback
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
-      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8080,http://localhost:8081}
+      - CLOUDINARY_API_SECRET_FILE=/run/secrets/cloudinary_api_secret
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
       - FILES_IN_DB=${FILES_IN_DB:-false}
       # RS256/session infrastructure; provision protected files before activating this API.
       - JWT_RS256_ISSUER=${JWT_RS256_ISSUER:-secure-ecommerce-api/access-v2}
@@ -66,11 +86,14 @@ services:
       - AUTH_REDIS_CA_PATH=/run/secrets/redis_ca
       - AUTH_REDIS_STATE_PATH=/run/redis-state/state.json
       - NODE_EXTRA_CA_CERTS=/run/secrets/redis_ca
-    command: ["sh", "-ec", ': "$${JWT_SECRET:?Set JWT_SECRET for the API}"; exec node index.js']
+    command: ["node", "index.js"]
     depends_on:
       db:
         condition: service_healthy
-        required: false
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
     volumes:
       - ./uploads:/usr/src/app/uploads
       - ./log:/usr/src/app/log
@@ -86,7 +109,12 @@ services:
         read_only: true
         bind:
           create_host_path: false
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     secrets:
+      - db_password
+      - jwt_secret
+      - cloudinary_api_secret
       - redis_app_password
       - redis_ca
       - access_private_key
@@ -95,17 +123,29 @@ services:
       - gmail_client
       - gmail_token
     networks:
-      - default
-      - redis_private
+      - app_edge
+      - backend_internal
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   redis:
     image: redis:8.2
     restart: unless-stopped
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
-    ports:
-      - "127.0.0.1:6380:6379"
     networks:
-      - redis_private
+      - backend_internal
     volumes:
       - redis_data:/data
       - type: bind
@@ -114,33 +154,49 @@ services:
         read_only: true
         bind:
           create_host_path: false
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
     secrets:
       - redis_acl
       - redis_health_password
       - redis_ca
       - redis_server_cert
       - redis_server_key
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
     healthcheck:
       test: ["CMD-SHELL", 'REDISCLI_AUTH="$$(cat /run/secrets/redis_health_password)" redis-cli --tls --cacert /run/secrets/redis_ca -h 127.0.0.1 -p 6379 --user redis_health ping | grep -qx PONG']
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
-    mem_limit: 256m
-    security_opt:
-      - no-new-privileges:true
 
 volumes:
   mysql_data:
   redis_data:
 
 networks:
-  redis_private:
+  app_edge:
     driver: bridge
-    driver_opts:
-      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"
+  backend_internal:
+    driver: bridge
+    internal: true
 
 secrets:
+  db_root_password:
+    file: ./.secrets/db/root-password
+  db_password:
+    file: ./.secrets/db/app-password
+  jwt_secret:
+    file: ./.secrets/auth/jwt-secret
+  cloudinary_api_secret:
+    file: ./.secrets/cloudinary/api-secret
   gmail_client:
     file: ./.secrets/gmail/client.json
   gmail_token:

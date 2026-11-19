@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { readEnvSecret } = require('../services/secret-env.service');
 
 const host = process.env.DB_HOST || '127.0.0.1';
 const port = process.env.DB_PORT || 3307;
@@ -9,10 +10,14 @@ function requireUnprivilegedAccount({ username, password, database }) {
   }
 }
 
+const dbPassword = readEnvSecret('DB_PASSWORD');
+const testDbPassword = readEnvSecret('TEST_DB_PASSWORD') || dbPassword;
+const prodDbPassword = readEnvSecret('PROD_DB_PASSWORD') || dbPassword;
+
 module.exports = {
   development: {
     username: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
+    password: dbPassword,
     database: process.env.DB_DATABASE,
     host,
     port,
@@ -24,7 +29,7 @@ module.exports = {
   },
   test: {
     username: process.env.TEST_DB_USER || process.env.DB_USER,
-    password: process.env.TEST_DB_PASSWORD || process.env.DB_PASSWORD,
+    password: testDbPassword,
     database: process.env.TEST_DB_DATABASE || 'secure_ecommerce_test',
     host: process.env.TEST_DB_HOST || host,
     port: process.env.TEST_DB_PORT || port,
@@ -35,7 +40,7 @@ module.exports = {
   },
   production: {
     username: process.env.PROD_DB_USERNAME || process.env.DB_USER,
-    password: process.env.PROD_DB_PASSWORD || process.env.DB_PASSWORD,
+    password: prodDbPassword,
     database: process.env.PROD_DB_NAME || process.env.DB_DATABASE,
     host: process.env.PROD_DB_HOSTNAME || host,
     port: process.env.PROD_DB_PORT || port,

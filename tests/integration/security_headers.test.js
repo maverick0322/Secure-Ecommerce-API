@@ -119,4 +119,11 @@ describe('Pruebas de Integración: Cabeceras de Seguridad y Enrutamiento Base', 
     const res = await request(devApp).get('/swagger/');
     expect([200, 503]).toContain(res.statusCode);
   });
+
+  it('SEC-11: GET /health responde 200 sin autenticación y sin exponer datos internos', async () => {
+    const res = await request(app).get('/health');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ status: 'ok' });
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
 });

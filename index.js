@@ -123,7 +123,11 @@ if (process.env.NODE_ENV !== 'production') {
   }
 }
 
-// 6. Middleware global de bitácora y auditoría
+// 6. Healthcheck mínimo sin autenticación ni datos internos (SEC-11)
+app.get('/health', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return res.status(200).json({ status: 'ok' });
+});
 
 // 7. Enrutamiento de recursos de la API
 app.use("/api/categories", require("./routes/categories.routes"));

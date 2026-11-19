@@ -1,0 +1,22 @@
+# Perfil de desarrollo local: expone MySQL y Redis únicamente en 127.0.0.1.
+# Uso: docker compose -f compose.yaml -f compose.dev.yaml up
+services:
+  db:
+    ports:
+      - "127.0.0.1:3307:3306"
+    networks:
+      - backend_internal
+      - dev_local
+
+  redis:
+    ports:
+      - "127.0.0.1:6380:6379"
+    networks:
+      - backend_internal
+      - dev_local
+
+networks:
+  dev_local:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"
