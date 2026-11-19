@@ -37,4 +37,7 @@ async function verify(password,encoded){
     return timingSafeEqual(await key(password,salt),expected);
   });
 }
-module.exports={hash,verify,isEncodedHash};
+function createDummyHash(){
+  return '$scrypt$v1$32768$8$3$'+randomBytes(16).toString('base64url')+'$'+randomBytes(64).toString('base64url');
+}
+module.exports={hash,verify,isEncodedHash,createDummyHash};
