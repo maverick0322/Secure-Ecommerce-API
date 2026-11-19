@@ -207,4 +207,40 @@ describe('secure_ecommerce migrations (recorded SQL, no database)', () => {
   it('refuses automatic undo for all three migrations', () => {
     for (const migration of [create, prepare, cutover]) expect(() => migration.down()).toThrow('Automatic undo is disabled');
   });
+
+  it('adds and reverses categories.normalizedName unique index and fails before DDL when normalized duplicates exist', async () => {
+    const normMigration = require('../../migrations/20261119000001-add-categories-normalized-name-unique');
+    const statements = [];
+    const makeQi = ({ existingCol = [], duplicates = [], existingIdx = [] } = {}) => ({
+      sequelize: {
+        query: jest.fn(async sql => {
+          const s = sql.trim();
+          if (s.startsWith('SELECT DATABASE()')) return [{ db: 'secure_ecommerce', version: '8.4.13', sqlMode: 'STRICT_TRANS_TABLES', foreignKeyChecks: 1 }];
+          if (s.includes('information_schema.COLUMNS')) return existingCol;
+          if (s.includes('information_schema.STATISTICS')) return existingIdx;
+          if (s.startsWith('SELECT') && s.includes('REGEXP_REPLACE')) return duplicates;
+          statements.push(s);
+          return [];
+        })
+      }
+    });
+
+    // Fail before DDL when normalized duplicates exist
+    const dupQi = makeQi({ duplicates: [{ norm: 'ropa deportiva', cnt: 2 }] });
+    await expect(normMigration.up(dupQi)).rejects.toThrow(/normalized duplicate category names/i);
+    expect(statements).toHaveLength(0);
+
+    // Succeeds when no duplicates exist
+    const cleanQi = makeQi();
+    await normMigration.up(cleanQi);
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toContain('ADD COLUMN `normalizedName`');
+    expect(statements[0]).toContain('ADD UNIQUE KEY `categories_normalized_name_unique` (`normalizedName`)');
+
+    // Reversible down drops index and column
+    const downQi = makeQi({ existingCol: [{ name: 'normalizedName' }], existingIdx: [{ name: 'categories_normalized_name_unique' }] });
+    await normMigration.down(downQi);
+    expect(statements[1]).toContain('DROP INDEX `categories_normalized_name_unique`');
+    expect(statements[1]).toContain('DROP COLUMN `normalizedName`');
+  });
 });

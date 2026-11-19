@@ -195,8 +195,8 @@ function addCatalogOperations(paths) {
   define('/api/categories', 'get', 'ADMIN, BUYER, SELLER: lista categorías activas.', [], 200, { type: 'array', items: ref('Category') });
   define('/api/categories/{id}', 'get', 'ADMIN, BUYER, SELLER: consulta una categoría activa.', [id('id')], 200, ref('Category'), [404]);
   const category = body({ name: { type: 'string', minLength: 1, maxLength: 120 } }, ['name']);
-  define('/api/categories', 'post', 'Solo ADMIN: crea una categoría compartida (nombre único sin distinguir mayúsculas ni espacios sobrantes).', [category], 201, ref('Category'), [409]);
-  define('/api/categories/{id}', 'put', 'Solo ADMIN: renombra una categoría compartida (nombre único sin distinguir mayúsculas ni espacios sobrantes).', [id('id'), category], 204, null, [404, 409]);
+  define('/api/categories', 'post', 'Solo ADMIN: crea una categoría compartida (unicidad sin distinguir mayúsculas ni espacios sobrantes reforzada en servicio y BD mediante normalizedName).', [category], 201, ref('Category'), [409]);
+  define('/api/categories/{id}', 'put', 'Solo ADMIN: renombra una categoría compartida (unicidad sin distinguir mayúsculas ni espacios sobrantes reforzada en servicio y BD mediante normalizedName).', [id('id'), category], 204, null, [404, 409]);
   define('/api/categories/{id}', 'delete', 'Solo ADMIN: desactiva una categoría no protegida.', [id('id')], 204, null, [404]);
   for (const [method, path] of [['post', '/api/files'], ['put', '/api/files/{id}'], ['delete', '/api/files/{id}']]) {
     define(path, method, 'Operación histórica retirada. Use la imagen del producto.', method === 'post' ? [] : [id('id')], 410, ref('ErrorResponse'));
