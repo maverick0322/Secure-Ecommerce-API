@@ -2,7 +2,7 @@
 const db=require('../../models'),catalog=require('../../services/catalog.service'),audit=require('../../services/audit.service');
 const tx={LOCK:{UPDATE:'UPDATE'}};let product,category;
 beforeEach(()=>{
-  product={id:1,sellerId:'seller',update:jest.fn(),destroy:jest.fn()};category={id:2,protected:false,update:jest.fn(),destroy:jest.fn()};
+  product={id:1,sellerId:'seller',description:'Descripción existente',update:jest.fn(),destroy:jest.fn()};category={id:2,protected:false,update:jest.fn(),destroy:jest.fn()};
   category.update.mockImplementation(async()=>category);
   jest.spyOn(db.sequelize,'transaction').mockImplementation((options,work)=>(work||options)(tx));
   jest.spyOn(db.User,'findByPk').mockResolvedValue({status:'ACTIVE',emailVerifiedAt:new Date()});
@@ -79,15 +79,23 @@ it('keeps admin-only category mutations, uniqueness and protected-category polic
   db.Category.findAll.mockResolvedValue([{id:99}]);await expect(catalog.mutateCategory({id:'admin'},2,'Duplicate')).rejects.toMatchObject({status:409});
   db.Admin.findByPk.mockResolvedValue(null);await expect(catalog.mutateCategory({id:'admin'},2,'Denied')).rejects.toMatchObject({status:403});
 });
-it('treats hostile search text as a bound Sequelize value and filters seller visibility',async()=>{
+it('treats hostile search text as a bound Sequelize value, escapes LIKE wildcards and filters seller visibility',async()=>{
   const find=jest.spyOn(db.Product,'findAll').mockResolvedValue([]),search="'; DROP TABLE users; --";
   await catalog.listProducts(search);
   expect(find.mock.calls[0][0].where.title[db.Sequelize.Op.like]).toBe('%'+search+'%');
+  await catalog.listProducts('100% cotton_shirt\\XL');
+  expect(find.mock.calls[1][0].where.title[db.Sequelize.Op.like]).toBe('%100\\% cotton\\_shirt\\\\XL%');
+  await catalog.listProducts('   ');
+  expect(find.mock.calls[2][0].where.title).toEqual({[db.Sequelize.Op.ne]:null});
   expect(find.mock.calls[0][0].include[0]).toMatchObject({required:true,where:{status:'APPROVED'},include:[expect.objectContaining({where:expect.objectContaining({status:'ACTIVE'})})]});
   for(const value of [[],{},'x'.repeat(256)])expect(()=>catalog.listProducts(value)).toThrow();
   jest.spyOn(db.Product,'findOne').mockResolvedValue(null);await expect(catalog.getProduct(1)).rejects.toMatchObject({status:404});
 });
-it('preserves Unicode/byte limits and rejects mass assignment or malformed numeric values',()=>{
-  expect(catalog.productInput({title:'  Café 🙂  ',price:0,description:null,stock:4294967295},true)).toEqual({title:'Café 🙂',price:'0.00',description:null,stock:4294967295});
-  for(const value of [{sellerId:'other'},[],{}, {title:' '},{price:Infinity},{price:'01'},{price:'1.001'},{stock:1.5},{stock:4294967296},{description:'é'.repeat(32768)}])expect(()=>catalog.productInput(value)).toThrow();
+it('preserves Unicode/byte limits, requires description on create/edit and rejects mass assignment or malformed numeric values',async()=>{
+  expect(catalog.productInput({title:'  Café 🙂  ',price:0,description:'  Café orgánico  ',stock:4294967295},true)).toEqual({title:'Café 🙂',price:'0.00',description:'Café orgánico',stock:4294967295});
+  for(const value of [{title:'A',price:'1.00'},{title:'A',price:'1.00',description:null},{title:'A',price:'1.00',description:'  '}])expect(()=>catalog.productInput(value,true)).toThrow();
+  for(const value of [{sellerId:'other'},[],{}, {title:' '},{price:Infinity},{price:'01'},{price:'1.001'},{stock:1.5},{stock:4294967296},{description:null},{description:'   '},{description:'é'.repeat(32768)}])expect(()=>catalog.productInput(value)).toThrow();
+  product.description=null;
+  await expect(catalog.updateProduct({id:'seller'},1,{stock:5})).rejects.toMatchObject({status:400});
+  expect(product.update).not.toHaveBeenCalled();
 });

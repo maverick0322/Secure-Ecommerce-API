@@ -95,7 +95,7 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
       expect((await request(app).post('/api/products').set('Authorization', auth(actor)).send({ title: 'Denied', price: '1.00' })).status).toBe(403);
     }
     expect((await request(app).post('/api/products').set('Authorization', auth(seller)).send({ title: 'Denied', price: '1.00', sellerId: other.id })).status).toBe(400);
-    const result = await request(app).post('/api/products').set('Authorization', auth(seller)).send({ title: 'Fixture product', price: '12.50', stock: 5 });
+    const result = await request(app).post('/api/products').set('Authorization', auth(seller)).send({ title: 'Fixture product', description: 'Fixture description', price: '12.50', stock: 5 });
     expect(result.status).toBe(201);
     expect(result.body).toMatchObject({ sellerId: seller.id, price: '12.50', stock: 5, imagePublicId: null });
     productId = result.body.productId;
@@ -125,7 +125,7 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     expect(stored.name).toBe(name);expect(stored.bytes).toBe(Buffer.from(name,'utf8').toString('hex').toUpperCase());
     const [[encoding]]=await db.query('SELECT @@character_set_client AS client,@@character_set_connection AS connection,@@character_set_results AS results');
     expect(encoding).toEqual({client:'utf8mb4',connection:'utf8mb4',results:'utf8mb4'});
-    const create=extra=>request(app).post('/api/products').set('Authorization',auth(seller)).send({title:'Unicode creation',price:'249.99',stock:15,...extra});
+    const create=extra=>request(app).post('/api/products').set('Authorization',auth(seller)).send({title:'Unicode creation',description:'Descripción Unicode',price:'249.99',stock:15,...extra});
     const before=await models.Product.count({paranoid:false});
     expect((await create({categoryId:2147483647})).status).toBe(404);
     expect(await models.Product.count({paranoid:false})).toBe(before);

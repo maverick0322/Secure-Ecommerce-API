@@ -44,11 +44,11 @@ function productInput(body, creating = false) {
     }
     result.title = body.title.trim();
   }
-  if (Object.hasOwn(body, 'description')) {
-    if (body.description !== null && (typeof body.description !== 'string' || Buffer.byteLength(body.description) > 65535)) {
-      throw new AccountError(400, 'La descripción debe ser texto de hasta 65535 bytes o null.');
+  if (creating || Object.hasOwn(body, 'description')) {
+    if (typeof body.description !== 'string' || !body.description.trim() || Buffer.byteLength(body.description.trim()) > 65535) {
+      throw new AccountError(400, 'La descripción es obligatoria y debe ser texto no vacío de hasta 65535 bytes.');
     }
-    result.description = body.description;
+    result.description = body.description.trim();
   }
   if (creating || Object.hasOwn(body, 'price')) {
     result.price = productPrice(body.price);
@@ -124,6 +124,9 @@ function createProduct(account, input, context = {}) {
 
 function updateProduct(account, id, input, context = {}) {
   return mutateProduct(account, id, async (product, transaction) => {
+    if (!Object.hasOwn(input, 'description') && (typeof product.description !== 'string' || !product.description.trim())) {
+      throw new AccountError(400, 'La descripción es obligatoria y debe ser texto no vacío de hasta 65535 bytes.');
+    }
     await checkPricePrecision(input.price, transaction);
     return product.update(input, { transaction });
   },context);
@@ -158,11 +161,18 @@ function visibleProductQuery() {
   ] };
 }
 
+function escapeLike(value) {
+  return value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+}
+
 function listProducts(search) {
   const query = visibleProductQuery();
   if (search !== undefined) {
     if (typeof search !== 'string' || search.length > 255) throw new AccountError(400, 'El término de búsqueda no es válido.');
-    query.where.title = { [Op.like]: `%${search}%` };
+    const trimmed = search.trim();
+    if (trimmed.length > 0) {
+      query.where.title = { [Op.like]: `%${escapeLike(trimmed)}%` };
+    }
   }
   return Product.findAll({ ...query, order: [['id', 'ASC']] });
 }
