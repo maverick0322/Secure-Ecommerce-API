@@ -177,12 +177,15 @@ function addCatalogOperations(paths) {
   define('/api/products', 'get', 'Consulta productos activos de vendedores aprobados.',
     [{ name: 's', in: 'query', type: 'string', maxLength: 255 }], 200, { type: 'array', items: ref('Product') });
   define('/api/products/{id}', 'get', 'Consulta un producto activo.', [id('id')], 200, ref('Product'), [404]);
-  define('/api/products', 'post', 'Crea un producto del vendedor autenticado y aprobado. Descripción obligatoria.',
-    [body({...productBody,categoryId:{type:'integer',minimum:1,maximum:2147483647,description:'Categoría activa existente opcional; se asocia en la misma transacción y nunca crea categorías nuevas.'}}, ['title', 'description', 'price'])], 201, ref('Product'), [404,409]);
-  define('/api/products/{id}', 'put', 'Edita precio, inventario o contenido de un producto propio. La descripción no puede quedar vacía ni nula.',
-    [id('id'), body(productBody)], 204, null, [404, 409]);
-  define('/api/products/{id}', 'delete', 'Oculta un producto propio mediante borrado lógico.', [id('id')], 204, null, [404]);
-  define('/api/products/{id}/categories', 'post', 'SELLER aprobado propietario: asocia o reactiva una categoría existente a su producto (nunca crea categorías).',
+  define('/api/products', 'post', 'Crea un producto del vendedor autenticado y aprobado. Descripción obligatoria. Tope de productos activos por vendedor (default 200 -> 409) y límite de escrituras en Redis (default 30/min -> 429).',
+    [body({...productBody,categoryId:{type:'integer',minimum:1,maximum:2147483647,description:'Categoría activa existente opcional; se asocia en la misma transacción y nunca crea categorías nuevas.'}}, ['title', 'description', 'price'])], 201, ref('Product'), [404, 409, 429]);
+  paths['/api/products'].post.responses[429].headers = { 'Retry-After': { type: 'integer', description: 'Segundos antes de reintentar.' } };
+  define('/api/products/{id}', 'put', 'Edita precio, inventario o contenido de un producto propio. La descripción no puede quedar vacía ni nula. Límite de escrituras en Redis (default 30/min -> 429).',
+    [id('id'), body(productBody)], 204, null, [404, 409, 429]);
+  paths['/api/products/{id}'].put.responses[429].headers = { 'Retry-After': { type: 'integer', description: 'Segundos antes de reintentar.' } };
+  define('/api/products/{id}', 'delete', 'Oculta un producto propio mediante borrado lógico. Límite de escrituras en Redis (default 30/min -> 429).', [id('id')], 204, null, [404, 429]);
+  paths['/api/products/{id}'].delete.responses[429].headers = { 'Retry-After': { type: 'integer', description: 'Segundos antes de reintentar.' } };
+  define('/api/products/{id}/categories', 'post', 'SELLER aprobado propietario: asocia o reactiva una categoría existente a su producto (nunca crea categorías; máximo 10 categorías activas por producto -> 409).',
     [id('id'), body({ categoryId: { type: 'integer', minimum: 1 } }, ['categoryId'])], 204, null, [404, 409]);
   define('/api/products/{id}/categories/{categoryId}', 'delete', 'SELLER aprobado propietario: desasocia lógicamente una categoría de su producto.',
     [id('id'), id('categoryId')], 204, null, [404]);

@@ -2148,7 +2148,7 @@
       ]
     },
     {
-      "name": "05 Productos e imagenes simuladas",
+      "name": "05 Productos e imagenes simuladas (cuotas: 200 activos, 30 escrituras/min, 10 categorias/producto)",
       "item": [
         {
           "name": "Crear Postman primary",

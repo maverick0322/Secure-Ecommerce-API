@@ -8,8 +8,10 @@ beforeEach(()=>{
   jest.spyOn(db.User,'findByPk').mockResolvedValue({status:'ACTIVE',emailVerifiedAt:new Date()});
   jest.spyOn(db.Seller,'findByPk').mockResolvedValue({status:'APPROVED'});jest.spyOn(db.Admin,'findByPk').mockResolvedValue({});
   jest.spyOn(db.Product,'findByPk').mockResolvedValue(product);jest.spyOn(db.Product,'create').mockResolvedValue(product);
+  jest.spyOn(db.Product,'count').mockResolvedValue(0);jest.spyOn(db.ProductCategory,'count').mockResolvedValue(0);
   jest.spyOn(db.Category,'findByPk').mockResolvedValue(category);jest.spyOn(db.Category,'findAll').mockResolvedValue([]);
   jest.spyOn(db.Category,'create').mockResolvedValue(category);jest.spyOn(audit,'business').mockResolvedValue();
+  jest.spyOn(audit,'write').mockResolvedValue();
   jest.spyOn(db.sequelize.getQueryInterface(),'describeTable').mockResolvedValue({price:{type:'DECIMAL(12,2)'}});
 });
 afterEach(()=>jest.restoreAllMocks());
@@ -101,4 +103,52 @@ it('preserves Unicode/byte limits, requires description on create/edit and rejec
   product.description=null;
   await expect(catalog.updateProduct({id:'seller'},1,{stock:5})).rejects.toMatchObject({status:400});
   expect(product.update).not.toHaveBeenCalled();
+});
+
+it('enforces SELLER_MAX_ACTIVE_PRODUCTS quota with 409, audits denial without sensitive data and releases after deletion', async () => {
+  const saved = process.env.SELLER_MAX_ACTIVE_PRODUCTS;
+  process.env.SELLER_MAX_ACTIVE_PRODUCTS = '2';
+  try {
+    db.Product.count.mockResolvedValueOnce(2);
+    await expect(catalog.createProduct({ id: 'seller' }, { title: 'Over quota', description: 'Desc', price: '10.00' }, { ipAddress: '127.0.0.1' }))
+      .rejects.toMatchObject({ status: 409, message: expect.stringMatching(/2 productos activos/) });
+    expect(db.Product.create).not.toHaveBeenCalled();
+    expect(audit.write).toHaveBeenCalledWith(expect.objectContaining({
+      actorUserId: 'seller', action: 'producto.quota_exceeded', outcome: 'DENIED',
+      details: { reason: 'seller_max_active_products' }
+    }));
+
+    // After deleting one product, active count drops to 1 and creation succeeds
+    db.Product.count.mockResolvedValueOnce(1);
+    await catalog.createProduct({ id: 'seller' }, { title: 'Released', description: 'Desc', price: '10.00' }, { ipAddress: '127.0.0.1' });
+    expect(db.Product.create).toHaveBeenCalledTimes(1);
+  } finally {
+    if (saved === undefined) delete process.env.SELLER_MAX_ACTIVE_PRODUCTS;
+    else process.env.SELLER_MAX_ACTIVE_PRODUCTS = saved;
+  }
+});
+
+it('enforces PRODUCT_MAX_CATEGORIES quota with 409, audits denial and releases after category removal', async () => {
+  const saved = process.env.PRODUCT_MAX_CATEGORIES;
+  process.env.PRODUCT_MAX_CATEGORIES = '2';
+  try {
+    jest.spyOn(db.ProductCategory, 'findOne').mockResolvedValue(null);
+    db.ProductCategory.count.mockResolvedValueOnce(2);
+    await expect(catalog.changeCategory({ id: 'seller' }, 1, 2, false, { ipAddress: '127.0.0.1' }))
+      .rejects.toMatchObject({ status: 409, message: expect.stringMatching(/2 categorías activas/) });
+    expect(audit.write).toHaveBeenCalledWith(expect.objectContaining({
+      actorUserId: 'seller', action: 'productocategoria.quota_exceeded', outcome: 'DENIED',
+      details: { reason: 'product_max_categories', productId: 1 }
+    }));
+
+    // After removing a category, count drops to 1 and assignment succeeds
+    const qi = db.sequelize.getQueryInterface();
+    jest.spyOn(qi, 'bulkInsert').mockResolvedValue();
+    db.ProductCategory.count.mockResolvedValueOnce(1);
+    await catalog.changeCategory({ id: 'seller' }, 1, 2, false, { ipAddress: '127.0.0.1' });
+    expect(qi.bulkInsert).toHaveBeenCalledTimes(1);
+  } finally {
+    if (saved === undefined) delete process.env.PRODUCT_MAX_CATEGORIES;
+    else process.env.PRODUCT_MAX_CATEGORIES = saved;
+  }
 });

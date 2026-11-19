@@ -86,7 +86,7 @@ if(pm.response.code===${status}) { ${tests} }`;
   add(categories,'Categoria protegida conservada','DELETE','/api/categories/1',400,{token:'adminToken'});
   add(categories,'Catalogo de categorias (BUYER)','GET','/api/categories',200,{token:'buyerToken',tests:"pm.test('Categories are an array',()=>pm.expect(Array.isArray(b)).to.eql(true));"});
   add(categories,'Catalogo de categorias (SELLER)','GET','/api/categories',200,{token:'sellerToken',tests:"pm.test('Seller reads categories',()=>pm.expect(Array.isArray(b)).to.eql(true));"});
-  const products=folder('05 Productos e imagenes simuladas');
+  const products=folder('05 Productos e imagenes simuladas (cuotas: 200 activos, 30 escrituras/min, 10 categorias/producto)');
   for(const [role,id,title,price,stock]of [['seller','productId','Postman primary','10.00',10],['sellerOther','otherProductId','Postman secondary','5.50',20]]){
     add(products,'Crear '+title,'POST','/api/products',201,{token:role+'Token',body:{title,description:'Descripcion '+title,price,stock},tests:`pm.variables.set('${id}',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string'));`});
   }
