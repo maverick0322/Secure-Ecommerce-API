@@ -21,15 +21,19 @@ function safeScope(scope) {
 }
 
 function createRateLimitService(connection) {
-  if (!connection || typeof connection.transaction !== 'function' || typeof connection.prefix !== 'string') {
-    throw new SessionStoreUnavailableError();
+  function ensureConnection() {
+    if (!connection || typeof connection.transaction !== 'function' || typeof connection.prefix !== 'string') {
+      throw new SessionStoreUnavailableError();
+    }
   }
 
   function rateKey(scope, identifier) {
+    ensureConnection();
     return `${connection.prefix}rl:${safeScope(scope)}:${digest(identifier)}`;
   }
 
   function lockoutKey(identifier) {
+    ensureConnection();
     return `${connection.prefix}rl:lfail:${digest(identifier)}`;
   }
 

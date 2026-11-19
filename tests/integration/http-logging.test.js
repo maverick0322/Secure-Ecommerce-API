@@ -76,11 +76,15 @@ it('records a disconnected request only once with no invented response status',(
   createHttpLogger()(req,res,()=>{});res.emit('close');res.emit('finish');
   expect(records).toHaveLength(1);expect(records[0]).toMatchObject({statusCode:null,completed:false,route:'unmatched'});
 });
-it('logs a real rate limiter rejection without amplifying it into a SQL audit write',async()=>{
+it('logs a real rate limiter rejection and records sanitized rate-limit audit without PII',async()=>{
+  const { createRateLimitService } = require('../../services/auth-rate-limit.service');
+  const { createAdmissionDouble } = require('../support/image-admission-double');
+  const rateLimits = createRateLimitService(createAdmissionDouble());
   app=express();app.use(createHttpLogger());app.use(auditMiddleware);
-  app.post('/limited',require('../../middlewares/auth-rate-limit.middleware')({max:1}),(req,res)=>res.status(204).end());
+  app.post('/limited',require('../../middlewares/auth-rate-limit.middleware')({max:1,getRateLimits:async()=>rateLimits}),(req,res)=>res.status(204).end());
   await request(app).post('/limited').expect(204);
   await request(app).post('/limited').expect(429);
   expect(records.filter(r=>r.event==='http.request').map(r=>r.statusCode)).toEqual([204,429]);
-  expect(AuditLog.create).not.toHaveBeenCalled();
+  expect(AuditLog.create).toHaveBeenCalledTimes(1);
+  expect(AuditLog.create).toHaveBeenCalledWith(expect.objectContaining({action:'auth.rate_limited',outcome:'DENIED'}),{});
 });

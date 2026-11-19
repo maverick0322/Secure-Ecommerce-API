@@ -49,7 +49,8 @@ async function blockRequest(req, res, retryAfter, reason) {
 
 function createLimiter({
   scope = 'auth',
-  ipMax = envInt('RATE_LIMIT_IP_MAX', 120),
+  max = null,
+  ipMax = max ?? envInt('RATE_LIMIT_IP_MAX', 120),
   ipWindowMs = envInt('RATE_LIMIT_IP_WINDOW_MS', 60000),
   accountMax = null,
   accountWindowMs = 60000,
