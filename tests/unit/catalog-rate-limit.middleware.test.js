@@ -82,8 +82,42 @@ describe('Seller product write rate limiting in Redis', () => {
       const res2 = makeRes();
       await mwNoRuntime({ account: { id: crypto.randomUUID() }, ip: '127.0.0.1' }, res2, next);
       expect(res2.status).toHaveBeenCalledWith(503);
+
+      const mwInvalidStore = createSellerProductWriteLimiter({ getRateLimits: async () => ({}) });
+      const res3 = makeRes();
+      await mwInvalidStore({ ip: '127.0.0.1' }, res3, next);
+      expect(res3.status).toHaveBeenCalledWith(503);
     } finally {
       connection.close();
+    }
+  });
+
+  it('reads env overrides with safe fallbacks and handles missing account/logAudit', async () => {
+    const prevMax = process.env.RATE_LIMIT_SELLER_PRODUCT_WRITES_MAX;
+    const prevWin = process.env.RATE_LIMIT_SELLER_PRODUCT_WRITES_WINDOW_MS;
+    try {
+      process.env.RATE_LIMIT_SELLER_PRODUCT_WRITES_MAX = '1';
+      process.env.RATE_LIMIT_SELLER_PRODUCT_WRITES_WINDOW_MS = 'invalid';
+      const consume = jest.fn()
+        .mockResolvedValueOnce({ allowed: true })
+        .mockResolvedValueOnce({ allowed: false, retryAfter: 0 });
+      const mw = createSellerProductWriteLimiter({ getRateLimits: async () => ({ consume }) });
+      const next = jest.fn();
+      const res1 = makeRes();
+      await mw({}, res1, next);
+      expect(consume).toHaveBeenCalledWith('prod_wr', 'unknown', { max: 1, windowMs: 60000 });
+      expect(next).toHaveBeenCalledTimes(1);
+
+      const res2 = makeRes();
+      await mw({ ip: '10.0.0.2' }, res2, next);
+      expect(consume).toHaveBeenCalledWith('prod_wr', '10.0.0.2', { max: 1, windowMs: 60000 });
+      expect(res2.set).toHaveBeenCalledWith('Retry-After', '1');
+      expect(res2.status).toHaveBeenCalledWith(429);
+    } finally {
+      if (prevMax === undefined) delete process.env.RATE_LIMIT_SELLER_PRODUCT_WRITES_MAX;
+      else process.env.RATE_LIMIT_SELLER_PRODUCT_WRITES_MAX = prevMax;
+      if (prevWin === undefined) delete process.env.RATE_LIMIT_SELLER_PRODUCT_WRITES_WINDOW_MS;
+      else process.env.RATE_LIMIT_SELLER_PRODUCT_WRITES_WINDOW_MS = prevWin;
     }
   });
 });
