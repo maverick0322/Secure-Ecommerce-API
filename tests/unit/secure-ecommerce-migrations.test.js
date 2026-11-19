@@ -15,7 +15,7 @@ const history = [
 ];
 
 function fixture({ tables = legacy, columns = {}, constraints = [], db = 'secure_ecommerce', sqlMode = 'STRICT_TRANS_TABLES',
-  foreignKeyChecks = 1, version = '8.0.41', failCheck = '', emailKeys = [{ INDEX_NAME: 'email' }] } = {}) {
+  foreignKeyChecks = 1, version = '8.4.13', failCheck = '', emailKeys = [{ INDEX_NAME: 'email' }] } = {}) {
   const statements = [];
   const query = jest.fn(async sql => {
     const statement = sql.trim();

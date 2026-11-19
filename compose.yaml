@@ -167,6 +167,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     mem_limit: 256m
     cpus: 0.5
     pids_limit: 64
