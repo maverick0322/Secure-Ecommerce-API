@@ -70,13 +70,16 @@ it('propagates association and audit failures to the transaction owner',async()=
   insert.mockResolvedValue();audit.business.mockRejectedValue(new Error('audit failure'));
   await expect(catalog.createProduct({id:'seller'},{price:'1.00',categoryId:2})).rejects.toThrow('audit failure');
 });
-it('keeps admin-only category mutations, uniqueness and protected-category policy',async()=>{
-  await catalog.mutateCategory({id:'admin'},null,'New category');
+it('keeps admin-only category mutations, whitespace/case-insensitive uniqueness and protected-category policy',async()=>{
+  expect(catalog.categoryInput({name:'  Ropa   Deportiva  '})).toBe('Ropa Deportiva');
+  await catalog.mutateCategory({id:'admin',profile:'ADMIN'},null,'  New   category  ');
   expect(db.Category.create).toHaveBeenCalledWith({name:'New category',protected:false},{transaction:tx});
-  await catalog.mutateCategory({id:'admin'},2,'Edited');expect(category.update).toHaveBeenCalledWith({name:'Edited'},{transaction:tx});
-  category.protected=true;await expect(catalog.mutateCategory({id:'admin'},2,null,true)).rejects.toMatchObject({status:400});
-  category.protected=false;await catalog.mutateCategory({id:'admin'},2,null,true);expect(category.destroy).toHaveBeenCalled();
-  db.Category.findAll.mockResolvedValue([{id:99}]);await expect(catalog.mutateCategory({id:'admin'},2,'Duplicate')).rejects.toMatchObject({status:409});
+  await catalog.mutateCategory({id:'admin',profile:'ADMIN'},2,'Edited');expect(category.update).toHaveBeenCalledWith({name:'Edited'},{transaction:tx});
+  category.protected=true;await expect(catalog.mutateCategory({id:'admin',profile:'ADMIN'},2,null,true)).rejects.toMatchObject({status:400});
+  category.protected=false;await catalog.mutateCategory({id:'admin',profile:'ADMIN'},2,null,true);expect(category.destroy).toHaveBeenCalled();
+  db.Category.findAll.mockResolvedValue([{id:99,name:'duplicate'}]);
+  await expect(catalog.mutateCategory({id:'admin',profile:'ADMIN'},2,'  DUPLICATE  ')).rejects.toMatchObject({status:409});
+  await expect(catalog.mutateCategory({id:'seller',profile:'SELLER'},null,'Forbidden')).rejects.toMatchObject({status:403});
   db.Admin.findByPk.mockResolvedValue(null);await expect(catalog.mutateCategory({id:'admin'},2,'Denied')).rejects.toMatchObject({status:403});
 });
 it('treats hostile search text as a bound Sequelize value, escapes LIKE wildcards and filters seller visibility',async()=>{

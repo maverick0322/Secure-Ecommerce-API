@@ -76,14 +76,19 @@ if(pm.response.code===${status}) { ${tests} }`;
   add(sellers,'Revision no se confirma dos veces','PUT','/api/users/sellers/{{sellerId}}/review',409,{token:'adminToken',body:{status:'APPROVED'}});
   const categories=folder('04 Categorias');
   add(categories,'BUYER no crea categorias','POST','/api/categories',403,{token:'buyerToken',body:{name:'Forbidden'}});
+  add(categories,'SELLER aprobado no crea categorias','POST','/api/categories',403,{token:'sellerToken',body:{name:'Forbidden Seller'}});
   add(categories,'Nombre vacio rechazado','POST','/api/categories',400,{token:'adminToken',body:{name:''}});
   add(categories,'Crear categoria','POST','/api/categories',201,{token:'adminToken',body:{name:'Postman {{isolationRunId}}'},tests:"pm.variables.set('categoryId',b.categoryId);"});
   add(categories,'Nombre duplicado rechazado','POST','/api/categories',409,{token:'adminToken',body:{name:'Postman {{isolationRunId}}'}});
+  add(categories,'Duplicado por mayusculas y espacios rechazado','POST','/api/categories',409,{token:'adminToken',body:{name:'  POSTMAN   {{isolationRunId}}  '}});
+  add(categories,'SELLER aprobado no edita categorias','PUT','/api/categories/{{categoryId}}',403,{token:'sellerToken',body:{name:'Hijacked'}});
+  add(categories,'SELLER aprobado no elimina categorias','DELETE','/api/categories/{{categoryId}}',403,{token:'sellerToken'});
   add(categories,'Categoria protegida conservada','DELETE','/api/categories/1',400,{token:'adminToken'});
-  add(categories,'Catalogo de categorias','GET','/api/categories',200,{token:'buyerToken',tests:"pm.test('Categories are an array',()=>pm.expect(Array.isArray(b)).to.eql(true));"});
+  add(categories,'Catalogo de categorias (BUYER)','GET','/api/categories',200,{token:'buyerToken',tests:"pm.test('Categories are an array',()=>pm.expect(Array.isArray(b)).to.eql(true));"});
+  add(categories,'Catalogo de categorias (SELLER)','GET','/api/categories',200,{token:'sellerToken',tests:"pm.test('Seller reads categories',()=>pm.expect(Array.isArray(b)).to.eql(true));"});
   const products=folder('05 Productos e imagenes simuladas');
   for(const [role,id,title,price,stock]of [['seller','productId','Postman primary','10.00',10],['sellerOther','otherProductId','Postman secondary','5.50',20]]){
-    add(products,'Crear '+title,'POST','/api/products',201,{token:role+'Token',body:{title,price,stock},tests:`pm.variables.set('${id}',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string'));`});
+    add(products,'Crear '+title,'POST','/api/products',201,{token:role+'Token',body:{title,description:'Descripcion '+title,price,stock},tests:`pm.variables.set('${id}',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string'));`});
   }
   add(products,'BUYER no publica','POST','/api/products',403,{token:'buyerToken',body:{title:'Forbidden',price:'1.00'}});
   add(products,'SELLER ajeno no modifica','PUT','/api/products/{{productId}}',404,{token:'sellerOtherToken',body:{title:'Foreign'}});
@@ -95,6 +100,8 @@ if(pm.response.code===${status}) { ${tests} }`;
     ['Desasociar logicamente','DELETE','/api/products/{{productId}}/categories/{{categoryId}}'],
     ['Reactivar asociacion','POST','/api/products/{{productId}}/categories',{categoryId:'{{categoryId}}'}]
   ])add(products,name,method,url,204,{token:'sellerToken',body});
+  add(products,'No asociar categoria inexistente','POST','/api/products/{{productId}}/categories',404,{token:'sellerToken',body:{categoryId:2147483647}});
+  add(products,'No asociar categoria a producto ajeno','POST','/api/products/{{otherProductId}}/categories',404,{token:'sellerToken',body:{categoryId:'{{categoryId}}'}});
   add(products,'Subir PNG a Cloudinary simulado','PUT','/api/products/{{productId}}/image',200,{token:'sellerToken',file:'scripts/fixtures/product.png',tests:"pm.test('Only public image reference',()=>pm.expect(typeof b.imagePublicId).to.eql('string'));pm.variables.set('imagePublicId',b.imagePublicId);"});
   add(products,'Contenido de imagen invalido','PUT','/api/products/{{productId}}/image',400,{token:'sellerToken',file:'scripts/fixtures/not-image.txt'});
   add(products,'Consultar productos activos','GET','/api/products',200,{token:'buyerToken',tests:"pm.test('Both approved sellers visible',()=>pm.expect(b.length).to.eql(2));"});
@@ -145,7 +152,7 @@ if(pm.response.code===${status}) { ${tests} }`;
   const security=folder('10 Seguridad y suspension');
   add(security,'Sin JWT','GET','/api/products',401);
   add(security,'JWT invalido','GET','/api/products',401,{headers:[{key:'Authorization',value:'Bearer invalid.synthetic.token'}]});
-  add(security,'CORS no autorizado sin diagnosticos internos','GET','/api/products',500,{token:'buyerToken',headers:[{key:'Origin',value:'https://untrusted.example.invalid'}],tests:"pm.test('No stack or SQL diagnostics',()=>{pm.expect(b).not.to.have.property('stack');pm.expect(b).not.to.have.property('sql');});"});
+  add(security,'CORS no autorizado sin cabecera allow-origin','GET','/api/products',200,{token:'buyerToken',headers:[{key:'Origin',value:'https://untrusted.example.invalid'}],tests:"pm.test('No Access-Control-Allow-Origin',()=>pm.expect(pm.response.headers.has('Access-Control-Allow-Origin')).to.eql(false));"});
   add(security,'Ruta roles retirada','GET','/api/roles',410,{token:'adminToken'});
   add(security,'Ruta files retirada','GET','/api/files/1',410);
   add(security,'Suspension sin motivo','PUT','/api/users/sellers/{{sellerId}}/suspend',400,{token:'adminToken',body:{reason:''}});

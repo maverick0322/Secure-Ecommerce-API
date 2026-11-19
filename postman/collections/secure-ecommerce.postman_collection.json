@@ -1798,6 +1798,46 @@
           ]
         },
         {
+          "name": "SELLER aprobado no crea categorias",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Forbidden Seller\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Nombre vacio rechazado",
           "request": {
             "method": "POST",
@@ -1918,6 +1958,113 @@
           ]
         },
         {
+          "name": "Duplicado por mayusculas y espacios rechazado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"  POSTMAN   {{isolationRunId}}  \"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409',function(){pm.expect(pm.response.code).to.eql(409);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===409) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SELLER aprobado no edita categorias",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories/{{categoryId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Hijacked\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SELLER aprobado no elimina categorias",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories/{{categoryId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 403',function(){pm.expect(pm.response.code).to.eql(403);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===403) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Categoria protegida conservada",
           "request": {
             "method": "DELETE",
@@ -1945,7 +2092,7 @@
           ]
         },
         {
-          "name": "Catalogo de categorias",
+          "name": "Catalogo de categorias (BUYER)",
           "request": {
             "method": "GET",
             "header": [
@@ -1966,6 +2113,33 @@
                   "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
                   "const b=pm.response.code===204?{}:pm.response.json();",
                   "if(pm.response.code===200) { pm.test('Categories are an array',()=>pm.expect(Array.isArray(b)).to.eql(true)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Catalogo de categorias (SELLER)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Seller reads categories',()=>pm.expect(Array.isArray(b)).to.eql(true)); }"
                 ]
               }
             }
@@ -1994,7 +2168,7 @@
             "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
             "body": {
               "mode": "raw",
-              "raw": "{\"title\":\"Postman primary\",\"price\":\"10.00\",\"stock\":10}",
+              "raw": "{\"title\":\"Postman primary\",\"description\":\"Descripcion Postman primary\",\"price\":\"10.00\",\"stock\":10}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2034,7 +2208,7 @@
             "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
             "body": {
               "mode": "raw",
-              "raw": "{\"title\":\"Postman secondary\",\"price\":\"5.50\",\"stock\":20}",
+              "raw": "{\"title\":\"Postman secondary\",\"description\":\"Descripcion Postman secondary\",\"price\":\"5.50\",\"stock\":20}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2358,6 +2532,86 @@
                   "pm.test('HTTP 204',function(){pm.expect(pm.response.code).to.eql(204);});",
                   "const b=pm.response.code===204?{}:pm.response.json();",
                   "if(pm.response.code===204) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No asociar categoria inexistente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"categoryId\":2147483647}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No asociar categoria a producto ajeno",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{otherProductId}}/categories",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"categoryId\":\"{{categoryId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
                 ]
               }
             }
@@ -4102,7 +4356,7 @@
           ]
         },
         {
-          "name": "CORS no autorizado sin diagnosticos internos",
+          "name": "CORS no autorizado sin cabecera allow-origin",
           "request": {
             "method": "GET",
             "header": [
@@ -4124,9 +4378,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('HTTP 500',function(){pm.expect(pm.response.code).to.eql(500);});",
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
                   "const b=pm.response.code===204?{}:pm.response.json();",
-                  "if(pm.response.code===500) { pm.test('No stack or SQL diagnostics',()=>{pm.expect(b).not.to.have.property('stack');pm.expect(b).not.to.have.property('sql');}); }"
+                  "if(pm.response.code===200) { pm.test('No Access-Control-Allow-Origin',()=>pm.expect(pm.response.headers.has('Access-Control-Allow-Origin')).to.eql(false)); }"
                 ]
               }
             }

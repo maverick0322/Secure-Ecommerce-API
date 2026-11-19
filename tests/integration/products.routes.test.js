@@ -91,6 +91,18 @@ it('validates category assignment and uses logical product mutations', async () 
   expect(remove).toHaveBeenCalledWith(expect.objectContaining({id:seller.account.id}),1,{ipAddress:expect.any(String)});
 });
 
+it('rejects assigning a nonexistent category or assigning to another seller product with 404 without creating categories', async () => {
+  const { Category } = require('../../models');
+  const createCategory = jest.spyOn(Category, 'create');
+  const change = jest.spyOn(catalog, 'changeCategory')
+    .mockRejectedValueOnce(new (require('../../services/accounts.service').AccountError)(404, 'Categoría no encontrada.'))
+    .mockRejectedValueOnce(new (require('../../services/accounts.service').AccountError)(404, 'Producto no encontrado.'));
+  expect((await request(app).post('/api/products/1/categories').set('Authorization', header(seller)).send({ categoryId: 9999 })).status).toBe(404);
+  expect((await request(app).post('/api/products/999/categories').set('Authorization', header(seller)).send({ categoryId: 2 })).status).toBe(404);
+  expect(change).toHaveBeenCalledTimes(2);
+  expect(createCategory).not.toHaveBeenCalled();
+});
+
 it('accepts a category only during creation and serializes its Unicode name',async()=>{
   const create=jest.spyOn(catalog,'createProduct').mockResolvedValue({...sample,categories:[{id:5,name:'Electrónica',protected:false}]});
   const result=await request(app).post('/api/products').set('Authorization',header(seller)).send({title:'Teclado mecánico',description:'Teclado RGB mecánico',price:'249.99',stock:15,categoryId:5});

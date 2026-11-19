@@ -59,11 +59,19 @@ function productInput(body, creating = false) {
   return result;
 }
 
+function normalizeCategoryName(value) {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
 function categoryInput(body) {
-  if (!body || Object.keys(body).length !== 1 || typeof body.name !== 'string' || !body.name.trim() || [...body.name.trim()].length > 120) {
+  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || typeof body.name !== 'string') {
     throw new AccountError(400, 'Indique únicamente name, de 1 a 120 caracteres.');
   }
-  return body.name.trim();
+  const normalized = normalizeCategoryName(body.name);
+  if (!normalized || [...normalized].length > 120) {
+    throw new AccountError(400, 'Indique únicamente name, de 1 a 120 caracteres.');
+  }
+  return normalized;
 }
 
 async function checkPricePrecision(price, transaction) {
@@ -185,6 +193,9 @@ async function getProduct(id) {
 }
 
 function mutateCategory(account, id, name, removing = false, context = {}) {
+  if (account?.profile && account.profile !== 'ADMIN') {
+    return Promise.reject(new AccountError(403, 'Se requiere ADMIN.'));
+  }
   return sequelize.transaction({ isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.REPEATABLE_READ }, async transaction => {
     await lockActor(account, transaction, 'ADMIN');
     let category;
@@ -198,11 +209,17 @@ function mutateCategory(account, id, name, removing = false, context = {}) {
       await require('./audit.service').business(account.id,'categoria.eliminar','category',id,transaction,context);
       return;
     }
-    // Lock matching names and gaps while the transition lacks the final unique index.
-    const matches = await Category.findAll({ where: { name }, paranoid: false, transaction, lock: transaction.LOCK.UPDATE });
+    const normalizedName = normalizeCategoryName(name);
+    // Case-insensitive and collapsed-whitespace uniqueness check (including soft-deleted rows).
+    const matches = await Category.findAll({
+      where: Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('name')), normalizedName.toLowerCase()),
+      paranoid: false,
+      transaction,
+      lock: transaction.LOCK.UPDATE
+    });
     if (matches.some(row => row.id !== id)) throw new AccountError(409, 'Ya existe una categoría con ese nombre.');
-    const result = category ? await category.update({ name }, { transaction }) :
-      await Category.create({ name, protected: false }, { transaction });
+    const result = category ? await category.update({ name: normalizedName }, { transaction }) :
+      await Category.create({ name: normalizedName, protected: false }, { transaction });
     await require('./audit.service').business(account.id,id ? 'categoria.editar' : 'categoria.crear','category',result.id,transaction,context);
     return result;
   });

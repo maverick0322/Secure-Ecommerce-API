@@ -162,7 +162,7 @@ function addAddressOperations(specification) {
 
 function addCatalogOperations(paths) {
   const id = name => ({ name, in: 'path', required: true, type: 'integer', minimum: 1, maximum: 2147483647 });
-  const productBody = { title: { type: 'string', maxLength: 255 }, description: { type: 'string', 'x-nullable': true },
+  const productBody = { title: { type: 'string', minLength: 1, maxLength: 255 }, description: { type: 'string', minLength: 1 },
     price: { type: 'string', pattern: '^(0|[1-9][0-9]{0,9})(\\.[0-9]{1,2})?$', example: '12.50' },
     stock: { type: 'integer', minimum: 0, maximum: 4294967295 } };
   const body = (properties, required = []) => ({ name: 'body', in: 'body', required: true,
@@ -177,14 +177,14 @@ function addCatalogOperations(paths) {
   define('/api/products', 'get', 'Consulta productos activos de vendedores aprobados.',
     [{ name: 's', in: 'query', type: 'string', maxLength: 255 }], 200, { type: 'array', items: ref('Product') });
   define('/api/products/{id}', 'get', 'Consulta un producto activo.', [id('id')], 200, ref('Product'), [404]);
-  define('/api/products', 'post', 'Crea un producto del vendedor autenticado y aprobado.',
-    [body({...productBody,categoryId:{type:'integer',minimum:1,maximum:2147483647,description:'Categoría activa opcional; se asocia en la misma transacción.'}}, ['title', 'price'])], 201, ref('Product'), [404,409]);
-  define('/api/products/{id}', 'put', 'Edita precio, inventario o contenido de un producto propio.',
+  define('/api/products', 'post', 'Crea un producto del vendedor autenticado y aprobado. Descripción obligatoria.',
+    [body({...productBody,categoryId:{type:'integer',minimum:1,maximum:2147483647,description:'Categoría activa existente opcional; se asocia en la misma transacción y nunca crea categorías nuevas.'}}, ['title', 'description', 'price'])], 201, ref('Product'), [404,409]);
+  define('/api/products/{id}', 'put', 'Edita precio, inventario o contenido de un producto propio. La descripción no puede quedar vacía ni nula.',
     [id('id'), body(productBody)], 204, null, [404, 409]);
   define('/api/products/{id}', 'delete', 'Oculta un producto propio mediante borrado lógico.', [id('id')], 204, null, [404]);
-  define('/api/products/{id}/categories', 'post', 'Asocia o reactiva una categoría de un producto propio.',
+  define('/api/products/{id}/categories', 'post', 'SELLER aprobado propietario: asocia o reactiva una categoría existente a su producto (nunca crea categorías).',
     [id('id'), body({ categoryId: { type: 'integer', minimum: 1 } }, ['categoryId'])], 204, null, [404, 409]);
-  define('/api/products/{id}/categories/{categoryId}', 'delete', 'Desasocia lógicamente una categoría.',
+  define('/api/products/{id}/categories/{categoryId}', 'delete', 'SELLER aprobado propietario: desasocia lógicamente una categoría de su producto.',
     [id('id'), id('categoryId')], 204, null, [404]);
   define('/api/products/{id}/image', 'put', 'Reemplaza la imagen de un producto propio. JPEG, PNG o WebP estático; hasta 2 MiB, 4096 píxeles por lado y 8 millones de píxeles. Se valida y recodifica sin metadatos EXIF/GPS. La imagen normalizada también debe caber en 2 MiB.',
     [id('id'), { name: 'image', in: 'formData', type: 'file', required: true }], 200,
@@ -192,12 +192,12 @@ function addCatalogOperations(paths) {
   paths['/api/products/{id}/image'].put.responses[429].headers = { 'Retry-After': { type: 'integer', description: 'Segundos antes de reintentar.' } };
   paths['/api/products/{id}/image'].put.consumes = ['multipart/form-data'];
   define('/api/products/{id}/image', 'delete', 'Retira la referencia de imagen y programa su limpieza segura.', [id('id')], 204, null, [404, 503]);
-  define('/api/categories', 'get', 'Lista categorías activas.', [], 200, { type: 'array', items: ref('Category') });
-  define('/api/categories/{id}', 'get', 'Consulta una categoría activa.', [id('id')], 200, ref('Category'), [404]);
+  define('/api/categories', 'get', 'ADMIN, BUYER, SELLER: lista categorías activas.', [], 200, { type: 'array', items: ref('Category') });
+  define('/api/categories/{id}', 'get', 'ADMIN, BUYER, SELLER: consulta una categoría activa.', [id('id')], 200, ref('Category'), [404]);
   const category = body({ name: { type: 'string', minLength: 1, maxLength: 120 } }, ['name']);
-  define('/api/categories', 'post', 'Crea una categoría como ADMIN.', [category], 201, ref('Category'), [409]);
-  define('/api/categories/{id}', 'put', 'Renombra una categoría como ADMIN.', [id('id'), category], 204, null, [404, 409]);
-  define('/api/categories/{id}', 'delete', 'Desactiva una categoría no protegida como ADMIN.', [id('id')], 204, null, [404]);
+  define('/api/categories', 'post', 'Solo ADMIN: crea una categoría compartida (nombre único sin distinguir mayúsculas ni espacios sobrantes).', [category], 201, ref('Category'), [409]);
+  define('/api/categories/{id}', 'put', 'Solo ADMIN: renombra una categoría compartida (nombre único sin distinguir mayúsculas ni espacios sobrantes).', [id('id'), category], 204, null, [404, 409]);
+  define('/api/categories/{id}', 'delete', 'Solo ADMIN: desactiva una categoría no protegida.', [id('id')], 204, null, [404]);
   for (const [method, path] of [['post', '/api/files'], ['put', '/api/files/{id}'], ['delete', '/api/files/{id}']]) {
     define(path, method, 'Operación histórica retirada. Use la imagen del producto.', method === 'post' ? [] : [id('id')], 410, ref('ErrorResponse'));
   }
@@ -247,7 +247,7 @@ function addAccountOperations(paths) {
   define('/api/users/me','put','Edita solo name, phoneNumber y storeName del propio SELLER. No admite campos administrativos.',[body({name,phoneNumber,storeName:name})],200,'User',[400,503]);
   define('/api/users/me/password','put','Exige currentPassword y nueva contraseña; revoca todas las sesiones incluida la actual. Vendedores pendientes admitidos.',[body({currentPassword:password,newPassword},['currentPassword','newPassword'])],204,null,[400,429,503]);
   for(const [path,method]of [['/api/auth/password/forgot','post'],['/api/auth/password/reset','post'],['/api/users/me','put'],['/api/users/me/password','put']])paths[path][method].parameters[0].schema.additionalProperties=false;
-  for(const path of ['/api/auth','/api/auth/register','/api/auth/register/verify']) paths[path].post.description+=' Límite compartido: 30 solicitudes por IP y minuto, además de los límites del código de verificación.';
+  for(const path of ['/api/auth','/api/auth/register','/api/auth/register/verify']) paths[path].post.description+=' Límite distribuido en Redis por IP y por cuenta (fallo cerrado 503 sin Redis).';
   define('/api/auth/time', 'get', 'Consulta el tiempo restante del JWT.', [], 200, 'SessionTime', []);
   define('/api/users', 'get', 'Lista cuentas para administración.', [], 200, null, []);
   paths['/api/users'].get.responses[200].schema = { type: 'array', items: { $ref: '#/definitions/User' } };
