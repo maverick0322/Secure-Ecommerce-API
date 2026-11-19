@@ -1,5 +1,5 @@
 # Imagen base oficial y ligera basada en Alpine Linux (Principio de superficie mínima de ataque)
-FROM node:20-alpine
+FROM node:24-alpine
 
 # Definir directorio de trabajo de la aplicación
 WORKDIR /usr/src/app

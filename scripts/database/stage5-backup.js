@@ -41,7 +41,7 @@ async function main(){
   let id,connection;
   try{
     id=docker(['run','--detach','--name',name,'--hostname',name,'--publish',`127.0.0.1:${port}:3306`,
-      '--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.0']).trim();
+      '--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.4']).trim();
     const detail=JSON.parse(docker(['inspect','--format','{{json .}}',name]));
     assert.equal(detail.Id,id);assert(detail.Mounts.every(m=>m.Type!=='volume'&&m.Type!=='bind'));
     for(let n=0;n<60;n++){

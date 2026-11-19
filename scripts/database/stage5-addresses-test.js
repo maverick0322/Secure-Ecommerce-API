@@ -25,7 +25,7 @@ async function main() {
   try {
     if(!external){
     containerId = docker(['run','--detach','--name',name,'--hostname',name,'--publish',`127.0.0.1:${port}:3306`,
-      '--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.0']);
+      '--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.4']);
     const details = JSON.parse(docker(['inspect','--format','{{json .}}',name]));
     assert.equal(details.Id,containerId);
     assert.equal(details.NetworkSettings.Ports['3306/tcp'][0].HostPort,String(port));

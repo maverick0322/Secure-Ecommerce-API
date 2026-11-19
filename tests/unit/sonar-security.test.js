@@ -92,7 +92,7 @@ it('accepts only literal Docker command templates', () => {
   const args=['run','--detach','--pull','never','--name','secure-ecommerce-postman-'+runId.replace(/-/g,'').slice(0,12),
     '--hostname','secure-ecommerce-postman-'+runId.replace(/-/g,'').slice(0,12),
     '--label','secure-ecommerce.test-suite=postman','--label','secure-ecommerce.test-run='+runId,
-    '--publish','127.0.0.1::3306','--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.0'];
+    '--publish','127.0.0.1::3306','--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.4'];
   expect(() => iso.validateDockerArgs(args)).not.toThrow();
   args[13]='3307:3306'; expect(() => iso.validateDockerArgs(args)).toThrow();
 });
@@ -202,7 +202,7 @@ it('keeps SQL type metadata and publishes no password example', () => {
 it('uses explicit Docker inputs and non-root runtime, with only log/uploads writable in the API', () => {
   const root=path.resolve(__dirname,'../..');
   const api=fs.readFileSync(path.join(root,'Dockerfile'),'utf8');
-  const verify=fs.readFileSync(path.join(root,'scripts/database/Dockerfile.node20-verify'),'utf8');
+  const verify=fs.readFileSync(path.join(root,'scripts/database/Dockerfile.node-verify'),'utf8');
   for (const dockerfile of [api,verify]) {
     expect(dockerfile).not.toMatch(/^COPY\s+\.\s+\./m);
     expect(dockerfile).toMatch(/^USER node$/m);

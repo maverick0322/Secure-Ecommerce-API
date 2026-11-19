@@ -14,10 +14,10 @@ it('preserves the entire tracked MySQL service and its volume, adding only a sep
   const original = {
   "services": {
     "db": {
-      "image": "mysql:8.0",
+      "image": "mysql:8.4",
       "container_name": "ecommerce_db",
       "restart": "unless-stopped",
-      "command": "--default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci\n",
+      "command": "--authentication-policy=caching_sha2_password,, --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci\n",
       "environment": {
         "MYSQL_ROOT_PASSWORD": "${DB_ROOT_PASSWORD:-}",
         "MYSQL_ROOT_HOST": "localhost"

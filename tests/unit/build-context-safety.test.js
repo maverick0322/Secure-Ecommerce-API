@@ -9,12 +9,12 @@ beforeEach(()=>{
   jest.spyOn(process.stdout,'write').mockReturnValue(true);
 });
 afterEach(()=>{process.exitCode=savedExit;jest.restoreAllMocks();jest.clearAllMocks();});
-function run(){jest.isolateModules(()=>require('../../scripts/database/verify-node20'));}
+function run(){jest.isolateModules(()=>require('../../scripts/database/verify-node'));}
 it('packages public examples explicitly while excluding local credentials and reports',()=>{
   run();const commands=child.spawnSync.mock.calls;
   expect(commands[0][1]).toEqual(expect.arrayContaining(['--exclude=.secrets','--exclude=.env','--exclude=postman/reports']));
   expect(commands[1][1]).toContain('.env.example');expect(commands.some(([command])=>command==='docker')).toBe(true);
-  expect(fs.readFileSync).toHaveBeenCalledWith('log/stage5/node20-source.tar');
+  expect(fs.readFileSync).toHaveBeenCalledWith('log/stage5/node-source.tar');
 });
 it.each(['./.env','./.secrets/private.key','.secrets/private.key','./postman/reports/private.json'])('refuses an unsafe archive entry before Docker receives it: %s',entry=>{
   listing+=entry+'\n';expect(run).toThrow('Unsafe verification archive');
