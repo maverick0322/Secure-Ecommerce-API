@@ -126,4 +126,17 @@ describe('Pruebas de Integración: Cabeceras de Seguridad y Enrutamiento Base', 
     expect(res.body).toEqual({ status: 'ok' });
     expect(res.headers['cache-control']).toBe('no-store');
   });
+
+  it('SEC-06: /swagger responde 503 fuera de producción si swagger-output.json no existe', async () => {
+    const fs = require('node:fs');
+    const spy = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+    try {
+      const devApp = loadAppWithEnv({ NODE_ENV: 'development', CORS_ORIGIN: '' });
+      const res = await request(devApp).get('/swagger');
+      expect(res.statusCode).toBe(503);
+      expect(res.body.message).toMatch(/npm run swagger/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });

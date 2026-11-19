@@ -46,3 +46,37 @@ it.each(['Niñez y electrónica 🙂','Accesorios e\u0301'])('preserves full Uni
   expect(result.status).toBe(201);expect(result.body.name).toBe(name);
   expect(write).toHaveBeenCalledWith(expect.any(Object),null,name,false,expect.any(Object));
 });
+
+it('handles GET by id, PUT update, DELETE errors and list failures cleanly', async () => {
+  jest.spyOn(Category, 'findByPk')
+    .mockResolvedValueOnce({ id: 7, name: 'Libros', protected: false })
+    .mockResolvedValueOnce(null);
+  const found = await request(app).get('/api/categories/7').set('Authorization', header(buyer));
+  expect(found.status).toBe(200);
+  expect(found.body).toEqual({ categoryId: 7, name: 'Libros', protected: false });
+
+  const missing = await request(app).get('/api/categories/99').set('Authorization', header(buyer));
+  expect(missing.status).toBe(404);
+
+  const badId = await request(app).get('/api/categories/abc').set('Authorization', header(buyer));
+  expect(badId.status).toBe(400);
+
+  jest.spyOn(Category, 'findAll').mockRejectedValueOnce(new Error('DB failure'));
+  const listErr = await request(app).get('/api/categories').set('Authorization', header(buyer));
+  expect(listErr.status).toBe(500);
+
+  const mutate = jest.spyOn(catalog, 'mutateCategory')
+    .mockResolvedValueOnce({ id: 7, name: 'Libros renovados', protected: false })
+    .mockRejectedValueOnce(new Error('Update failure'))
+    .mockRejectedValueOnce(new Error('Delete failure'));
+
+  const updated = await request(app).put('/api/categories/7').set('Authorization', header(admin)).send({ name: 'Libros renovados' });
+  expect(updated.status).toBe(204);
+  expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ id: admin.account.id }), 7, 'Libros renovados');
+
+  const updateErr = await request(app).put('/api/categories/7').set('Authorization', header(admin)).send({ name: 'Otra' });
+  expect(updateErr.status).toBe(500);
+
+  const deleteErr = await request(app).delete('/api/categories/7').set('Authorization', header(admin));
+  expect(deleteErr.status).toBe(500);
+});
