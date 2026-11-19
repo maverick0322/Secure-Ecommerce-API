@@ -47,7 +47,7 @@ async function verifySchema() {
     const indexes = await q(`SELECT TABLE_NAME AS t, INDEX_NAME AS name, NON_UNIQUE AS nonUnique,
       COLUMN_NAME AS c, EXPRESSION AS expression, SEQ_IN_INDEX AS seq FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`);
-    for (const [table, fields] of [['users',['email']],['categories',['name']],['carts',['buyerId']],
+    for (const [table, fields] of [['users',['email']],['categories',['name']],['categories',['normalizedName']],['carts',['buyerId']],
       ['cart_items',['cartId','productId']],['orders',['checkoutId','sellerId']]]) {
       const names = [...new Set(indexes.filter(r => r.t === table && r.nonUnique === 0).map(r => r.name))];
       assert(names.some(n => JSON.stringify(indexes.filter(r => r.t === table && r.name === n).map(r => r.c)) === JSON.stringify(fields)), `${table} UNIQUE`);

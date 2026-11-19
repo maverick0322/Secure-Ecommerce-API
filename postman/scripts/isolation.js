@@ -57,7 +57,7 @@ function validateDockerArgs(args){
     const name='secure-ecommerce-postman-'+runId.replace(/-/g,'').slice(0,12);
     ensure(equal(['run','--detach','--pull','never','--name',name,'--hostname',name,
       '--label',ownerLabel+'=postman','--label',runLabel+'='+runId,'--publish','127.0.0.1::3306',
-      '--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.0']),'INVALID_RUN_ARGUMENTS');
+      '--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.4']),'INVALID_RUN_ARGUMENTS');
   }else ensure(false,'FORBIDDEN_DOCKER_OPERATION');
 }
 function assertLocalContext(){
@@ -149,7 +149,7 @@ async function create(runId){
   fixture.rootPassword=rootPassword;fixture.appPassword=crypto.randomBytes(32).toString('hex');
   fixture.containerId=docker(['run','--detach','--pull','never','--name',fixture.name,'--hostname',fixture.name,
     '--label',ownerLabel+'=postman','--label',runLabel+'='+runId,'--publish','127.0.0.1::3306',
-    '--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.0'],
+    '--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.4'],
     {env:{MYSQL_ROOT_PASSWORD:rootPassword}});
   // Keep the descriptor on errors so the caller can clean up only its own instance.
   try{

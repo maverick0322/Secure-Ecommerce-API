@@ -15,7 +15,7 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
   await accounts.reviewSeller(admin,seller.id,'APPROVED',null,'127.0.0.1');
   let token=await isolatedAuth.issue(seller);
   const merchant=req=>req.set('Authorization',`Bearer ${token}`);
-  const productResponse=await merchant(request(app).post('/api/products')).send({title:'Security fixture',price:'8.25',stock:20});
+  const productResponse=await merchant(request(app).post('/api/products')).send({title:'Security fixture',description:'Security fixture description',price:'8.25',stock:20});
   assert.equal(productResponse.status,201);const productId=productResponse.body.productId;
   const categoryResponse=await auth(request(app).post('/api/categories')).send({name:`Security ${crypto.randomUUID()}`});
   assert.equal(categoryResponse.status,201);const categoryId=categoryResponse.body.categoryId;
@@ -64,7 +64,7 @@ module.exports=async function securityChecks({root,models,app,admin,adminHeader,
     'SELECT quantity FROM cart_items WHERE productId=?',[productId]);
   await rollback('cart.remove',()=>buyer(request(app).delete(`/api/cart/items/${productId}`)),
     'SELECT deletedAt FROM cart_items WHERE productId=?',[productId]);
-  await rollback('producto.crear',()=>merchant(request(app).post('/api/products')).send({title:'Must rollback',price:'2.00'}),
+  await rollback('producto.crear',()=>merchant(request(app).post('/api/products')).send({title:'Must rollback',description:'Must rollback description',price:'2.00'}),
     'SELECT id FROM products WHERE sellerId=? ORDER BY id',[seller.id]);
   await rollback('producto.editar',()=>merchant(request(app).put(`/api/products/${productId}`)).send({price:'9.00'}),
     'SELECT price FROM products WHERE id=?',[productId]);

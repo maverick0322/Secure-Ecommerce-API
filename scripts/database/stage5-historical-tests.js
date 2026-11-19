@@ -10,7 +10,7 @@ const name='secure-ecommerce-stage25';
 function docker(args){const r=spawnSync('docker',[...(process.platform==='win32'?['--context','desktop-linux']:[]),...args],{encoding:'utf8',env:{...process.env,MYSQL_ROOT_PASSWORD:password},timeout:60000,windowsHide:true});if(r.status!==0)throw new Error(r.stderr);return r.stdout.trim();}
 function node(args,env){const r=spawnSync(process.execPath,args,{encoding:'utf8',env:{...process.env,...env},timeout:180000,windowsHide:true,maxBuffer:8*1024*1024});process.stdout.write((r.stdout||'')+(r.stderr||''));if(r.status!==0)throw new Error('Historical isolated tests failed');}
 async function main(){let id,root;try{
- id=docker(['run','--detach','--name',name,'--hostname',name,'--publish','127.0.0.1:13307:3306','--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.0']);
+ id=docker(['run','--detach','--name',name,'--hostname',name,'--publish','127.0.0.1:13307:3306','--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.4']);
  const detail=JSON.parse(docker(['inspect','--format','{{json .}}',name]));assert.equal(detail.Id,id);assert(detail.Mounts.every(m=>m.Type!=='volume'&&m.Type!=='bind'));
  for(let n=0;n<60;n++){try{root=await mysql.createConnection({host:'127.0.0.1',port:13307,user:'root',password});break;}catch{await new Promise(resolve=>setTimeout(resolve,1000));}}
  assert(root);const [[identity]]=await root.query('SELECT @@hostname AS host,@@server_uuid AS uuid,VERSION() AS version');assert.equal(identity.host,name);assert.match(identity.version,/^8\.0\./);

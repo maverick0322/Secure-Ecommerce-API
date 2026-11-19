@@ -3,6 +3,8 @@ const personal = require('../services/personal-account.service');
 const { getRemainingTokenTime } = require('../services/jwttoken.service');
 
 const authentication = require('../services/authentication.service');
+const runtime = require('../services/auth-runtime.service');
+const { normalizeEmailKey } = require('../middlewares/auth-rate-limit.middleware');
 const { AccountError, respondError } = accounts;
 
 async function requestRegistrationCode(req, res) {
@@ -26,12 +28,24 @@ async function register(req, res) {
 }
 
 async function login(req, res) {
+  const emailKey = normalizeEmailKey(req);
   try {
     const result = await authentication.login(req.body, { ipAddress: req.ip });
     req.account={id:result.id}; // Server-validated identity for request logging.
+    if (emailKey) {
+      const rt = await runtime.getRuntime().catch(() => null);
+      await rt?.rateLimits?.clearLoginFailures?.(emailKey).catch(() => {});
+    }
     res.set('Cache-Control', 'no-store'); res.set('Pragma', 'no-cache');
     return res.status(200).json(result);
   } catch (error) {
+    if (error instanceof AccountError && error.status === 401 && emailKey) {
+      const rt = await runtime.getRuntime().catch(() => null);
+      const lockout = await rt?.rateLimits?.recordLoginFailure?.(emailKey).catch(() => null);
+      if (lockout?.locked && req.logAudit) {
+        await req.logAudit('auth.login.locked', null, null, 'DENIED', { reason: 'login_failures_threshold' });
+      }
+    }
     if (req.logAudit && error instanceof AccountError) await req.logAudit('auth.login.denied', null, null, 'DENIED');
     return respondError(res, error);
   }

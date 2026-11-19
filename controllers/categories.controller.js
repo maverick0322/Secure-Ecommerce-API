@@ -17,8 +17,15 @@ async function get(req, res) {
   } catch (error) { return catalog.catalogError(res, error); }
 }
 
+function requireAdminAccount(req) {
+  if (req.account?.profile !== 'ADMIN') {
+    throw new AccountError(403, 'Acceso prohibido para esta cuenta.');
+  }
+}
+
 async function create(req, res) {
   try {
+    requireAdminAccount(req);
     const category = await catalog.mutateCategory(req.account, null, catalog.categoryInput(req.body), false, {ipAddress:req.ip});
     return res.status(201).json(serialize(category));
   } catch (error) { return catalog.catalogError(res, error); }
@@ -26,14 +33,16 @@ async function create(req, res) {
 
 async function update(req, res) {
   try {
+    requireAdminAccount(req);
     const id = catalog.positiveId(req.params.id);
-    await catalog.mutateCategory(req.account, id, catalog.categoryInput(req.body));
+    await catalog.mutateCategory(req.account, id, catalog.categoryInput(req.body), false, {ipAddress:req.ip});
     return res.status(204).end();
   } catch (error) { return catalog.catalogError(res, error); }
 }
 
 async function remove(req, res) {
   try {
+    requireAdminAccount(req);
     const id = catalog.positiveId(req.params.id);
     await catalog.mutateCategory(req.account, id, undefined, true, {ipAddress:req.ip});
     return res.status(204).end();

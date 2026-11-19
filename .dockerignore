@@ -5,6 +5,8 @@ yarn-error.log*
 .pnpm-debug.log*
 .git
 .gitignore
+tests/
+docs/
 .env
 .env.local
 .env.*.local

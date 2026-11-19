@@ -11,7 +11,7 @@ const buyer = tokenFor('BUYER');
 const admin = tokenFor('ADMIN');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGPUaLrDwMDAxAAGABG+AYoOO5YVAAAAAElFTkSuQmCC', 'base64');
 const header = fixture => `Bearer ${fixture.token}`;
-const sample = { id: 1, sellerId: seller.account.id, title: 'Fixture', description: null, price: '12.50', stock: 2, imagePublicId: null };
+const sample = { id: 1, sellerId: seller.account.id, title: 'Fixture', description: 'Descripción válida', price: '12.50', stock: 2, imagePublicId: null };
 
 beforeEach(() => {
   mockAccountLookups();
@@ -21,10 +21,31 @@ afterEach(() => jest.restoreAllMocks());
 
 it('allows an approved seller to create and derives sellerId on the server', async () => {
   const create = jest.spyOn(catalog, 'createProduct').mockResolvedValue(sample);
-  const result = await request(app).post('/api/products').set('Authorization', header(seller)).send({ title: 'Fixture', price: '12.5', stock: 2 });
+  const result = await request(app).post('/api/products').set('Authorization', header(seller)).send({ title: 'Fixture', description: 'Descripción válida', price: '12.5', stock: 2 });
   expect(result.status).toBe(201);
-  expect(result.body).toMatchObject({ productId: 1, sellerId: seller.account.id, price: '12.50', imagePublicId: null });
-  expect(create).toHaveBeenCalledWith(expect.objectContaining({ id: seller.account.id }), { title: 'Fixture', price: '12.50', stock: 2 },{ipAddress:expect.any(String)});
+  expect(result.body).toMatchObject({ productId: 1, sellerId: seller.account.id, description: 'Descripción válida', price: '12.50', imagePublicId: null });
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ id: seller.account.id }), { title: 'Fixture', description: 'Descripción válida', price: '12.50', stock: 2 },{ipAddress:expect.any(String)});
+});
+
+it('requires non-empty description when creating and editing products', async () => {
+  const create = jest.spyOn(catalog, 'createProduct');
+  const update = jest.spyOn(catalog, 'updateProduct');
+  for (const body of [
+    { title: 'Fixture', price: '10.00' },
+    { title: 'Fixture', description: null, price: '10.00' },
+    { title: 'Fixture', description: '   ', price: '10.00' }
+  ]) {
+    const res = await request(app).post('/api/products').set('Authorization', header(seller)).send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/descripción/i);
+  }
+  for (const body of [{ description: null }, { description: '' }, { description: '   ' }]) {
+    const res = await request(app).put('/api/products/1').set('Authorization', header(seller)).send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/descripción/i);
+  }
+  expect(create).not.toHaveBeenCalled();
+  expect(update).not.toHaveBeenCalled();
 });
 
 it.each(['PENDING', 'REJECTED', 'SUSPENDED'])('rejects a %s seller before reaching the catalog', async status => {
@@ -70,11 +91,23 @@ it('validates category assignment and uses logical product mutations', async () 
   expect(remove).toHaveBeenCalledWith(expect.objectContaining({id:seller.account.id}),1,{ipAddress:expect.any(String)});
 });
 
+it('rejects assigning a nonexistent category or assigning to another seller product with 404 without creating categories', async () => {
+  const { Category } = require('../../models');
+  const createCategory = jest.spyOn(Category, 'create');
+  const change = jest.spyOn(catalog, 'changeCategory')
+    .mockRejectedValueOnce(new (require('../../services/accounts.service').AccountError)(404, 'Categoría no encontrada.'))
+    .mockRejectedValueOnce(new (require('../../services/accounts.service').AccountError)(404, 'Producto no encontrado.'));
+  expect((await request(app).post('/api/products/1/categories').set('Authorization', header(seller)).send({ categoryId: 9999 })).status).toBe(404);
+  expect((await request(app).post('/api/products/999/categories').set('Authorization', header(seller)).send({ categoryId: 2 })).status).toBe(404);
+  expect(change).toHaveBeenCalledTimes(2);
+  expect(createCategory).not.toHaveBeenCalled();
+});
+
 it('accepts a category only during creation and serializes its Unicode name',async()=>{
   const create=jest.spyOn(catalog,'createProduct').mockResolvedValue({...sample,categories:[{id:5,name:'Electrónica',protected:false}]});
-  const result=await request(app).post('/api/products').set('Authorization',header(seller)).send({title:'Teclado mecánico',price:'249.99',stock:15,categoryId:5});
+  const result=await request(app).post('/api/products').set('Authorization',header(seller)).send({title:'Teclado mecánico',description:'Teclado RGB mecánico',price:'249.99',stock:15,categoryId:5});
   expect(result.status).toBe(201);expect(result.body.categories).toEqual([{categoryId:5,name:'Electrónica',protected:false}]);
-  expect(create).toHaveBeenCalledWith(expect.any(Object),{title:'Teclado mecánico',price:'249.99',stock:15,categoryId:5},expect.any(Object));
+  expect(create).toHaveBeenCalledWith(expect.any(Object),{title:'Teclado mecánico',description:'Teclado RGB mecánico',price:'249.99',stock:15,categoryId:5},expect.any(Object));
   expect((await request(app).put('/api/products/1').set('Authorization',header(seller)).send({categoryId:5})).status).toBe(400);
 });
 it.each([null,0,-1,1.5,'bad',{},[],true,2147483648])('rejects an invalid initial category %# before creating',async categoryId=>{

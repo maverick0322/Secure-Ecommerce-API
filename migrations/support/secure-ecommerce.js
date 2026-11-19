@@ -19,9 +19,11 @@ async function requireTarget(queryInterface) {
     throw new Error('These migrations require the secure_ecommerce database.');
   }
 
-  const version = /^8\.0\.(\d+)\b/.exec(server.version);
-  if (!version || Number(version[1]) < 18 || /mariadb/i.test(server.version)) {
-    throw new Error('These migrations require MySQL 8.0.18 or later in the 8.0 series.');
+  const version = /^8\.(\d+)\.(\d+)\b/.exec(server.version);
+  const minor = version ? Number(version[1]) : -1;
+  const patch = version ? Number(version[2]) : -1;
+  if (!version || /mariadb/i.test(server.version) || !((minor === 0 && patch >= 18) || minor === 4)) {
+    throw new Error('These migrations require MySQL 8.0.18+ or MySQL 8.4 LTS.');
   }
   if (!/\bSTRICT_(TRANS|ALL)_TABLES\b/.test(server.sqlMode) || Number(server.foreignKeyChecks) !== 1) {
     throw new Error('Enable strict SQL mode and foreign_key_checks before migrating.');
