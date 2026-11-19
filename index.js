@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
@@ -8,13 +9,46 @@ const app = express();
 // 1. Cargar variables de entorno desde el archivo .env
 dotenv.config();
 
-// 2. Seguridad defensiva: suprimir cabecera de tecnología subyacente (CWE-200)
+// 2. Seguridad defensiva: cabeceras HTTP seguras y supresión de tecnología subyacente (CWE-200, CWE-693)
 app.disable('x-powered-by');
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+      frameAncestors: ["'none'"]
+    }
+  },
+  frameguard: { action: 'deny' },
+  referrerPolicy: { policy: 'no-referrer' },
+  xContentTypeOptions: true
+}));
 // No proxy headers are trusted implicitly. Changing this requires a reviewed
 // deployment-specific proxy allowlist, never an unrestricted boolean true.
 app.set('trust proxy', false);
 app.use(require('./middlewares/http-logging.middleware'));
 app.use(require('./middlewares/audit-logs.middleware'));
+
+// 2.1 Control de caché para rutas con datos personales o respuestas autenticadas (CWE-525)
+const NO_STORE_PREFIXES = [
+  '/api/users',
+  '/api/addresses',
+  '/api/orders',
+  '/api/cart',
+  '/api/checkout',
+  '/api/audit-logs',
+  '/api/auth'
+];
+app.use((req, res, next) => {
+  const pathLower = (req.path || '').toLowerCase();
+  const isSensitiveRoute = NO_STORE_PREFIXES.some(
+    prefix => pathLower === prefix || pathLower.startsWith(`${prefix}/`)
+  );
+  if (isSensitiveRoute || req.headers.authorization) {
+    res.set('Cache-Control', 'no-store');
+    res.set('Pragma', 'no-cache');
+  }
+  next();
+});
 
 // 3. Procesamiento de cuerpos de petición (JSON y URL-encoded)
 app.use(express.json());
@@ -22,17 +56,23 @@ app.use(express.urlencoded({
   extended: false
 }));
 
-// 4. Configuración de CORS con lista blanca dinámica
-const defaultOrigins = ['http://localhost:8080', 'http://localhost:8081'];
-const envOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean) : [];
-if(envOrigins.includes('*')) throw new Error('Configure explicit CORS origins; wildcard access is forbidden.');
-const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+// 4. Configuración de CORS: denegar todo por defecto; permitir solo orígenes explícitos vía CORS_ORIGIN
+const envOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean)
+  : [];
+if (envOrigins.includes('*')) {
+  throw new Error('Configure explicit CORS origins; wildcard access is forbidden.');
+}
+const allowedOrigins = Array.from(new Set(envOrigins));
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin) {
+      return callback(null, false);
+    }
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    return callback(new Error(`Origen no permitido por política CORS: ${origin}`));
+    return callback(null, false);
   },
   methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
