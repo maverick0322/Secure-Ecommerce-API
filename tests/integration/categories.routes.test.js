@@ -39,3 +39,10 @@ it('preserves UTF-8 input and output without replacing accented characters',asyn
   const listed=await request(app).get('/api/categories').set('Authorization',header(buyer));
   expect(listed.body[0].name).toBe('Electrónica');expect(listed.headers['content-type']).toContain('charset=utf-8');
 });
+
+it.each(['Niñez y electrónica 🙂','Accesorios e\u0301'])('preserves full Unicode category names without normalization %#',async name=>{
+  const write=jest.spyOn(catalog,'mutateCategory').mockResolvedValue({id:3,name,protected:false});
+  const result=await request(app).post('/api/categories').set('Authorization',header(admin)).set('Content-Type','application/json; charset=utf-8').send(JSON.stringify({name}));
+  expect(result.status).toBe(201);expect(result.body.name).toBe(name);
+  expect(write).toHaveBeenCalledWith(expect.any(Object),null,name,false,expect.any(Object));
+});

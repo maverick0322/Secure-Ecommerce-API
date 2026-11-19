@@ -480,7 +480,7 @@ La cotización dura diez minutos y usa una clave HMAC derivada con dominio separ
 
 Checkout bloquea comprador, vendedores y productos en orden estable, vuelve a comprobar disponibilidad y stock, calcula totales exactos con límite DECIMAL, crea un pedido por vendedor, detalle, historial inicial y auditoría, descuenta inventario y retira lógicamente las líneas dentro de una transacción. El reintento compara contra pedidos/detalles/snapshots persistidos y no descuenta nuevamente stock, incluso si la cotización ya confirmada caducó. La comparación de objetos JSON no depende del orden de claves que utiliza MySQL.
 
-Transiciones: SELLER propietario aprobado o ADMIN puede preparar, enviar y entregar; BUYER solo cancela PENDING; SELLER/ADMIN cancela PENDING o PREPARING. Estados terminales y saltos inválidos se rechazan. No hay edición de snapshots ni borrado de pedidos. La cancelación **no repone automáticamente stock**: no se presupone devolución física ni se introduce otra escritura de inventario sin una política de devoluciones. Se usa UPDATE únicamente de `status, updatedAt`, conforme a los permisos SQL existentes.
+Transiciones: SELLER propietario aprobado o ADMIN puede preparar, enviar y entregar; BUYER solo cancela PENDING; SELLER/ADMIN cancela PENDING o PREPARING. Estados terminales y saltos inválidos se rechazan. No hay edición de snapshots ni borrado de pedidos. La decisión original de no restituir stock se sustituyó por la regla autorizada de [restitución atómica al cancelar](../security/order-cancellation.md): stocks, estado, historial y auditoría se actualizan en la misma transacción, sin cambios de esquema/permisos ni restituciones retroactivas. El pedido sigue recibiendo UPDATE únicamente de `status, updatedAt`.
 
 Pruebas reales: cambio de precio exige reconfirmación; dos confirmaciones concurrentes producen un único resultado; dos compradores compiten por la última unidad y solo uno compra; pedidos independientes para dos vendedores; fallo simulado durante el segundo vendedor revierte también el primero; reintento después del fallo completa la compra; instantáneas sobreviven a cambios de catálogo/dirección; acceso ajeno 404; actor/comprador incorrecto, falta de motivo y transiciones inválidas rechazados. Historial y campos históricos protegidos por permisos SQL.
 
@@ -1092,3 +1092,22 @@ Compose, pruebas Gmail/registro, fixture sintético, README y documentación. No
 modificaron RS256, JWT, sesiones, OTP ni sus controles. No hubo cambios en bases,
 datos, credenciales o contenedores habituales; no se enviaron correos reales,
 no se abrió navegador real ni se ejecutó autorización. Sin commits, push o PR.
+
+
+### Imágenes Cloudinary — fase 3A: G09/H01
+
+Se implementaron cierre durable de operaciones e identidad persistente vinculada a base y cloud para impedir limpiezas de subidas activas y retiradas entre entornos. Los identificadores históricos permanecen legibles y no se eliminan automáticamente. Operaciones abandonadas sin resultado conocido se conservan para revisión manual: no se certifica recuperación autónoma ni HA multi-host. No se accedió a Cloudinary real, a la base habitual o a la imagen del producto 4. H1–H4 siguen pendientes.
+
+Diseño, restricciones y alternativas: [guía de fase 3A](../security/cloudinary-stage3a.md). Archivos, pruebas, resultados y límites: [informe de verificación](../../tests/security/images-phase3a-report.md). No se modificaron workflows, SonarQube, dependencias ni .env; sin commits, sincronización o despliegue.
+
+### Imágenes Cloudinary — fase 3B: H1/H2
+
+Se añadieron clasificación segura de errores del proveedor, backoff durable y presupuesto de recuperación, admisión conservadora por capacidad del diario y conservación de casos manuales. La ruta de carga aplica cuotas y concurrencia mediante el coordinador Redis existente antes de Multer; rechaza con 429/Retry-After o 503 si no puede limitar. Los permisos vencen y se renuevan; la memoria retenida también queda acotada localmente. G09/H01 permanecen y no se habilita borrado de pendientes activos o recursos históricos.
+
+Detalles, alternativas, límites de ventanas/permisos y operación manual: [guía 3B](../security/cloudinary-stage3b.md). Evidencia y resultados: [informe 3B](../../tests/security/images-phase3b-report.md). H3/H4 y el bloqueo externo de npm audit permanecen fuera de esta etapa. Sin cambios de dependencias, workflows, SonarQube, secretos ni datos reales.
+
+### Imágenes Cloudinary — fase 3C: H3, multipart y respuestas del proveedor
+
+Se añade sharp 0.35.5, justificado para decodificar completamente y recodificar imágenes nuevas sin EXIF/GPS. Se limita tamaño, dimensiones, píxeles, fotogramas, procesos y tiempo; la validación de framing/CRC/expansión acotada complementa el decodificador nativo. Se rechazan advertencias de reparaciones nativas, truncados y poliglotas de los escenarios comprobados. Multipart incompleto devuelve 400; el exceso conserva 413. Las confirmaciones del proveedor exigen identificador, tipo, formato, dimensiones, versión, asset_id, bytes, URL y pertenencia coherentes; los resultados inciertos conservan el protocolo de recuperación de 3A/3B.
+
+Diseño, justificación de dependencia y límites: [guía 3C](../security/cloudinary-stage3c.md). Pruebas y resultados: [informe 3C](../../tests/security/images-phase3c-report.md). No se modifican H4, workflows, SonarQube, secretos, bases habituales o recursos reales. Se mantiene el bloqueo externo de auditoría; no se declara CI aprobado. Sin publicaciones ni operaciones Git.

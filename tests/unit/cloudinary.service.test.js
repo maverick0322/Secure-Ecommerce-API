@@ -1,6 +1,7 @@
 const { PassThrough } = require('node:stream');
 const sdk = require('cloudinary').v2;
 const cloud = require('../../services/cloudinary.service');
+const scope = { version:1,id:'11111111-1111-4111-8111-111111111111',binding:'a'.repeat(64) };
 
 afterEach(() => jest.restoreAllMocks());
 
@@ -13,13 +14,13 @@ it.each([new Error('Synthetic failure'), {message:'provider payload'}, 'provider
       stream.on('end',()=>viaStream?stream.emit('error',failure):callback(failure));
       return stream;
     });
-    await expect(cloud.upload(Buffer.from('synthetic'),'synthetic',1)).rejects.toBeInstanceOf(Error);
+    await expect(cloud.upload(Buffer.from('synthetic'),'synthetic',1,scope)).rejects.toBeInstanceOf(Error);
   }
 });
 it('normalizes a synchronous non-Error SDK throw without copying provider details',async()=>{
   jest.replaceProperty(process,'env',{...process.env,CLOUDINARY_CLOUD_NAME:'synthetic',CLOUDINARY_API_KEY:'synthetic',CLOUDINARY_API_SECRET:'synthetic'});
   jest.spyOn(sdk.uploader,'upload_stream').mockImplementation(()=>{throw {message:'private provider payload'};});
-  await expect(cloud.upload(Buffer.from('synthetic'),'synthetic',1)).rejects.toThrow('Image upload failed.');
+  await expect(cloud.upload(Buffer.from('synthetic'),'synthetic',1,scope)).rejects.toThrow('Image upload failed.');
 });
 
 it('uses the official signed stream upload with server-owned options', async () => {
@@ -30,7 +31,7 @@ it('uses the official signed stream upload with server-owned options', async () 
     stream.on('end', () => callback(null, { public_id: options.public_id, format: 'png' }));
     return stream;
   });
-  await expect(cloud.upload(Buffer.from('fixture'), 'server-owned-id', 7)).resolves.toEqual({ public_id: 'server-owned-id', format: 'png' });
+  await expect(cloud.upload(Buffer.from('fixture'), 'server-owned-id', 7, scope)).resolves.toEqual({ public_id: 'server-owned-id', format: 'png' });
   expect(upload.mock.calls[0][0]).toMatchObject({ public_id: 'server-owned-id', overwrite: false, resource_type: 'image',
     allowed_formats: ['jpg', 'png', 'webp'], context: { catalog_owner: 'secure-ecommerce-api', product_id: '7' } });
 });
@@ -41,4 +42,12 @@ it('requires explicit credentials and builds delivery URLs without private keys'
   const url = cloud.deliveryUrl('products/example');
   expect(url).toMatch(/^https:\/\/res\.cloudinary\.com\/synthetic-cloud\/image\/upload\//);
   expect(url).not.toContain('api_key');
+});
+
+it('preserves delivery identifiers created before environment-scoped uploads', () => {
+  jest.replaceProperty(process, 'env', { ...process.env, CLOUDINARY_CLOUD_NAME: 'synthetic-cloud' });
+  const legacy = 'secure-ecommerce/products/701/11111111-1111-4111-8111-111111111111';
+  const url = cloud.deliveryUrl(legacy);
+  expect(url).toMatch(/^https:\/\/res\.cloudinary\.com\/synthetic-cloud\/image\/upload\//);
+  expect(url).toContain(legacy);
 });

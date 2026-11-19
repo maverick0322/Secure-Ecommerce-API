@@ -17,7 +17,7 @@ module.exports=spec=>{
       [body({quote:{type:'string',maxLength:100000}},['quote'])],{type:'object',properties:{replayed:{type:'boolean'},orders:{type:'array',items:{$ref:'#/definitions/Order'}}}}],
     ['/api/orders','get',200,'BUYER: pedidos propios. SELLER aprobado: pedidos de su tienda. ADMIN: consulta general. Devuelve hasta 100 pedidos recientes.',[],{type:'array',items:{$ref:'#/definitions/Order'}}],
     ['/api/orders/{id}','get',200,'Propietario BUYER/SELLER aprobado o ADMIN: consulta snapshots e historial sin modificarlos.',[{name:'id',in:'path',required:true,...id}],{$ref:'#/definitions/Order'}],
-    ['/api/orders/{id}/status','put',200,'Propietario SELLER aprobado o ADMIN: PENDING → PREPARING → SHIPPED → DELIVERED. BUYER solo cancela PENDING; SELLER/ADMIN pueden cancelar PENDING/PREPARING con motivo. No repone stock automáticamente. Historial y auditoría se insertan en la misma transacción.',
+    ['/api/orders/{id}/status','put',200,'Propietario SELLER aprobado o ADMIN: PENDING → PREPARING → SHIPPED → DELIVERED. BUYER solo cancela su PENDING; SELLER/ADMIN pueden cancelar PENDING/PREPARING con motivo obligatorio. Cancelar restituye exactamente una vez las cantidades históricas, también en productos eliminados lógicamente sin reactivarlos. Stock, estado, historial y auditoría son atómicos. Repeticiones, estados terminales y desbordamiento de stock devuelven 409; no hay restitución retroactiva ni reembolsos.',
       [{name:'id',in:'path',required:true,...id},body({status:{type:'string',enum:['PREPARING','SHIPPED','DELIVERED','CANCELED']},reason:{type:'string',minLength:1,maxLength:255}},['status'])],{$ref:'#/definitions/Order'}]
   ];
   for(const [path,method,success,description,parameters,schema] of operations){

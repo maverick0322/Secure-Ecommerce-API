@@ -108,21 +108,65 @@ async function get(account,id){
   const [result]=await fullOrders([order]);
   result.history=await db.OrderStatusHistory.findAll({where:{orderId:id},order:[['id','ASC']]});return result;
 }
+
+async function cancellationSellerLock(account,id,transaction){
+  // Ownership is checked before locking another account. This read is only for
+  // lock ordering; the order and its current state are read again FOR UPDATE.
+  const initial=await db.Order.findOne({where:{id,...scope(account)},transaction});
+  if(!initial) throw new AccountError(404,'Pedido no encontrado.');
+  if(account.id!==initial.sellerId){
+    const user=await db.User.findByPk(initial.sellerId,{transaction,paranoid:false,lock:transaction.LOCK.UPDATE});
+    const seller=await db.Seller.findByPk(initial.sellerId,{transaction,lock:transaction.LOCK.UPDATE});
+    // Cancellation by a buyer/admin remains possible if the seller is inactive.
+    if(!user||!seller) throw conflict('El vendedor del pedido no está disponible.');
+  }
+  return initial.sellerId;
+}
+
+function cancellationQuantities(items){
+  if(!items.length) throw conflict('El pedido no contiene productos para restituir.');
+  const quantities=new Map();
+  for(const item of items){
+    if(!Number.isInteger(item.quantity)||item.quantity<=0||item.quantity>4294967295) throw conflict('Cantidad histórica no válida.');
+    quantities.set(item.productId,(quantities.get(item.productId)||0n)+BigInt(item.quantity));
+  }
+  return [...quantities.entries()].sort((a,b)=>a[0]-b[0]);
+}
+
+async function restockCanceledOrder(order,transaction){
+  // Details are immutable under the application grants; do not request UPDATE
+  // locks/permissions on order_items. The order lock serializes cancellation.
+  const items=await db.OrderItem.findAll({where:{orderId:order.id},transaction,order:[['productId','ASC'],['id','ASC']]});
+  const updates=[];
+  for(const [productId,quantity] of cancellationQuantities(items)){
+    const product=await db.Product.findByPk(productId,{transaction,paranoid:false,lock:transaction.LOCK.UPDATE});
+    if(!product||product.sellerId!==order.sellerId) throw conflict('Producto histórico no disponible para restituir.');
+    if(!Number.isInteger(product.stock)||product.stock<0||product.stock>4294967295||BigInt(product.stock)+quantity>4294967295n){
+      throw conflict('La restitución supera el inventario máximo permitido.');
+    }
+    updates.push({product,stock:Number(BigInt(product.stock)+quantity)});
+  }
+  for(const {product,stock} of updates){
+    await product.update({stock},{transaction,fields:['stock','updatedAt']});
+  }
+}
+
 function transition(account,id,{status,reason},ipAddress){
   return db.sequelize.transaction(async transaction=>{
     const user=await db.User.findByPk(account.id,{transaction,lock:transaction.LOCK.UPDATE});
     if(!isActive(user)) throw new AccountError(403,'Cuenta no disponible.');
     const profile=account.profile==='ADMIN' ? await db.Admin.findByPk(account.id,{transaction}) : account.profile==='SELLER' ? await db.Seller.findByPk(account.id,{transaction,lock:transaction.LOCK.UPDATE}) : await db.Buyer.findByPk(account.id,{transaction});
     if(!profile || (account.profile==='SELLER' && profile.status!=='APPROVED')) throw new AccountError(403,'Perfil no disponible.');
+    const cancellationSeller=status==='CANCELED'?await cancellationSellerLock(account,id,transaction):undefined;
     const order=await db.Order.findOne({where:{id,...scope(account)},transaction,lock:transaction.LOCK.UPDATE});
     if(!order) throw new AccountError(404,'Pedido no encontrado.');
+    if(cancellationSeller!==undefined&&order.sellerId!==cancellationSeller) throw conflict('El vendedor del pedido cambió.');
     const allowed={PENDING:['PREPARING','CANCELED'],PREPARING:['SHIPPED','CANCELED'],SHIPPED:['DELIVERED'],DELIVERED:[],CANCELED:[]};
     if(!allowed[order.status].includes(status)) throw conflict('Transición no permitida.');
     if(account.profile==='BUYER' && !(order.status==='PENDING'&&status==='CANCELED')) throw new AccountError(403,'El comprador solo puede cancelar pedidos pendientes.');
     if(status==='CANCELED'&&!reason) throw new AccountError(400,'La cancelación requiere un motivo.');
     const previousStatus=order.status;
-    // Cancellation does not restock automatically: avoids introducing a second
-    // inventory write path or assuming that goods have been returned.
+    if(status==='CANCELED') await restockCanceledOrder(order,transaction);
     await order.update({status,updatedAt:new Date()},{transaction,fields:['status','updatedAt']});
     await db.OrderStatusHistory.create({orderId:order.id,previousStatus,newStatus:status,changedByUserId:account.id,reason,occurredAt:new Date()},{transaction});
     await audit.write({actorUserId:account.id,action:'order.transition',targetType:'order',targetId:order.id,ipAddress,details:{status,previousStatus}},{transaction});

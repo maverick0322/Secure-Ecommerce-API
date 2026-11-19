@@ -9,7 +9,10 @@ const sessions = { create: jest.fn(async ({ userId }) => ({ sessionId: randomUUI
 revoke: jest.fn(async () => ({})), revokeAll: jest.fn(async () => ({})) };
 function mockAuthRuntime() {
   jest.spyOn(runtime, 'getTokens').mockReturnValue(cryptoServices.tokens);
-  jest.spyOn(runtime, 'getRuntime').mockResolvedValue({ ...cryptoServices, sessions });
+  const { createImageLimits } = require('../../services/image-limits.service');
+  const { createAdmissionDouble } = require('./image-admission-double');
+  jest.spyOn(runtime, 'getRuntime').mockResolvedValue({ ...cryptoServices, sessions,
+    imageLimits: createImageLimits(createAdmissionDouble()) });
 }
 beforeEach(mockAuthRuntime);
 

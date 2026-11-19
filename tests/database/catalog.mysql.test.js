@@ -5,7 +5,7 @@ const mysql = require('mysql2/promise');
 const request = require('supertest');
 
 const isolated = process.env.STAGE3B_MYSQL_UUID ? describe : describe.skip;
-const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGPUaLrDwMDAxAAGABG+AYoOO5YVAAAAAElFTkSuQmCC', 'base64');
 const password = 'synthetic-stage3a-password-7!';
 
 isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s columns', variant => {
@@ -65,11 +65,12 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     remote = new Map();
   }, 30000);
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await isolatedAuth.resetImageAdmission();
     jest.spyOn(console, 'error').mockImplementation(() => {});
-    jest.spyOn(cloud, 'upload').mockImplementation(async (buffer, publicId, id) => {
-      remote.set(publicId, { context: { custom: { catalog_owner: 'secure-ecommerce-api', product_id: String(id) } } });
-      return { public_id: publicId, format: 'png' };
+    jest.spyOn(cloud, 'upload').mockImplementation(async (buffer, publicId, id, scope) => {
+      remote.set(publicId, { context: { custom: require('../../services/image-ownership.service').context(scope, id) } });
+      return require('../support/image-phase2-fixture').uploadResult(publicId,'png',scope,id);
     });
     jest.spyOn(cloud, 'inspect').mockImplementation(async id => remote.get(id) || null);
     jest.spyOn(cloud, 'destroy').mockImplementation(async id => { remote.delete(id); });
@@ -148,6 +149,15 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     expect((await create({categoryId:id})).status).toBe(404);expect(await models.Product.count({paranoid:false})).toBe(count);
   });
 
+  it('preserves accents, enie, emoji and combining sequences in category storage and HTTP',async()=>{
+    const name='Niñez y electrónica 🙂 e\u0301';
+    const created=await request(app).post('/api/categories').set('Authorization',auth(admin)).set('Content-Type','application/json; charset=utf-8').send(JSON.stringify({name}));
+    expect(created.status).toBe(201);expect(created.body.name).toBe(name);
+    const [[stored]]=await db.query('SELECT name,HEX(name) AS bytes FROM categories WHERE id=?',[created.body.categoryId]);
+    expect(stored.name).toBe(name);expect(stored.bytes).toBe(Buffer.from(name,'utf8').toString('hex').toUpperCase());
+    const listed=await request(app).get('/api/categories').set('Authorization',auth(buyer));expect(listed.status).toBe(200);expect(listed.body.find(c=>c.categoryId===created.body.categoryId).name).toBe(name);
+  });
+
   it('reuses one category link across concurrent assignment, removal and reactivation', async () => {
     expect(Number.isInteger(rounds)&&rounds>=1&&rounds<=500).toBe(true);
     const category = await request(app).post('/api/categories').set('Authorization', auth(admin)).send({ name: 'Fixture category' });
@@ -206,20 +216,20 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     jest.spyOn(models.Product.prototype, 'update').mockRejectedValueOnce(new Error('synthetic SQL write failure'));
     expect((await upload(seller)).status).toBe(500);
     expect((await models.Product.findByPk(productId)).imagePublicId).toBe(second.body.imagePublicId);
-    expect(await fs.readdir(directory)).toEqual([]);
+    expect((await fs.readdir(directory)).filter(name=>name!=='.ownership.json')).toEqual([]);
   });
 
   it('recovers an uncertain upload failure from the durable journal', async () => {
     let orphan;
-    cloud.upload.mockImplementationOnce(async (buffer, publicId, id) => {
+    cloud.upload.mockImplementationOnce(async (buffer, publicId, id, scope) => {
       orphan = publicId;
-      remote.set(publicId, { context: { custom: { catalog_owner: 'secure-ecommerce-api', product_id: String(id) } } });
+      remote.set(publicId, { context: { custom: require('../../services/image-ownership.service').context(scope, id) } });
       throw new Error('synthetic timeout after remote creation');
     });
     const previous = (await models.Product.findByPk(productId)).imagePublicId;
     expect((await upload(seller)).status).toBe(502);
     expect(remote.has(orphan)).toBe(true);
-    expect(await fs.readdir(directory)).toHaveLength(1);
+    expect((await fs.readdir(directory)).filter(name=>name!=='.ownership.json')).toHaveLength(1);
     jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 180000);
     await images.recover();
     expect(remote.has(orphan)).toBe(false);
@@ -229,11 +239,11 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
   it('compensates an upload if seller approval is revoked while it is in progress', async () => {
     const previous = (await models.Product.findByPk(productId)).imagePublicId;
     let uploaded;
-    cloud.upload.mockImplementationOnce(async (buffer, publicId, id) => {
+    cloud.upload.mockImplementationOnce(async (buffer, publicId, id, scope) => {
       uploaded = publicId;
-      remote.set(publicId, { context: { custom: { catalog_owner: 'secure-ecommerce-api', product_id: String(id) } } });
+      remote.set(publicId, { context: { custom: require('../../services/image-ownership.service').context(scope, id) } });
       await models.Seller.update({ status: 'SUSPENDED' }, { where: { userId: seller.id } });
-      return { public_id: publicId, format: 'png' };
+      return require('../support/image-phase2-fixture').uploadResult(publicId,'png',scope,id);
     });
     try {
       expect((await upload(seller)).status).toBe(403);
@@ -251,15 +261,30 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     expect(result.status).toBe(200);
     expect((await models.Product.findByPk(productId)).imagePublicId).toBe(result.body.imagePublicId);
     expect(remote.has(previous)).toBe(true);
-    await images.recover();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 180000);
+    try { await images.recover(); } finally { clock.mockRestore(); }
     expect(remote.has(previous)).toBe(false);
   });
 
-  it('serializes concurrent image replacement and removes the superseded upload', async () => {
-    const results = await Promise.all([upload(seller), upload(seller)]);
-    expect(results.map(row => row.status)).toEqual([200, 200]);
+  it('serializes concurrent service replacements and removes the superseded upload', async () => {
+    const results = await Promise.all([images.replace(seller, productId, png), images.replace(seller, productId, png)]);
     const current = (await models.Product.findByPk(productId)).imagePublicId;
-    for (const response of results) expect(remote.has(response.body.imagePublicId)).toBe(response.body.imagePublicId === current);
+    for (const publicId of results) expect(remote.has(publicId)).toBe(publicId === current);
+  });
+
+  it('rejects a second HTTP upload by the same seller before contacting the provider', async () => {
+    let entered, resume;
+    const started = new Promise(resolve => { entered = resolve; });
+    const gate = new Promise(resolve => { resume = resolve; });
+    const normal = cloud.upload.getMockImplementation();
+    cloud.upload.mockImplementationOnce(async (...args) => { entered(); await gate; return normal(...args); });
+    const first = upload(seller).then(response => response);
+    await started;
+    try {
+      const denied = await upload(seller);
+      expect(denied.status).toBe(429); expect(Number(denied.headers['retry-after'])).toBeGreaterThan(0);
+      expect(cloud.upload).toHaveBeenCalledTimes(1);
+    } finally { resume(); await first; }
   });
 
   it('preserves historical images and supports the catalog without files in the final fixture', async () => {

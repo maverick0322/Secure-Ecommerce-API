@@ -46,3 +46,14 @@ it('sanitizes unexpected errors', async () => {
   const response = await request(app).get('/api/addresses').set('Authorization',header);
   expect(response.status).toBe(500); expect(JSON.stringify(response.body)).not.toContain('secret');
 });
+
+it('preserves accented, astral and combining Unicode in address requests and responses',async()=>{
+  const body={recipientName:'María Muñoz 🙂',street:'Peña y José',exteriorNumber:'1',neighborhood:'Niños Héroes',city:'Mérida',state:'Yucatán',postalCode:'01000',label:'Casa e\u0301',country:'MX'};
+  const create=jest.spyOn(addresses,'create').mockResolvedValue({id:'1',...body});
+  const created=await request(app).post('/api/addresses').set('Authorization',header).set('Content-Type','application/json; charset=utf-8').send(JSON.stringify(body));
+  expect(created.status).toBe(201);expect(created.body).toEqual({id:'1',...body});
+  expect(create).toHaveBeenCalledWith(buyer.account.id,body,{ipAddress:expect.any(String)});
+  jest.spyOn(addresses,'list').mockResolvedValue([{id:'1',...body}]);
+  const listed=await request(app).get('/api/addresses').set('Authorization',header);
+  expect(listed.body[0]).toEqual(created.body);expect(listed.headers['content-type']).toContain('charset=utf-8');
+});

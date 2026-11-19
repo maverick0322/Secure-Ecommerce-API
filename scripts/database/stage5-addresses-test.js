@@ -216,6 +216,7 @@ async function main() {
     }finally{mail.sendVerificationCode=originalMail;}
     await require('../../tests/support/security-checks')({root,models,app,admin,adminHeader,
       buyerId:buyers[0],buyerHeader:headers[0],isolatedAuth});
+    await require('../../tests/support/cancellation-checks')({root,models,app,isolatedAuth,expectedUuid:identity.uuid});
     // Re-run the pre-existing account/catalog scenarios against independent final-schema fixtures.
     const adminFixture='00000000-0000-4000-8000-000000000003';
     const fixtureHash=await require('bcrypt').hash('synthetic-stage3a-password-7!',10);

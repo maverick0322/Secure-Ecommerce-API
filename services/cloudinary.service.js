@@ -1,5 +1,7 @@
 const cloudinary = require('cloudinary').v2;
 const { AccountError } = require('./accounts.service');
+const ownership = require('./image-ownership.service');
+const https = require('node:https');
 
 function credentials() {
   const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
@@ -9,35 +11,58 @@ function credentials() {
   return { cloud_name: CLOUDINARY_CLOUD_NAME, api_key: CLOUDINARY_API_KEY, api_secret: CLOUDINARY_API_SECRET, secure: true };
 }
 
-function upload(buffer, publicId, productId) {
+function upload(buffer, publicId, productId, scope) {
   const options = credentials();
+  const context = ownership.context(scope, productId);
   return new Promise((resolve, reject) => {
+    const agent = new https.Agent({ keepAlive: false, maxSockets: 1 });
+    let stream;
+    const deadline = setTimeout(() => {
+      fail({});
+      stream?.destroy();
+    }, 35000);
+    deadline.unref();
     function fail(error) {
-      reject(error instanceof Error ? error : new Error('Image upload failed.'));
+      clearTimeout(deadline);
+      agent.destroy();
+      const safe = new Error('Image upload failed.');
+      safe.imageFailure = classify(error);
+      reject(safe);
     }
     try {
-    const stream = cloudinary.uploader.upload_stream({ ...options, public_id: publicId, resource_type: 'image', type: 'upload',
+    stream = cloudinary.uploader.upload_stream({ ...options, agent, public_id: publicId, resource_type: 'image', type: 'upload',
       overwrite: false, allowed_formats: ['jpg', 'png', 'webp'], timeout: 30000,
-      context: { catalog_owner: 'secure-ecommerce-api', product_id: String(productId) } },
-    (error, result) => error ? fail(error) : resolve(result));
+      context },
+    (error, result) => { clearTimeout(deadline); agent.destroy(); return error ? fail(error) : resolve(result); });
     stream.on('error', fail);
     stream.end(buffer);
     } catch (error) { fail(error); }
   });
 }
 
+function classify(error) {
+  const status = Number(error?.http_code ?? error?.error?.http_code);
+  if ([400, 401, 403, 404, 413, 415, 422].includes(status)) return 'definitive';
+  if (status === 429) return 'transient';
+  return 'uncertain';
+}
+
 async function inspect(publicId) {
   try {
-    return await cloudinary.api.resource(publicId, { ...credentials(), resource_type: 'image', type: 'upload', context: true, timeout: 30000 });
+    const result = await cloudinary.api.resource(publicId, { ...credentials(), resource_type: 'image', type: 'upload', context: true, timeout: 30000 });
+    if (!result || result.public_id !== publicId || result.resource_type !== 'image' || result.type !== 'upload') throw new Error('Invalid inspection');
+    return result;
   } catch (error) {
-    if (error.http_code === 404 || error.error?.http_code === 404) return null;
-    throw error;
+    if (error?.http_code === 404 || error?.error?.http_code === 404) return null;
+    const safe = new Error('Image inspection failed.'); safe.imageFailure=classify(error); throw safe;
   }
 }
 
 async function destroy(publicId) {
-  const result = await cloudinary.uploader.destroy(publicId, { ...credentials(), resource_type: 'image', type: 'upload', invalidate: true, timeout: 30000 });
-  if (!['ok', 'not found'].includes(result.result)) throw new Error('Image deletion was not confirmed');
+  let result;
+  try { result = await cloudinary.uploader.destroy(publicId, { ...credentials(), resource_type: 'image', type: 'upload', invalidate: true, timeout: 30000 }); }
+  catch(error) { const safe=new Error('Image deletion failed.');safe.imageFailure=classify(error);throw safe; }
+  if (!['ok', 'not found'].includes(result?.result)) throw new Error('Image deletion was not confirmed');
 }
 
 function deliveryUrl(publicId) {
@@ -45,4 +70,4 @@ function deliveryUrl(publicId) {
   return cloudinary.url(publicId, { cloud_name: process.env.CLOUDINARY_CLOUD_NAME, secure: true, resource_type: 'image', type: 'upload' });
 }
 
-module.exports = { credentials, upload, inspect, destroy, deliveryUrl };
+module.exports = { credentials, upload, inspect, destroy, deliveryUrl, classify };

@@ -61,13 +61,13 @@ it.each([['ADMIN',{}],['BUYER',{buyerId:'owner'}],['SELLER',{sellerId:'owner'}]]
   const result=await orders.get(actor,'7');expect(db.Order.findOne).toHaveBeenCalledWith({where:{id:'7',...where}});expect(result.history).toEqual([{newStatus:'PENDING'}]);
   db.Order.findOne.mockResolvedValue(null);await expect(orders.get(actor,'8')).rejects.toMatchObject({status:404});
 });
-it.each(['ADMIN','SELLER','BUYER'])('records an authorized %s cancellation without touching snapshots or stock',async profile=>{
+it.each(['ADMIN','SELLER','BUYER'])('records an authorized %s cancellation and restocks without touching snapshots',async profile=>{
   const actor={id:profile==='SELLER'?seller:buyer,profile};
   jest.spyOn(db.Admin,'findByPk').mockResolvedValue({});jest.spyOn(db.Order,'findOne').mockResolvedValue(order);
   await orders.transition(actor,'7',{status:'CANCELED',reason:'Synthetic reason'},'127.0.0.1');
   expect(order.update).toHaveBeenCalledWith({status:'CANCELED',updatedAt:expect.any(Date)},{transaction:tx,fields:['status','updatedAt']});
   expect(db.OrderStatusHistory.create).toHaveBeenCalledWith(expect.objectContaining({previousStatus:'PENDING',newStatus:'CANCELED',reason:'Synthetic reason'}),{transaction:tx});
-  expect(product.update).not.toHaveBeenCalled();
+  expect(product.update).toHaveBeenCalledWith({stock:7},{transaction:tx,fields:['stock','updatedAt']});
 });
 it.each(['inactive','unapproved','missing','backward','buyer-shipping','reason'])('rejects an unauthorized transition: %s',async kind=>{
   jest.spyOn(db.Order,'findOne').mockResolvedValue(order);
