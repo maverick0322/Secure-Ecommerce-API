@@ -3,11 +3,38 @@ const cors = require('cors');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
 const fs = require('fs');
+const net = require('node:net');
 const path = require('path');
 const app = express();
 
 // 1. Cargar variables de entorno desde el archivo .env
 dotenv.config();
+
+// 1.1 Configuración explícita de TRUST_PROXY (desactivada por defecto, SEC-08)
+function resolveTrustProxy(raw = process.env.TRUST_PROXY) {
+  if (raw === undefined || raw === null) return false;
+  const trimmed = String(raw).trim();
+  if (!trimmed || trimmed.toLowerCase() === 'false' || trimmed === '0') return false;
+  if (trimmed.toLowerCase() === 'true' || trimmed === '*') {
+    throw new Error('TRUST_PROXY must be false or an explicit comma-separated list of trusted proxy IPs/CIDRs.');
+  }
+  const entries = trimmed.split(',').map(item => item.trim()).filter(Boolean);
+  for (const entry of entries) {
+    const [ip, prefix, extra] = entry.split('/');
+    const ipVersion = net.isIP(ip);
+    if (!ipVersion || extra !== undefined) {
+      throw new Error(`Invalid TRUST_PROXY entry: ${entry}`);
+    }
+    if (prefix !== undefined) {
+      const bits = Number(prefix);
+      const maxBits = ipVersion === 4 ? 32 : 128;
+      if (!/^\d+$/.test(prefix) || bits < 0 || bits > maxBits) {
+        throw new Error(`Invalid TRUST_PROXY CIDR: ${entry}`);
+      }
+    }
+  }
+  return entries;
+}
 
 // 2. Seguridad defensiva: cabeceras HTTP seguras y supresión de tecnología subyacente (CWE-200, CWE-693)
 app.disable('x-powered-by');
@@ -23,8 +50,8 @@ app.use(helmet({
   xContentTypeOptions: true
 }));
 // No proxy headers are trusted implicitly. Changing this requires a reviewed
-// deployment-specific proxy allowlist, never an unrestricted boolean true.
-app.set('trust proxy', false);
+// deployment-specific proxy allowlist via TRUST_PROXY, never boolean true.
+app.set('trust proxy', resolveTrustProxy());
 app.use(require('./middlewares/http-logging.middleware'));
 app.use(require('./middlewares/audit-logs.middleware'));
 

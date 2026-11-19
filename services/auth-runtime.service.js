@@ -4,6 +4,7 @@ const { loadCredentialVersionService } = require('./credential-version.service')
 const { loadRedisConfiguration, createAuthRedisConnection } = require('./auth-redis.service');
 const { createSessionService } = require('./auth-session.service');
 const { createImageLimits } = require('./image-limits.service');
+const { createRateLimitService } = require('./auth-rate-limit.service');
 let tokens, pending, connection;
 function getTokens() { return tokens ||= loadAccessTokenService(); }
 function getRuntime() {
@@ -13,7 +14,13 @@ function getRuntime() {
     const access = getTokens(), versions = loadCredentialVersionService();
     connection = createAuthRedisConnection(loadRedisConfiguration());
     await connection.connect();
-    return Object.freeze({ tokens: access, versions, sessions: createSessionService(connection), imageLimits: createImageLimits(connection) });
+    return Object.freeze({
+      tokens: access,
+      versions,
+      sessions: createSessionService(connection),
+      imageLimits: createImageLimits(connection),
+      rateLimits: createRateLimitService(connection)
+    });
   });
 }
 function close() { connection?.close(); }
