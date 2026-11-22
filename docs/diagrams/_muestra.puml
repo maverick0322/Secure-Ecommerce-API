@@ -1,0 +1,243 @@
+' =============================================================================
+' _muestra.puml — Muestra de validación visual y tipográfica de los 6 tipos
+' de diagramas UML 2.5.1 / Modelo de Datos usando _skin.puml.
+' Referencia de línea base: docs/BASELINE.md y docs/diagrams/GUIA_ESTILO_UML.md
+' =============================================================================
+
+@startuml muestra_01_casos_uso
+!include _skin.puml
+left to right direction
+title Muestra 1 — Diagrama de Casos de Uso (UML 2.5.1)
+caption Verificación de estilo _skin.puml: actores, límite del sistema, «include» y «extend»
+
+actor "Comprador" as Buyer
+actor "Gmail OAuth2 API" as Gmail <<external>>
+
+rectangle "Tienda en Línea Segura (Contexto Muestra)" {
+  usecase "UC-01: Registrar cuenta\nde comprador" as UC_Register
+  usecase "UC-02: Verificar código\nOTP por correo" as UC_VerifyOtp
+  usecase "UC-03: Realizar pedido\nen checkout" as UC_Checkout
+  usecase "UC-04: Cancelar pedido\nen estado PENDING" as UC_CancelOrder
+}
+
+Buyer -- UC_Register
+Buyer -- UC_Checkout
+Buyer -- UC_CancelOrder
+UC_Register ..> UC_VerifyOtp : <<include>>
+UC_VerifyOtp -- Gmail
+UC_CancelOrder ..> UC_Checkout : <<extend>>\n{status == PENDING}
+@enduml
+
+@startuml muestra_02_clases
+!include _skin.puml
+title Muestra 2 — Diagrama de Clases (UML 2.5.1 / ICONIX ECB)
+caption Verificación de compartimentos, visibilidad (+/-/~/), estereotipos y multiplicidades
+
+enum OrderStatus <<enumeration>> {
+  PENDING
+  PREPARING
+  SHIPPED
+  DELIVERED
+  CANCELED
+}
+
+class OrdersController <<boundary>> {
+  + createQuote(req : Request, res : Response) : Promise<void>
+  + confirmCheckout(req : Request, res : Response) : Promise<void>
+}
+
+class OrdersService <<control>> {
+  - {static} QUOTE_TTL_SECONDS : int = 600
+  + createCheckoutQuote(buyerId : UUID, addressId : bigint) : Promise<CheckoutQuoteDto>
+  + confirmCheckoutQuote(buyerId : UUID, quoteToken : string) : Promise<Order[]>
+  + updateOrderStatus(actor : Actor, orderId : bigint, status : OrderStatus) : Promise<Order>
+}
+
+class Order <<entity>> {
+  + id : bigint
+  + checkoutId : UUID
+  + status : OrderStatus = PENDING
+  + total : decimal
+  + cancelReason : string [0..1]
+}
+
+class OrderItem <<entity>> {
+  + id : bigint
+  + productTitleSnapshot : string
+  + unitPriceSnapshot : decimal
+  + quantity : int
+  + lineTotal : decimal
+}
+
+OrdersController ..> OrdersService : <<use>>
+OrdersService ..> Order : <<create/manage>>
+Order "1" *-- "1..*" OrderItem : items >
+Order ..> OrderStatus
+@enduml
+
+@startuml muestra_03_secuencia
+!include _skin.puml
+autonumber "<b>[00]"
+title Muestra 3 — Diagrama de Secuencia (UML 2.5.1)
+caption Verificación de lifelines, activación, mensajes síncronos/retorno y fragmento alt
+
+actor "Comprador" as ActorBuyer
+boundary "AuthController\n(frontendnet)" as FeAuth <<boundary>>
+control "AuthRateLimitMiddleware\n(backendnode)" as RateLimit <<control>>
+control "AuthenticationService\n(backendnode)" as AuthSvc <<control>>
+database "Redis 7.4\n(mTLS :6380)" as Redis <<database>>
+database "MySQL 8.4\n(:3306)" as MySQL <<database>>
+
+ActorBuyer -> FeAuth : POST /Auth/Index (email, password)
+activate FeAuth
+FeAuth -> RateLimit : POST /api/auth { email, password }
+activate RateLimit
+RateLimit -> Redis : EVAL script ventana deslizante (IP 120/60s, cuenta 10/60s)
+activate Redis
+Redis --> RateLimit : allowed = true, locked = false
+deactivate Redis
+
+RateLimit -> AuthSvc : authenticate(email, password, ipAddress)
+activate AuthSvc
+AuthSvc -> MySQL : SELECT user, buyer, seller WHERE email = ?
+activate MySQL
+MySQL --> AuthSvc : User (status = ACTIVE, passwordHash = $scrypt$v1$32768$8$3$...)
+deactivate MySQL
+
+AuthSvc -> AuthSvc : verifyPassword(password, passwordHash) [scrypt N=32768,r=8,p=3]
+
+alt [Credenciales válidas y cuenta ACTIVE]
+  AuthSvc -> Redis : HSET session:<sid> + SET alive:<sid> (IDLE=30m, ABS=8h)
+  activate Redis
+  Redis --> AuthSvc : OK
+  deactivate Redis
+  AuthSvc --> RateLimit : 200 OK { jwt (RS256, 300s), refreshToken (43 chars) }
+  RateLimit --> FeAuth : 200 OK
+  FeAuth --> ActorBuyer : Set-Cookie .frontendnet (HttpOnly, SameSite=Lax) + 302 Redirect
+else [Credenciales inválidas]
+  AuthSvc -> Redis : INCR fallo de cuenta (umbral lockout = 5 en 15m)
+  activate Redis
+  Redis --> AuthSvc : failures
+  deactivate Redis
+  AuthSvc --> RateLimit : 401 Unauthorized
+  RateLimit --> FeAuth : 401 Unauthorized
+  FeAuth --> ActorBuyer : Vista Login con error sanitizado
+end
+deactivate AuthSvc
+deactivate RateLimit
+deactivate FeAuth
+@enduml
+
+@startuml muestra_04_componentes
+!include _skin.puml
+title Muestra 4 — Diagrama de Componentes (UML 2.5.1)
+caption Verificación de estilo uml2, contenedores y conectores ball-and-socket
+
+package "frontendnet (ASP.NET Core 9.0 BFF)" {
+  component "Controllers + Razor Views" as FeMvc <<boundary>>
+  component "SessionTokenManager +\nDelegatingHandlers" as FeSession <<control>>
+  FeMvc ..> FeSession : <<use>>
+}
+
+interface "REST API /api/*\n(JSON / Multipart)" as IRestApi
+
+package "backendnode (Node.js 24 LTS / Express 4)" {
+  component "Routes + Security Middlewares\n(Helmet, RateLimit, Authorize)" as BeEdge <<boundary>>
+  component "Domain Services\n(Auth, Catalog, Orders, Images)" as BeServices <<control>>
+  component "Sequelize Models" as BeModels <<entity>>
+  BeEdge ..> BeServices
+  BeServices ..> BeModels
+}
+
+interface "RESP mTLS :6380" as IRedis
+interface "MySQL Protocol :3306" as IMySql
+
+database "Redis 7.4 TLS" as CompRedis <<database>>
+database "MySQL 8.4" as CompMySql <<database>>
+
+FeSession -( IRestApi
+IRestApi - BeEdge
+BeServices -( IRedis
+IRedis - CompRedis
+BeModels -( IMySql
+IMySql - CompMySql
+@enduml
+
+@startuml muestra_05_despliegue
+!include _skin.puml
+title Muestra 5 — Diagrama de Despliegue (UML 2.5.1)
+caption Verificación de nodos, entornos de ejecución, artefactos y enlaces con protocolo
+
+node "Host / Red Interna Docker (backend_internal)" as DockerHost <<device>> {
+  node "Contenedor backend\n(node:24-alpine, USER node)" as NodeContainer <<container>> {
+    node "Node.js 24 LTS Runtime" as NodeEnv <<executionEnvironment>> {
+      artifact "backendnode (/app/index.js)" as ArtBackend <<artifact>>
+      artifact "/run/secrets/* (*_FILE)" as ArtSecrets <<artifact>>
+    }
+  }
+
+  node "Contenedor redis\n(redis:7.4-alpine)" as RedisContainer <<container>> {
+    node "Redis Server 7.4" as RedisEnv <<executionEnvironment>> {
+      artifact "users.acl + /tls/redis.*" as ArtRedisTls <<artifact>>
+    }
+  }
+
+  node "Contenedor db\n(mysql:8.4)" as MysqlContainer <<container>> {
+    node "MySQL 8.4 Engine" as MysqlEnv <<executionEnvironment>> {
+      artifact "ecommerce_db (14 tablas)" as ArtMysqlDb <<artifact>>
+    }
+  }
+}
+
+NodeContainer -- RedisContainer : "<<mTLS RESP :6380>>\ntls-auth-clients yes"
+NodeContainer -- MysqlContainer : "<<TCP MySQL :3306>>\ncaching_sha2_password"
+@enduml
+
+@startuml muestra_06_er
+!include _skin.puml
+title Muestra 6 — Modelo de Datos Lógico / Físico (Notación Tabla UML)
+caption Verificación de estereotipos «table», «PK», «FK», «UK» y tipos MySQL 8.4
+
+class "users" as TUsers <<table>> {
+  + *id : CHAR(36) <<PK>>
+  --
+  + *email : VARCHAR(254) <<UK>>
+  + *password_hash : VARCHAR(255)
+  + *name : VARCHAR(120)
+  + phone_number : VARCHAR(20)
+  + *profile : ENUM('ADMIN','BUYER','SELLER')
+  + *status : ENUM('ACTIVE','SUSPENDED','DISABLED')
+  + *credential_version : INT UNSIGNED = 1
+  + *created_at : DATETIME
+  + *updated_at : DATETIME
+  + deleted_at : DATETIME <<IDX>>
+}
+
+class "sellers" as TSellers <<table>> {
+  + *user_id : CHAR(36) <<PK, FK>>
+  --
+  + *store_name : VARCHAR(120)
+  + *status : ENUM('PENDING','APPROVED','REJECTED','SUSPENDED') <<IDX>>
+  + rejection_reason : VARCHAR(255)
+  + reviewed_at : DATETIME
+  + reviewed_by_user_id : CHAR(36) <<FK>>
+}
+
+class "products" as TProducts <<table>> {
+  + *id : INT UNSIGNED <<PK>>
+  --
+  + *seller_id : CHAR(36) <<FK, IDX>>
+  + *title : VARCHAR(255) <<IDX>>
+  + *description : TEXT
+  + *price : DECIMAL(12,2)
+  + *stock : INT UNSIGNED = 0
+  + image_public_id : VARCHAR(255)
+  + image_url : VARCHAR(500)
+  + *created_at : DATETIME
+  + *updated_at : DATETIME
+  + deleted_at : DATETIME <<IDX>>
+}
+
+TUsers "1" ||--o| "0..1" TSellers : "user_id"
+TSellers "1" ||--o{ "0..200" TProducts : "seller_id"
+@enduml
