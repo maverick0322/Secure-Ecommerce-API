@@ -2,9 +2,11 @@ const cloudinary = require('cloudinary').v2;
 const { AccountError } = require('./accounts.service');
 const ownership = require('./image-ownership.service');
 const https = require('node:https');
+const { readEnvSecret } = require('./secret-env.service');
 
 function credentials() {
-  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
+  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY } = process.env;
+  const CLOUDINARY_API_SECRET = readEnvSecret('CLOUDINARY_API_SECRET');
   if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
     throw new AccountError(503, 'El servicio de imágenes no está configurado.');
   }

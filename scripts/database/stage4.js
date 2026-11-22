@@ -33,7 +33,7 @@ function checkContainer() {
   const details = JSON.parse(docker(['inspect', '--format',
     '{{json .}}', container]));
   assert.equal(details.Id, expectedContainer);
-  assert.equal(details.Config.Image, 'mysql:8.0');
+  assert.equal(details.Config.Image, 'mysql:8.4');
   assert(details.NetworkSettings.Ports['3306/tcp'].some(p => p.HostPort === '3307'));
   return details;
 }

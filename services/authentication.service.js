@@ -3,9 +3,9 @@ const hashes = require('./password-hash.service');
 const accounts = require('./accounts.service');
 const runtime = require('./auth-runtime.service');
 const { AccountError } = accounts;
-// Public timing-only bcrypt work factor (12), never assigned to any account.
-// Keep the comparison on lookup misses; this value is not a credential.
-const DUMMY_HASH = '$2b$12$yIYsFG/CLkHoQu1IXqg0Ke4Vy3kGCImKQPBR0tcNW5QXxWLnxZH3y';
+// Synthetic timing-only scrypt hash (N=32768, r=8, p=3, 16B salt, 64B digest)
+// generated once at startup; never assigned to any account.
+const DUMMY_HASH = hashes.createDummyHash();
 function body(input, fields) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
     Object.keys(input).length !== fields.length || fields.some(key => !Object.hasOwn(input, key))) {

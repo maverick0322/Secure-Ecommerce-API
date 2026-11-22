@@ -10,6 +10,7 @@ const { RedisDouble } = require('../support/redis-double');
 const { cryptography } = require('../support/isolated-auth');
 const { createAuthRedisConnection } = require('../../services/auth-redis.service');
 const { createSessionService } = require('../../services/auth-session.service');
+const { createRateLimitService } = require('../../services/auth-rate-limit.service');
 let server, connection, services, users, buyer, admin;
 const password = crypto.randomBytes(24).toString('base64url');
 const cryptoServices = cryptography();
@@ -19,7 +20,7 @@ beforeEach(async () => {
   connection = createAuthRedisConnection({ host: '127.0.0.1', port: 16379, tls: false, username: 'isolated',
     password: crypto.randomBytes(32).toString('hex'), namespace: 'isolated-http', generation: crypto.randomUUID(),
     expectedRunId: server.runId }, { poolFactory: (o, p) => server.poolFactory(o, p) });
-  await connection.connect(); services = { ...cryptoServices, sessions: createSessionService(connection) };
+  await connection.connect(); services = { ...cryptoServices, sessions: createSessionService(connection), rateLimits: createRateLimitService(connection) };
   jest.spyOn(runtime, 'getTokens').mockReturnValue(services.tokens);
   jest.spyOn(runtime, 'getRuntime').mockResolvedValue(services);
   users = new Map();

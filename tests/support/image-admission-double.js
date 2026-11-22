@@ -10,7 +10,10 @@ function createAdmissionDouble() {
         return work({ watch: async () => {}, time: async () => connection.now,
           get: async key => { const row = data.get(key); return row && row.until > connection.now ? row.value : null; },
           commit: async (commands = []) => {
-            for (const [, key, value, , until] of commands) data.set(key, { value, until: Number(until) });
+            for (const [cmd, key, value, , until] of commands) {
+              if (cmd === 'DEL') data.delete(key);
+              else data.set(key, { value, until: Number(until) });
+            }
           } });
       });
       tail = next.catch(() => {}); return next;

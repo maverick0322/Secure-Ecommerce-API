@@ -2,6 +2,26 @@ const { Product, Category, ProductCategory, User, Seller, Admin, sequelize, Sequ
 const { AccountError, isActive, respondError } = require('./accounts.service');
 const { Op } = Sequelize;
 
+function envPositiveInt(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : fallback;
+}
+
+function recordQuotaDenial(actorUserId, action, targetType, targetId, context = {}, reason) {
+  const details = { reason, ...(targetType === 'product' && Number.isInteger(Number(targetId)) ? { productId: Number(targetId) } : {}) };
+  return require('./audit.service').write({
+    actorUserId,
+    action,
+    targetType,
+    targetId,
+    ipAddress: context.ipAddress,
+    outcome: 'DENIED',
+    details
+  }).catch(() => {});
+}
+
 function catalogError(res, error) {
   if (error instanceof Sequelize.UniqueConstraintError || error.original?.code === 'ER_LOCK_DEADLOCK') {
     return respondError(res, new AccountError(409, 'La operación entra en conflicto con otro cambio del catálogo.'));
@@ -44,11 +64,11 @@ function productInput(body, creating = false) {
     }
     result.title = body.title.trim();
   }
-  if (Object.hasOwn(body, 'description')) {
-    if (body.description !== null && (typeof body.description !== 'string' || Buffer.byteLength(body.description) > 65535)) {
-      throw new AccountError(400, 'La descripción debe ser texto de hasta 65535 bytes o null.');
+  if (creating || Object.hasOwn(body, 'description')) {
+    if (typeof body.description !== 'string' || !body.description.trim() || Buffer.byteLength(body.description.trim()) > 65535) {
+      throw new AccountError(400, 'La descripción es obligatoria y debe ser texto no vacío de hasta 65535 bytes.');
     }
-    result.description = body.description;
+    result.description = body.description.trim();
   }
   if (creating || Object.hasOwn(body, 'price')) {
     result.price = productPrice(body.price);
@@ -59,11 +79,19 @@ function productInput(body, creating = false) {
   return result;
 }
 
+function normalizeCategoryName(value) {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
 function categoryInput(body) {
-  if (!body || Object.keys(body).length !== 1 || typeof body.name !== 'string' || !body.name.trim() || [...body.name.trim()].length > 120) {
+  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || typeof body.name !== 'string') {
     throw new AccountError(400, 'Indique únicamente name, de 1 a 120 caracteres.');
   }
-  return body.name.trim();
+  const normalized = normalizeCategoryName(body.name);
+  if (!normalized || [...normalized].length > 120) {
+    throw new AccountError(400, 'Indique únicamente name, de 1 a 120 caracteres.');
+  }
+  return normalized;
 }
 
 async function checkPricePrecision(price, transaction) {
@@ -103,6 +131,12 @@ function mutateProduct(account, id, apply, context = {}, action = 'producto.edit
 function createProduct(account, input, context = {}) {
   return sequelize.transaction(async transaction => {
     await lockActor(account, transaction, 'SELLER');
+    const maxProducts = envPositiveInt('SELLER_MAX_ACTIVE_PRODUCTS', 200);
+    const activeProducts = await Product.count({ where: { sellerId: account.id }, transaction });
+    if (activeProducts >= maxProducts) {
+      await recordQuotaDenial(account.id, 'producto.quota_exceeded', 'seller', account.id, context, 'seller_max_active_products');
+      throw new AccountError(409, `Se alcanzó el límite máximo de ${maxProducts} productos activos por vendedor.`);
+    }
     await checkPricePrecision(input.price, transaction);
     const {categoryId,...values}=input;
     let category;
@@ -124,6 +158,9 @@ function createProduct(account, input, context = {}) {
 
 function updateProduct(account, id, input, context = {}) {
   return mutateProduct(account, id, async (product, transaction) => {
+    if (!Object.hasOwn(input, 'description') && (typeof product.description !== 'string' || !product.description.trim())) {
+      throw new AccountError(400, 'La descripción es obligatoria y debe ser texto no vacío de hasta 65535 bytes.');
+    }
     await checkPricePrecision(input.price, transaction);
     return product.update(input, { transaction });
   },context);
@@ -140,12 +177,22 @@ function changeCategory(account, productId, categoryId, removing, context = {}) 
     const link = await ProductCategory.findOne({ where, paranoid: false, transaction, lock: transaction.LOCK.UPDATE });
     if (removing) {
       if (link && !link.deletedAt) await link.destroy({ transaction });
-    } else if (link) {
-      if (link.deletedAt) await link.restore({ transaction });
+    } else if (link && !link.deletedAt) {
+      // Already active; idempotent no-op.
     } else {
-      const now = new Date();
-      const row = { ...where, createdAt: now };
-      await sequelize.getQueryInterface().bulkInsert('product_categories', [row], { transaction }, ProductCategory.rawAttributes);
+      const maxCategories = envPositiveInt('PRODUCT_MAX_CATEGORIES', 10);
+      const activeCategories = await ProductCategory.count({ where: { productId: product.id }, transaction });
+      if (activeCategories >= maxCategories) {
+        await recordQuotaDenial(account.id, 'productocategoria.quota_exceeded', 'product', product.id, context, 'product_max_categories');
+        throw new AccountError(409, `Cada producto puede tener como máximo ${maxCategories} categorías activas.`);
+      }
+      if (link) {
+        await link.restore({ transaction });
+      } else {
+        const now = new Date();
+        const row = { ...where, createdAt: now };
+        await sequelize.getQueryInterface().bulkInsert('product_categories', [row], { transaction }, ProductCategory.rawAttributes);
+      }
     }
   },context,removing ? 'productocategoria.remover' : 'productocategoria.agregar',`${productId}:${categoryId}`);
 }
@@ -158,11 +205,18 @@ function visibleProductQuery() {
   ] };
 }
 
+function escapeLike(value) {
+  return value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+}
+
 function listProducts(search) {
   const query = visibleProductQuery();
   if (search !== undefined) {
     if (typeof search !== 'string' || search.length > 255) throw new AccountError(400, 'El término de búsqueda no es válido.');
-    query.where.title = { [Op.like]: `%${search}%` };
+    const trimmed = search.trim();
+    if (trimmed.length > 0) {
+      query.where.title = { [Op.like]: `%${escapeLike(trimmed)}%` };
+    }
   }
   return Product.findAll({ ...query, order: [['id', 'ASC']] });
 }
@@ -175,6 +229,9 @@ async function getProduct(id) {
 }
 
 function mutateCategory(account, id, name, removing = false, context = {}) {
+  if (account?.profile && account.profile !== 'ADMIN') {
+    return Promise.reject(new AccountError(403, 'Se requiere ADMIN.'));
+  }
   return sequelize.transaction({ isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.REPEATABLE_READ }, async transaction => {
     await lockActor(account, transaction, 'ADMIN');
     let category;
@@ -188,11 +245,17 @@ function mutateCategory(account, id, name, removing = false, context = {}) {
       await require('./audit.service').business(account.id,'categoria.eliminar','category',id,transaction,context);
       return;
     }
-    // Lock matching names and gaps while the transition lacks the final unique index.
-    const matches = await Category.findAll({ where: { name }, paranoid: false, transaction, lock: transaction.LOCK.UPDATE });
+    const normalizedName = normalizeCategoryName(name);
+    // Case-insensitive and collapsed-whitespace uniqueness check (including soft-deleted rows).
+    const matches = await Category.findAll({
+      where: Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('name')), normalizedName.toLowerCase()),
+      paranoid: false,
+      transaction,
+      lock: transaction.LOCK.UPDATE
+    });
     if (matches.some(row => row.id !== id)) throw new AccountError(409, 'Ya existe una categoría con ese nombre.');
-    const result = category ? await category.update({ name }, { transaction }) :
-      await Category.create({ name, protected: false }, { transaction });
+    const result = category ? await category.update({ name: normalizedName }, { transaction }) :
+      await Category.create({ name: normalizedName, protected: false }, { transaction });
     await require('./audit.service').business(account.id,id ? 'categoria.editar' : 'categoria.crear','category',result.id,transaction,context);
     return result;
   });

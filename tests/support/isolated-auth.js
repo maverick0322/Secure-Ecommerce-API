@@ -32,7 +32,8 @@ async function start({ applicationRoot, poolFactory, onTiming=()=>{} } = {}) {
     try {
       const connectStart=performance.now();
       await store.connect(); const services = { ...cryptoServices, sessions: createSessionService(store),
-        imageLimits: require('../../services/image-limits.service').createImageLimits(store) };
+        imageLimits: require('../../services/image-limits.service').createImageLimits(store),
+        rateLimits: require('../../services/auth-rate-limit.service').createRateLimitService(store) };
       onTiming('redis-connect',performance.now()-connectStart);
       targetRuntime.getTokens = () => services.tokens; targetRuntime.getRuntime = async () => services;
       handle = { ...services, config, async resetImageAdmission() {

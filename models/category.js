@@ -4,6 +4,7 @@ module.exports = (sequelize, DataTypes) => {
   const Category = sequelize.define('Category', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true, allowNull: false },
     name: { type: DataTypes.STRING(120), allowNull: false, unique: true },
+    normalizedName: { type: DataTypes.STRING(120), allowNull: true, set() { /* MySQL STORED generated column */ } },
     protected: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     createdAt: { type: DataTypes.DATE(3), allowNull: false },
     updatedAt: { type: DataTypes.DATE(3), allowNull: false },

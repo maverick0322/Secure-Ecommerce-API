@@ -92,7 +92,7 @@ it('accepts only literal Docker command templates', () => {
   const args=['run','--detach','--pull','never','--name','secure-ecommerce-postman-'+runId.replace(/-/g,'').slice(0,12),
     '--hostname','secure-ecommerce-postman-'+runId.replace(/-/g,'').slice(0,12),
     '--label','secure-ecommerce.test-suite=postman','--label','secure-ecommerce.test-run='+runId,
-    '--publish','127.0.0.1::3306','--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.0'];
+    '--publish','127.0.0.1::3306','--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.4'];
   expect(() => iso.validateDockerArgs(args)).not.toThrow();
   args[13]='3307:3306'; expect(() => iso.validateDockerArgs(args)).toThrow();
 });
@@ -141,15 +141,57 @@ it('does not stop or remove an unrelated inspected container', () => {
   expect(spawn).toHaveBeenCalledTimes(2);
   expect(spawn.mock.calls.every(call=>!call[1].includes('stop')&&!call[1].includes('rm'))).toBe(true);
 });
-it('performs a real bcrypt cost-12 comparison on an absent account without creating a session', async () => {
-  const bcrypt=require('bcrypt'), accounts=require('../../services/accounts.service');
-  const runtime=require('../../services/auth-runtime.service');
-  jest.spyOn(accounts,'findAccountByEmail').mockResolvedValue(null);
-  const compare=jest.spyOn(bcrypt,'compare');
-  const session=jest.spyOn(runtime,'getRuntime');
-  await expect(require('../../services/authentication.service').login({email:'absent@example.invalid',password:'synthetic test password'})).rejects.toMatchObject({status:401});
-  expect(compare).toHaveBeenCalledTimes(1);
-  expect(bcrypt.getRounds(compare.mock.calls[0][1])).toBe(12);
+it('performs a real scrypt verification on an absent account with the same 401 response as wrong password and without creating a session', async () => {
+  const cryptoMod = require('node:crypto');
+  const bcrypt = require('bcrypt');
+  const scryptSpy = jest.spyOn(cryptoMod, 'scrypt');
+  const bcryptSpy = jest.spyOn(bcrypt, 'compare');
+
+  let hashes, accounts, runtime, authService;
+  jest.isolateModules(() => {
+    hashes = require('../../services/password-hash.service');
+    accounts = require('../../services/accounts.service');
+    runtime = require('../../services/auth-runtime.service');
+    authService = require('../../services/authentication.service');
+  });
+
+  const verifySpy = jest.spyOn(hashes, 'verify');
+  const session = jest.spyOn(runtime, 'getRuntime');
+
+  jest.spyOn(accounts, 'findAccountByEmail').mockResolvedValue(null);
+  let absentError;
+  try {
+    await authService.login({ email: 'absent@example.invalid', password: 'synthetic test password' });
+  } catch (err) {
+    absentError = err;
+  }
+  expect(absentError).toMatchObject({ status: 401, message: 'Usuario o contraseña incorrectos.' });
+  expect(verifySpy).toHaveBeenCalledTimes(1);
+  expect(verifySpy.mock.calls[0][1]).toMatch(/^\$scrypt\$v1\$32768\$8\$3\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{86}$/);
+  expect(scryptSpy).toHaveBeenCalledTimes(1);
+  expect(scryptSpy.mock.calls[0][2]).toBe(64);
+  expect(scryptSpy.mock.calls[0][3]).toEqual({ N: 32768, r: 8, p: 3, maxmem: 64 * 1024 * 1024 });
+  expect(bcryptSpy).not.toHaveBeenCalled();
+  expect(session).not.toHaveBeenCalled();
+
+  const realHash = await hashes.hash('CorrectPass1!');
+  accounts.findAccountByEmail.mockResolvedValue({
+    id: cryptoMod.randomUUID(),
+    email: 'existing@example.invalid',
+    name: 'Existing User',
+    passwordHash: realHash,
+    status: 'ACTIVE',
+    emailVerifiedAt: new Date(),
+    deletedAt: null,
+    buyer: { userId: 'u1' }
+  });
+  let wrongPassError;
+  try {
+    await authService.login({ email: 'existing@example.invalid', password: 'WrongPassword1!' });
+  } catch (err) {
+    wrongPassError = err;
+  }
+  expect(wrongPassError).toMatchObject({ status: absentError.status, message: absentError.message });
   expect(session).not.toHaveBeenCalled();
 }, 20000);
 it('keeps SQL type metadata and publishes no password example', () => {
@@ -160,7 +202,7 @@ it('keeps SQL type metadata and publishes no password example', () => {
 it('uses explicit Docker inputs and non-root runtime, with only log/uploads writable in the API', () => {
   const root=path.resolve(__dirname,'../..');
   const api=fs.readFileSync(path.join(root,'Dockerfile'),'utf8');
-  const verify=fs.readFileSync(path.join(root,'scripts/database/Dockerfile.node20-verify'),'utf8');
+  const verify=fs.readFileSync(path.join(root,'scripts/database/Dockerfile.node-verify'),'utf8');
   for (const dockerfile of [api,verify]) {
     expect(dockerfile).not.toMatch(/^COPY\s+\.\s+\./m);
     expect(dockerfile).toMatch(/^USER node$/m);

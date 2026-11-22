@@ -10,64 +10,56 @@ let directory;
 beforeEach(() => { directory = fs.mkdtempSync(path.join(os.tmpdir(), 'secure-redis-config-')); });
 afterEach(() => { jest.useRealTimers(); fs.rmSync(directory, { recursive: true, force: true }); });
 
-it('preserves the entire tracked MySQL service and its volume, adding only a separate Redis volume/network', () => {
-  const original = {
-  "services": {
-    "db": {
-      "image": "mysql:8.0",
-      "container_name": "ecommerce_db",
-      "restart": "unless-stopped",
-      "command": "--default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci\n",
-      "environment": {
-        "MYSQL_ROOT_PASSWORD": "${DB_ROOT_PASSWORD:-}",
-        "MYSQL_ROOT_HOST": "localhost"
-      },
-      "ports": [
-        "127.0.0.1:3307:3306"
-      ],
-      "volumes": [
-        "mysql_data:/var/lib/mysql",
-        "./bd.sql:/docker-entrypoint-initdb.d/01-init.sql:ro"
-      ],
-      "healthcheck": {
-        "test": [
-          "CMD",
-          "mysqladmin",
-          "ping",
-          "--host=127.0.0.1",
-          "--user=mysql_healthcheck",
-          "--silent"
-        ],
-        "interval": "10s",
-        "timeout": "5s",
-        "retries": 5,
-        "start_period": "20s"
-      }
-    },
-    "app": {
-      "depends_on": {
-        "db": {
-          "condition": "service_healthy",
-          "required": false
-        }
-      }
-    }
-  },
-  "volumes": {
-    "mysql_data": null
-  }
-};
+it('enforces hardened MySQL 8.4, Redis 8.2 and API container configuration with secrets and internal network', () => {
   const current = yaml.load(fs.readFileSync('compose.yaml', 'utf8'));
-  expect(current.services.db).toEqual(original.services.db);
-  expect(current.volumes.mysql_data).toEqual(original.volumes.mysql_data);
+  const dev = yaml.load(fs.readFileSync('compose.dev.yaml', 'utf8'));
+
+  expect(current.services.db.image).toBe('mysql:8.4');
+  expect(current.services.db.command).toContain('--authentication-policy=caching_sha2_password,,');
+  expect(current.services.db.command).not.toContain('mysql_native_password');
+  expect(current.services.db.environment.MYSQL_ROOT_PASSWORD_FILE).toBe('/run/secrets/db_root_password');
+  expect(current.services.db.environment.MYSQL_ROOT_PASSWORD).toBeUndefined();
+  expect(current.services.db.ports).toBeUndefined();
+  expect(current.services.db.networks).toEqual(['backend_internal']);
+  expect(current.services.db.read_only).toBe(true);
+  expect(current.services.db.security_opt).toContain('no-new-privileges:true');
+  expect(current.services.db.cap_drop).toEqual(['ALL']);
+  expect(current.services.db.mem_limit).toBe('1g');
+  expect(current.services.db.pids_limit).toBe(256);
+
   expect(current.services.redis.image).toBe('redis:8.2');
-  expect(current.services.redis.ports).toEqual(['127.0.0.1:6380:6379']);
-  expect(current.services.redis.networks).toEqual(['redis_private']);
+  expect(current.services.redis.ports).toBeUndefined();
+  expect(current.services.redis.networks).toEqual(['backend_internal']);
   expect(current.services.redis.volumes[0]).toBe('redis_data:/data');
+  expect(current.services.redis.read_only).toBe(true);
+  expect(current.services.redis.security_opt).toContain('no-new-privileges:true');
+  expect(current.services.redis.cap_drop).toEqual(['ALL']);
   expect(current.services.redis.healthcheck.test.join(' ')).toContain('--tls');
   expect(current.services.redis.healthcheck.test.join(' ')).toContain('--user redis_health');
-  expect(current.services.app.networks).toContain('default');
-  expect(current.services.app.depends_on).toEqual(original.services.app.depends_on);
+
+  expect(current.services.app.ports).toEqual(['${APP_BIND_ADDRESS:-127.0.0.1}:${SERVER_PORT:-3000}:3000']);
+  expect(current.services.app.environment).toEqual(expect.arrayContaining([
+    'DB_PASSWORD_FILE=/run/secrets/db_password',
+    'JWT_SECRET_FILE=/run/secrets/jwt_secret',
+    'CLOUDINARY_API_SECRET_FILE=/run/secrets/cloudinary_api_secret'
+  ]));
+  expect(current.services.app.environment.some(e => /^DB_PASSWORD=/.test(e))).toBe(false);
+  expect(current.services.app.environment.some(e => /^JWT_SECRET=/.test(e))).toBe(false);
+  expect(current.services.app.environment.some(e => /^CLOUDINARY_API_SECRET=/.test(e))).toBe(false);
+  expect(current.services.app.depends_on).toEqual({
+    db: { condition: 'service_healthy', required: true },
+    redis: { condition: 'service_healthy', required: true }
+  });
+  expect(current.services.app.read_only).toBe(true);
+  expect(current.services.app.security_opt).toContain('no-new-privileges:true');
+  expect(current.services.app.cap_drop).toEqual(['ALL']);
+  expect(current.services.app.healthcheck.test.join(' ')).toContain('/health');
+  expect(current.services.app.networks).toEqual(['app_edge', 'backend_internal']);
+
+  expect(current.networks.backend_internal.internal).toBe(true);
+  expect(current.volumes.mysql_data).toBeNull();
+  expect(dev.services.db.ports).toEqual(['127.0.0.1:3307:3306']);
+  expect(dev.services.redis.ports).toEqual(['127.0.0.1:6380:6379']);
 });
 it('creates random local credentials once, hashes ACL secrets, disables default and limits commands', () => {
   prepare(directory);

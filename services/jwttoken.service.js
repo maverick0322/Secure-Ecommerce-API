@@ -1,8 +1,9 @@
 const runtime = require('./auth-runtime.service');
 const { isUuid } = require('../validators/uuid');
+const { readEnvSecret } = require('./secret-env.service');
 
 function getJwtSecret() {
-  const secret = process.env.JWT_SECRET;
+  const secret = readEnvSecret('JWT_SECRET');
   // Encoding and diversity reject obvious weak keys, but cannot prove random
   // generation. Provision at least 32 CSPRNG bytes; never a human passphrase.
   let bytes;
