@@ -1,0 +1,370 @@
+' =============================================================================
+' _skin.puml — Hoja de estilo común PlantUML para Secure E-Commerce
+' Incluir en cada diagrama inmediatamente después de @startuml:
+'   !include _skin.puml
+' =============================================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundCorner 6
+skinparam handwritten false
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 220
+skinparam wrapWidth 220
+skinparam defaultTextAlignment left
+
+' --- Tipografía y grosores de línea legibles en documento HTML/PDF ---
+skinparam defaultFontName "Segoe UI", "Liberation Sans", "Helvetica Neue", Arial, sans-serif
+skinparam defaultFontSize 12
+skinparam defaultFontColor #0F172A
+skinparam monochrome false
+skinparam Padding 4
+skinparam ParticipantPadding 14
+skinparam BoxPadding 12
+skinparam Nodesep 36
+skinparam Ranksep 42
+
+skinparam Arrow {
+  Color #334155
+  FontColor #1E293B
+  FontSize 11
+  Thickness 1.4
+}
+
+skinparam Title {
+  FontSize 16
+  FontColor #0F172A
+  FontStyle bold
+}
+
+skinparam Legend {
+  BackgroundColor #F8FAFC
+  BorderColor #CBD5E1
+  BorderThickness 1
+  FontSize 11
+  FontColor #1E293B
+}
+
+skinparam Note {
+  BackgroundColor #FEFCE8
+  BorderColor #CA8A04
+  BorderThickness 1
+  FontColor #1E293B
+  FontSize 11
+}
+
+' --- Paquetes, Fronteras del Sistema y Contenedores ---
+skinparam Package {
+  BackgroundColor #F8FAFC
+  BorderColor #64748B
+  BorderThickness 1.5
+  FontColor #0F172A
+  FontSize 13
+  FontStyle bold
+  StereotypeFontColor #475569
+  StereotypeFontSize 10
+}
+
+skinparam Rectangle {
+  BackgroundColor #F8FAFC
+  BorderColor #475569
+  BorderThickness 1.5
+  FontColor #0F172A
+  FontSize 12
+  StereotypeFontColor #475569
+  StereotypeFontSize 10
+}
+
+' --- Casos de Uso y Actores ---
+skinparam Actor {
+  BackgroundColor #E2E8F0
+  BorderColor #1E293B
+  BorderThickness 1.5
+  FontColor #0F172A
+  FontSize 12
+  FontStyle bold
+  StereotypeFontColor #475569
+}
+
+skinparam Usecase {
+  BackgroundColor #F8FAFC
+  BorderColor #1E40AF
+  BorderThickness 1.4
+  FontColor #0F172A
+  FontSize 12
+  ArrowColor #334155
+  StereotypeFontColor #1E3A8A
+}
+
+' --- Clases, Interfaces y Entidades Relacionales (DER) ---
+skinparam classAttributeIconSize 0
+skinparam Class {
+  BackgroundColor #FFFFFF
+  HeaderBackgroundColor #F1F5F9
+  BorderColor #334155
+  BorderThickness 1.4
+  FontColor #0F172A
+  FontSize 12
+  FontStyle bold
+  AttributeFontColor #1E293B
+  AttributeFontSize 11
+  AttributeFontName "Cascadia Mono", "Consolas", "Liberation Mono", monospace
+  StereotypeFontColor #475569
+  StereotypeFontSize 10
+}
+
+' --- Diagramas de Secuencia ---
+skinparam Sequence {
+  ArrowThickness 1.4
+  ArrowColor #1E293B
+  LifeLineBorderColor #64748B
+  LifeLineBorderThickness 1.2
+  LifeLineBackgroundColor #F8FAFC
+  ActivationBorderColor #1E40AF
+  ActivationBackgroundColor #DBEAFE
+  GroupBorderColor #475569
+  GroupBorderThickness 1.3
+  GroupBackgroundColor #F8FAFC
+  GroupBodyBackgroundColor #FFFFFF
+  GroupHeaderFontColor #0F172A
+  GroupHeaderFontSize 11
+  GroupHeaderFontStyle bold
+  DividerBackgroundColor #E2E8F0
+  DividerBorderColor #64748B
+  DividerBorderThickness 1
+  DividerFontColor #0F172A
+  DividerFontSize 11
+  ReferenceBorderColor #1E40AF
+  ReferenceBackgroundColor #EFF6FF
+  ReferenceHeaderBackgroundColor #DBEAFE
+  BoxBorderColor #94A3B8
+  BoxBackgroundColor #F8FAFC
+  BoxFontColor #0F172A
+  BoxFontSize 12
+}
+
+skinparam Participant {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  BorderThickness 1.4
+  FontColor #0F172A
+  FontSize 12
+  FontStyle bold
+  StereotypeFontColor #475569
+  StereotypeFontSize 10
+}
+
+skinparam Database {
+  BackgroundColor #FFFBEB
+  BorderColor #92400E
+  FontColor #78350F
+  FontSize 12
+}
+
+' --- Componentes y Despliegue ---
+skinparam ComponentStyle uml2
+skinparam Component {
+  BackgroundColor #FFFFFF
+  BorderColor #334155
+  BorderThickness 1.4
+  FontColor #0F172A
+  FontSize 12
+  StereotypeFontColor #475569
+  StereotypeFontSize 10
+}
+
+skinparam Interface {
+  BackgroundColor #E0E7FF
+  BorderColor #3730A3
+  FontColor #1E1B4B
+  FontSize 11
+}
+
+skinparam Node {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  BorderThickness 1.5
+  FontColor #0F172A
+  FontSize 12
+  StereotypeFontColor #475569
+}
+
+skinparam Artifact {
+  BackgroundColor #FFFFFF
+  BorderColor #475569
+  BorderThickness 1.2
+  FontColor #0F172A
+  FontSize 11
+}
+
+' =============================================================================
+' Estereotipos del Proyecto (Distinción Frontend / Backend / Datos / Seguridad)
+' =============================================================================
+
+' Frontend (.NET 9 ASP.NET Core MVC) — Azul Índigo
+skinparam rectangle<<frontend>> {
+  BackgroundColor #EEF2FF
+  BorderColor #3730A3
+  FontColor #1E1B4B
+}
+skinparam component<<frontend>> {
+  BackgroundColor #EEF2FF
+  BorderColor #3730A3
+  FontColor #1E1B4B
+}
+skinparam participant<<frontend>> {
+  BackgroundColor #EEF2FF
+  BorderColor #3730A3
+  FontColor #1E1B4B
+}
+skinparam class<<frontend>> {
+  BackgroundColor #FFFFFF
+  HeaderBackgroundColor #E0E7FF
+  BorderColor #3730A3
+}
+skinparam node<<frontend>> {
+  BackgroundColor #EEF2FF
+  BorderColor #3730A3
+}
+skinparam package<<frontend>> {
+  BackgroundColor #F5F7FF
+  BorderColor #3730A3
+}
+
+' Backend (Node.js / Express REST API) — Verde Esmeralda
+skinparam rectangle<<backend>> {
+  BackgroundColor #ECFDF5
+  BorderColor #065F46
+  FontColor #064E3B
+}
+skinparam component<<backend>> {
+  BackgroundColor #ECFDF5
+  BorderColor #065F46
+  FontColor #064E3B
+}
+skinparam participant<<backend>> {
+  BackgroundColor #ECFDF5
+  BorderColor #065F46
+  FontColor #064E3B
+}
+skinparam class<<backend>> {
+  BackgroundColor #FFFFFF
+  HeaderBackgroundColor #D1FAE5
+  BorderColor #065F46
+}
+skinparam node<<backend>> {
+  BackgroundColor #ECFDF5
+  BorderColor #065F46
+}
+skinparam package<<backend>> {
+  BackgroundColor #F2FDF8
+  BorderColor #065F46
+}
+
+' Base de Datos Relacional (MySQL) — Ámbar
+skinparam rectangle<<database>> {
+  BackgroundColor #FFFBEB
+  BorderColor #92400E
+  FontColor #78350F
+}
+skinparam component<<database>> {
+  BackgroundColor #FFFBEB
+  BorderColor #92400E
+  FontColor #78350F
+}
+skinparam participant<<database>> {
+  BackgroundColor #FFFBEB
+  BorderColor #92400E
+  FontColor #78350F
+}
+skinparam class<<table>> {
+  BackgroundColor #FFFFFF
+  HeaderBackgroundColor #FEF3C7
+  BorderColor #92400E
+}
+skinparam node<<database>> {
+  BackgroundColor #FFFBEB
+  BorderColor #92400E
+}
+
+' Almacén en Memoria (Redis TLS / Sesiones / Rate Limit) — Coral / Rojo
+skinparam rectangle<<cache>> {
+  BackgroundColor #FEF2F2
+  BorderColor #991B1B
+  FontColor #7F1D1D
+}
+skinparam component<<cache>> {
+  BackgroundColor #FEF2F2
+  BorderColor #991B1B
+  FontColor #7F1D1D
+}
+skinparam participant<<cache>> {
+  BackgroundColor #FEF2F2
+  BorderColor #991B1B
+  FontColor #7F1D1D
+}
+skinparam node<<cache>> {
+  BackgroundColor #FEF2F2
+  BorderColor #991B1B
+}
+
+' Controles de Seguridad / Criptografía / Secretos — Violeta
+skinparam rectangle<<security>> {
+  BackgroundColor #F5F3FF
+  BorderColor #5B21B6
+  FontColor #4C1D95
+}
+skinparam component<<security>> {
+  BackgroundColor #F5F3FF
+  BorderColor #5B21B6
+  FontColor #4C1D95
+}
+skinparam participant<<security>> {
+  BackgroundColor #F5F3FF
+  BorderColor #5B21B6
+  FontColor #4C1D95
+}
+skinparam artifact<<secret>> {
+  BackgroundColor #F5F3FF
+  BorderColor #5B21B6
+  FontColor #4C1D95
+}
+
+' Sistemas Externos (Cloudinary, Gmail OAuth2, Cloudflare Turnstile) — Gris Pizarra
+skinparam rectangle<<external>> {
+  BackgroundColor #F1F5F9
+  BorderColor #475569
+  FontColor #1E293B
+}
+skinparam component<<external>> {
+  BackgroundColor #F1F5F9
+  BorderColor #475569
+  FontColor #1E293B
+}
+skinparam participant<<external>> {
+  BackgroundColor #F1F5F9
+  BorderColor #475569
+  FontColor #1E293B
+}
+skinparam actor<<external>> {
+  BackgroundColor #F1F5F9
+  BorderColor #475569
+  FontColor #1E293B
+}
+
+' Estereotipos ECB (Boundary / Control / Entity)
+skinparam class<<boundary>> {
+  BackgroundColor #FFFFFF
+  HeaderBackgroundColor #DBEAFE
+  BorderColor #1E40AF
+}
+skinparam class<<control>> {
+  BackgroundColor #FFFFFF
+  HeaderBackgroundColor #D1FAE5
+  BorderColor #065F46
+}
+skinparam class<<entity>> {
+  BackgroundColor #FFFFFF
+  HeaderBackgroundColor #FEF3C7
+  BorderColor #92400E
+}
