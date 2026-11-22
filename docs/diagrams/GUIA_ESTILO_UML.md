@@ -1,218 +1,173 @@
-# Guía de Estilo UML y Convenciones de Diagramación (`GUIA_ESTILO_UML.md`)
+# Guía de Estilo UML 2.5.1 y Convenciones de Diagramación
 
-Esta guía establece las reglas formales de modelado UML 2.x y las convenciones visuales obligatorias para todos los diagramas del proyecto (`backendnode/docs/diagrams/*.puml`).
+Este documento establece las reglas normativas de modelado y notación UML 2.5.1 para todos los diagramas PlantUML (`docs/diagrams/*.puml`) del proyecto **Tienda en Línea Segura** (`backendnode` + `frontendnet`). Toda regla está fundamentada en las dos obras de referencia del proyecto ubicadas en `libros/` y verificadas en [CITAS_VERIFICACION.md](file:///c:/codigo/ps/ecommerce/backendnode/docs/diagrams/CITAS_VERIFICACION.md):
 
-Todas las reglas sintácticas y semánticas han sido redactadas a partir de los dos libros de referencia del proyecto ubicados en `/ecommerce/libros`:
-
-1. **Seidl, M., Scholz, M., Huemer, C., & Kappel, G. (2015).** *UML @ Classroom: An Introduction to Object-Oriented Modeling*. Springer. (Citado como **`[Seidl2015]`**).
-2. **Rosenberg, D., & Stephens, M. (2007).** *Use Case Driven Object Modeling with UML: Theory and Practice*. Apress. (Citado como **`[Rosenberg2007]`**).
+- **`[Seidl2015]`**: Martina Seidl, Marion Scholz, Christian Huemer y Gerti Kappel, *UML @ Classroom: An Introduction to Object-Oriented Modeling*, Springer, 2015 (`libros/UML_at_Classroom_3dfd.pdf`).
+- **`[Rosenberg2007]`**: Doug Rosenberg y Matt Stephens, *Use Case Driven Object Modeling with UML: Theory and Practice* (ICONIX Process), Apress, 2007 (`libros/Apress.Use.Case.Driven.Object.Modeling.with.UML.Jan.2007_7c25.pdf`).
 
 ---
 
-## 1. Diagramas y Especificación Textual de Casos de Uso
+## 1. Diagramas de Casos de Uso
 
-### 1.1 Nombres, Frontera del Sistema y Actores (`[Seidl2015, Cap. 3, §§3.1–3.4]`, `[Rosenberg2007, Cap. 3, pp. 49–61]`)
+### 1.1 Elementos permitidos `[Seidl2015, Cap. 3, §§3.1–3.4; Rosenberg2007, Cap. 3, pp. 49–61]`
+1. **Caso de uso (`usecase`)**: Elipse identificada por una frase verbal en voz activa desde la perspectiva del actor que exprese un objetivo de negocio con valor observable (ej. *"Realizar pedido en checkout"*, *"Publicar producto con imagen"*) `[Seidl2015, Cap. 3, §3.1 y §3.7.1]`.
+2. **Límite del sistema (`rectangle`)**: Caja que encierra exclusivamente los casos de uso que el sistema implementa, rotulada con el nombre del sistema o contexto acotado (`Tienda en Línea Segura`) `[Seidl2015, Cap. 3, §3.1 y §3.7.3 Error 2]`.
+3. **Actor (`actor`)**: Rol externo que interactúa directamente con el sistema; siempre se ubica **fuera** del límite del sistema `[Seidl2015, Cap. 3, §3.2]`:
+   - **Actores humanos (primarios/activos)**: Notación stick figure por defecto (`Comprador`, `Vendedor`, `Administrador`).
+   - **Actores no humanos (sistemas externos secundarios/pasivos)**: Rectángulo con el estereotipo `«actor»` o `«external»` (ej. `Cloudinary API «external»`, `Gmail OAuth2 API «external»`) `[Seidl2015, Cap. 3, §3.2, Fig. 3.3]`.
+4. **Asociación comunicativa (`--`)**: Línea sólida sin punta de flecha entre un actor y el caso de uso en el que participa `[Seidl2015, Cap. 3, §3.3]`.
 
-- **Nombres de casos de uso:** Deben expresarse como una frase verbal activa en infinitivo o sustantivo de acción seguida del objeto de negocio (`Verbo + Objeto`, p. ej., *Confirmar pedido*, *Moderar solicitud de vendedor*, *Renovar sesión*). El nombre debe reflejar una meta con valor observable para el actor que la inicia, nunca una operación técnica interna ni un paso aislado de interfaz (`[Seidl2015, §3.1 y §3.7.1]`).
-- **Frontera del sistema (*System Boundary*):** Todo diagrama de casos de uso debe encerrar las elipses dentro de un rectángulo claramente rotulado con el nombre del sistema o subsistema (p. ej., `Sistema de Comercio Electrónico Seguro`). Nada que pertenezca al software modelado puede quedar fuera del rectángulo, y ningún actor puede ubicarse dentro de él (`[Seidl2015, §3.1 y §3.7.3 Error 2]`).
-- **Actores:**
-  - Representan **roles externos** (usuarios humanos, otros sistemas o dispositivos/temporizadores) que interactúan directamente con el sistema intercambiando información (`[Seidl2015, §3.2]`).
-  - **Prohibición de actores internos:** Un componente interno del propio sistema (como una base de datos propia, un middleware o una tarea interna en memoria) **jamás** se modela como actor. Solo servicios externos autónomos fuera del control del sistema (p. ej., *Cloudinary API*, *Gmail OAuth2 API*, *Cloudflare Turnstile*) pueden modelarse como actores secundarios no humanos (`[Seidl2015, §3.2]`).
-  - **Notación:** Los actores humanos se representan como *stick figures* y los sistemas externos con el estereotipo `«actor»` o `«external»` en notación rectangular para distinguirlos visualmente (`[Seidl2015, §3.2, Fig. 3.3]`).
-  - **Asociaciones actor–caso de uso:** Se trazan con línea continua sin punta de flecha; indican participación en la comunicación bidireccional del caso de uso (`[Seidl2015, §3.3]`).
+### 1.2 Cuándo usar `«include»`, `«extend»` y generalización `[Seidl2015, Cap. 3, §§3.4–3.5; Rosenberg2007, Cap. 3, tema: relaciones entre casos de uso y factorización de comportamiento común]`
+- **`«include»` (flecha punteada abierta `..>` desde el caso base hacia el caso incluido)**:
+  - Úsese **únicamente** cuando un subflujo de comportamiento es obligatorio y se reutiliza en **dos o más** casos de uso base para evitar duplicación `[Seidl2015, Cap. 3, §3.5.1, Fig. 3.8; Rosenberg2007, Cap. 3, tema: relación «includes» y factorización de comportamiento común]`.
+  - **Prohibido** usar `«include»` para descomposición funcional o para encadenar precondiciones como *"Iniciar sesión"* antes de cada acción autenticada (`Iniciar sesión` es un caso de uso independiente y una precondición de sesión en los demás casos, no un `«include»` de todos ellos) `[Seidl2015, Cap. 3, §3.7.3 Error 4, tema: descomposición funcional; Rosenberg2007, Cap. 3, tema: abuso de «includes»/«extends» y descomposición funcional]`.
+- **`«extend»` (flecha punteada abierta `..>` desde el caso extensor hacia el caso base)**:
+  - Úsese solo para comportamiento **opcional o condicional** que se inserta en un punto de extensión explícito del caso de uso base bajo una guarda (`Condition: { ... }`, `Extension point: ...`) `[Seidl2015, Cap. 3, §3.5.2, Fig. 3.9]`.
+- **Generalización (`--|>`, flecha sólida con punta triangular vacía del subtipo al supertipo)**:
+  - Entre actores cuando un rol especializado hereda todos los casos de uso de un actor general, o entre casos de uso cuando un caso especializado refina uno general `[Seidl2015, Cap. 3, §3.4 y §3.5.3]`.
+  - Si un actor padre se asocia a un caso de uso, sus subtipos lo heredan automáticamente y **no** deben repetir la línea de asociación `[Seidl2015, Cap. 3, §3.4, Fig. 3.6 y §3.7.3 Error 5]`.
 
-### 1.2 Relaciones `«include»`, `«extend»` y Generalización (`[Seidl2015, Cap. 3, §§3.4–3.5 y §3.7.3]`, `[Rosenberg2007, Cap. 3, pp. 56–60]`)
+### 1.3 Qué NO va en un diagrama de casos de uso `[Seidl2015, Cap. 3, §3.7.3, Errores 1–6; Rosenberg2007, Cap. 3, pp. 61–81 y Cap. 4, pp. 86–94]`
+- **No modelar flujos de trabajo, orden temporal ni pasos secuenciales** entre casos de uso (los casos de uso no son diagramas de flujo ni máquinas de estados).
+- **No modelar detalles internos de interfaz gráfica ni mecanismos técnicos** (ej. *"Hacer clic en botón enviar"*, *"Validar firma JWT RS256"*, *"Ejecutar script Lua en Redis"*).
+- **No conectar actores entre sí** ni colocar actores dentro del rectángulo del sistema.
+- **No desglosar un mismo objetivo CRUD en 4 elipses triviales** cuando comparten actor, precondiciones y valor de negocio (ej. colapsar altas, bajas y cambios de direcciones del comprador en *"Gestionar libreta de direcciones de envío"*, salvo que una operación tenga actores o reglas de negocio sustancialmente distintas, como *"Revisar solicitud de vendedor"* vs. *"Suspender vendedor aprobado"*) `[Seidl2015, Cap. 3, §3.7.3 Error 4 y Error 6]`.
 
-- **`«include»` (inclusión obligatoria):**
-  - Se dibuja como una flecha punteada con punta abierta (`..>`) **desde el caso de uso base hacia el caso de uso incluido** (`[Seidl2015, §3.5.1, Fig. 3.8]`).
-  - Semántica: El comportamiento del caso incluido se ejecuta **siempre** como parte indispensable del caso base (equivalente a una subrutina compartida). Úsese únicamente cuando un fragmento conductual significativo es reutilizado por dos o más casos de uso o cuando aislarlo simplifica un caso complejo sin caer en descomposición funcional (`[Rosenberg2007, Cap. 3, p. 57]`).
-- **`«extend»` (extensión condicional):**
-  - Se dibuja como una flecha punteada con punta abierta (`..>`) **desde el caso de uso extensor hacia el caso de uso base** (`[Seidl2015, §3.5.2, Fig. 3.9]`).
-  - Semántica: El caso base es completo por sí mismo; el caso extensor inserta comportamiento adicional de manera opcional solo si se cumple una condición explícita en un punto de extensión (*extension point*) definido dentro del caso base (`[Seidl2015, §3.5.2]`). Si se usa `«extend»`, debe documentarse la condición (`Condition: {...}`) y el punto de extensión.
-- **Generalización de actores y de casos de uso:**
-  - Se dibuja con línea continua y punta triangular hueca (`--|>`) desde el elemento especializado hacia el elemento general (`[Seidl2015, §3.4 y §3.5.3]`).
-  - Cuando dos o más actores pueden ejecutar exactamente el mismo caso de uso de manera independiente (p. ej., *Comprador*, *Vendedor* y *Administrador* pueden *Cerrar sesión*), no se deben trazar múltiples líneas al mismo caso si ello sugiere que se requieren todos simultáneamente; en su lugar, se define un actor general abstracto (p. ej., *Usuario Autenticado*) del cual heredan los roles específicos (`[Seidl2015, §3.4, Fig. 3.6 y §3.7.3 Error 5]`).
-- **Errores prohibidos (`[Seidl2015, §3.7.3, Errores 1–6]`, `[Rosenberg2007, Cap. 3, pp. 58–60]`):**
-  1. **No modelar flujos de trabajo ni orden cronológico:** Los casos de uso no son diagramas de flujo ni máquinas de estados; nunca se encadenan con `«include»` o `«extend»` para expresar que uno ocurre "después" de otro.
-  2. **No usar *Iniciar sesión* como `«include»` de cada operación protegida:** Haber iniciado sesión es una **precondición** de los casos de uso protegidos, no un caso de uso incluido en cada acción (`[Seidl2015, §3.7.3 Error 4, Fig. 3.21]`).
-  3. **No caer en descomposición funcional ni micro-CRUD:** Acciones triviales de interfaz (*Pulsar botón*, *Ingresar datos*) no son casos de uso (`[Seidl2015, §3.7.3 Error 4 y Error 6]`).
-
-### 1.3 Especificación del TEXTO del Caso de Uso: Curso Básico y Cursos Alternos (`[Seidl2015, §3.7.2, Tabla 3.1]`, `[Rosenberg2007, Cap. 3, pp. 61–81 y Cap. 4, pp. 86–94]`)
-
-Todo caso de uso documentado en AsciiDoc debe incluir su ficha textual estructurada con los siguientes campos obligatorios:
-
-1. **Encabezado estructurado (`[Seidl2015, §3.7.2, Tabla 3.1]`):** Identificador (`CU-XX`), Nombre, Actor(es) primario(s) y secundario(s), Precondiciones, Disparador (*Trigger*), Postcondición de éxito y Postcondición/Garantía mínima ante fallo.
-2. **Curso Básico (*Basic Course / Sunny-Day Scenario*) (`[Rosenberg2007, Cap. 3, pp. 62–68]`):**
-   - Secuencia numerada (`1, 2, 3...`) redactada en **voz activa y tiempo presente** (*"El Comprador selecciona..."*, *"El Sistema valida..."*).
-   - Debe describir **ambos lados del diálogo** usuario–sistema (acción del actor y respuesta/validación del sistema), referenciando por su nombre exacto los objetos del modelo de dominio y las vistas o endpoints de frontera (`[Rosenberg2007, Cap. 3, Fig. 3-2, pp. 63–66]`).
-   - Debe mantenerse conciso (regla de los dos párrafos / ~4 a 10 pasos claros) y libre de fórmulas algorítmicas de bajo nivel o SQL (`[Rosenberg2007, Cap. 3, Tabla 3-2, p. 77]`).
-3. **Cursos Alternos (*Alternate Courses / Rainy-Day Scenarios*) (`[Rosenberg2007, Cap. 3, pp. 68–73]`, `[Seidl2015, §3.7.2]`):**
-   - Se numeran ramificándose desde el paso exacto del curso básico donde ocurre la condición divergente (p. ej., `3a`, `3b`, `5a`).
-   - Todo caso de uso de seguridad o negocio **debe** especificar sus cursos alternos y de error: credenciales inválidas, bloqueo por límite de intentos (*rate-limit* `429`), cuenta suspendida o pendiente de aprobación (`403`), token expirado o revocado (`401`), stock insuficiente o conflicto de estado (`409`), fallo de validación de entrada (`400`) o indisponibilidad de dependencia crítica (`503`).
-   - Cada curso alterno debe indicar explícitamente qué registra el sistema (auditoría), qué mensaje o código devuelve al actor y en qué estado queda el sistema.
+### 1.4 Granularidad y estructura de la descripción `[Seidl2015, Cap. 3, §3.7.2, Tabla 3.1; Rosenberg2007, Cap. 3, tema: anatomía del escenario evento/respuesta y cursos básico y alternos]`
+Cada caso de uso documentado fuera del gráfico debe poder expresarse con: **Nombre**, **Actor(es)**, **Precondiciones**, **Postcondiciones**, **Curso Básico** (flujo evento del usuario / respuesta del sistema referenciando objetos del dominio) y **Cursos Alternos / Excepciones** (errores `400/401/403/409/429`).
 
 ---
 
 ## 2. Diagramas de Clases
 
-### 2.1 Compartimentos, Visibilidad y Tipos (`[Seidl2015, Cap. 4, §§4.2.1–4.2.6]`, `[Rosenberg2007, Cap. 2 y Cap. 8]`)
+### 2.1 Compartimentos, visibilidad y formato `[Seidl2015, Cap. 4, §§4.2.1–4.2.6]`
+1. **Compartimentos**: Tres compartimentos estándar: (1) estereotipo opcional y nombre de la clase en **sustantivo singular en `PascalCase`** (`User`, `Order`, `CatalogService`), (2) atributos relevantes de dominio/estado y (3) operaciones con responsabilidad clave `[Seidl2015, Cap. 4, §4.2.1; Rosenberg2007, Cap. 2, p. 31]`.
+2. **Marcadores de visibilidad obligatorios** (`skinparam classAttributeIconSize 0` para renderizar los símbolos estándar UML) `[Seidl2015, Cap. 4, §4.2.5, Tabla 4.1]`:
+   - `+` público (`public`)
+   - `-` privado (`private`)
+   - `#` protegido (`protected`)
+   - `~` paquete / interno (`package` / `internal` en C#)
+3. **Formato de atributos** `[Seidl2015, Cap. 4, §4.2.2]`:
+   ```text
+   visibilidad [/] nombre : Tipo [multiplicidad] [= valorPorDefecto] {propiedades}
+   ```
+   *(Ejemplo: `+ status : SellerStatus = PENDING`, `- passwordHash : string`, `/ total : decimal`).*
+4. **Formato de operaciones** `[Seidl2015, Cap. 4, tema: formato y firma de operaciones]`:
+   ```text
+   visibilidad nombre(param1 : Tipo1, param2 : Tipo2) : TipoRetorno
+   ```
+   *(Ejemplo: `+ createQuote(buyerId : UUID, addressId : bigint) : CheckoutQuoteDto`).*
+5. **Elementos estáticos y abstractos**: Miembros de clase (`static`) subrayados (`{static}` en PlantUML); clases u operaciones abstractas en cursiva o con `{abstract}` `[Seidl2015, Cap. 4, §4.2.6 y §4.6.1]`.
 
-- **Nomenclatura:** Los nombres de clases e interfaces se escriben en `PascalCase` y en **singular** (`User`, `Order`, `SessionTokenManager`), nunca en plural (`[Seidl2015, §4.2.1]`, `[Rosenberg2007, Cap. 2, p. 31]`).
-- **Visibilidad obligatoria (`[Seidl2015, §4.2.5, Tabla 4.1]`):** Todo atributo y operación en un diagrama de clases de diseño debe llevar su marcador de visibilidad explícito:
-  - `+` Público (*public*)
-  - `-` Privado (*private*)
-  - `#` Protegido (*protected*)
-  - `~` Paquete / Interno (*package / internal*)
-- **Formato de atributos (`[Seidl2015, §4.2.2]`):**
-  `visibilidad [/] nombre : Tipo [multiplicidad] [= valorPorDefecto] {propiedades}`
-  *(Ejemplo: `- credentialVersion : int = 0`, `+ [/] normalizedName : string {readOnly}`).*
-- **Formato de operaciones (`[Seidl2015, §4.2.3]`):**
-  `visibilidad nombre(param1 : Tipo1, param2 : Tipo2) : TipoRetorno`
-  *(Ejemplo: `+ rotateRefreshToken(rawToken : string, ipAddress : string) : Promise<SessionResult>`).*
-- **Miembros estáticos y abstractos (`[Seidl2015, §4.2.6 y §4.6.1]`):** Los atributos o métodos de clase (`static`) se subrayan (`{static}` en PlantUML); las clases u operaciones abstractas se escriben en cursiva o con `{abstract}`.
+### 2.2 Relaciones entre clases `[Seidl2015, Cap. 4, §§4.3–4.7; Rosenberg2007, Cap. 2, pp. 31–36 y Cap. 8, p. 214]`
+- **Asociación (`--` o `-->`) frente a atributo**: Si el tipo destino es otra clase del diagrama (`User`, `Product`, `Order`), **se modela como línea de asociación con multiplicidad**, sin duplicar la referencia como atributo primitivo suelto dentro de la caja (salvo en el modelo físico de tablas donde se documentan columnas `FK`) `[Seidl2015, Cap. 4, §4.3.1]`.
+- **Multiplicidad y nombres de rol**: Toda asociación entre clases de dominio debe declarar explícitamente su multiplicidad en ambos extremos (`1`, `0..1`, `1..*`, `0..*` o `*`) y nombre de rol cuando clarifique la semántica (ej. `reviewedBy` entre `Seller` y `Admin`) `[Seidl2015, Cap. 4, §4.3.1; Rosenberg2007, Cap. 8, p. 214]`.
+- **Agregación compartida (`o--`, rombo blanco) frente a composición (`*--`, rombo negro)** `[Seidl2015, Cap. 4, §4.5, tema: agregación compartida y composición]`:
+  - **Composición (`*--`)**: Relación todo-parte con ciclo de vida exclusivo (la parte pertenece a un único todo y no existe sin él: `Cart 1 *-- 0..* CartItem`, `Order 1 *-- 1..* OrderItem`, `Order 1 *-- 1..* OrderStatusHistory`).
+  - **Agregación (`o--`)**: Relación todo-parte débil donde la parte puede compartirse o sobrevivir al contenedor (`Category 0..* o-- 0..* Product` vía `ProductCategory`).
+- **Generalización (`--|>`) frente a realización de interfaz (`..|>`)** `[Seidl2015, Cap. 4, §§4.6–4.7]`:
+  - `--|>` (línea sólida, punta triangular cerrada vacía): herencia entre clases.
+  - `..|>` (línea punteada, punta triangular cerrada vacía): una clase implementa una interfaz (`«interface»`).
+- **Dependencia (`..>`, línea punteada con punta abierta)**: Un controlador o servicio usa temporalmente otra clase, validador o DTO como parámetro o dependencia sin poseer su estado `[Seidl2015, Cap. 4, §4.4, tema: clases de asociación]`.
 
-### 2.2 Asociaciones, Multiplicidades, Nombres de Rol y Agregación/Composición (`[Seidl2015, Cap. 4, §§4.3–4.8]`, `[Rosenberg2007, Cap. 2, pp. 32–38 y Cap. 8, p. 214]`)
-
-- **Prohibición de relaciones como métodos internos:** Las asociaciones entre clases (`1:1`, `1:N`, `N:M`) **jamás** se escriben como métodos `hasMany()` o `belongsTo()` dentro del compartimento de operaciones de la clase; deben trazarse como líneas de asociación UML entre las cajas de clase (`[Seidl2015, §4.3]`).
-- **Multiplicidades y nombres de rol (`[Seidl2015, §4.3.1]`, `[Rosenberg2007, Cap. 8, p. 214]`):**
-  - Toda asociación binaria debe especificar la **multiplicidad** en ambos extremos (`1`, `0..1`, `0..*`, `1..*`). Omitir la multiplicidad deja el modelo incompleto (`[Rosenberg2007, p. 214]`).
-  - Cuando existan múltiples asociaciones entre las mismas clases o el papel semántico no sea obvio (p. ej., `User` asociado a `Order` como comprador `buyer` y como vendedor `seller`, o como `changedByUser` en `OrderStatusHistory`), es obligatorio rotular el **nombre de rol** en el extremo correspondiente (`+buyer`, `+seller`, `+actor`).
-- **Asociación simple vs. Agregación vs. Composición (`[Seidl2015, §4.5, Fig. 4.19–4.21]`, `[Rosenberg2007, Cap. 2, p. 33]`):**
-  - **Asociación (`--` o `-->`):** Relación estructural entre objetos independientes. Si es navegable en un solo sentido, se usa punta de flecha abierta (`-->`).
-  - **Agregación compartida (`o--`, rombo hueco en el todo):** Relación parte–todo débil (*has-a*) donde la parte puede existir independientemente del todo o ser compartida.
-  - **Composición (`*--`, rombo relleno en el todo):** Relación parte–todo fuerte con **dependencia de existencia** y pertenencia exclusiva (la multiplicidad en el extremo del todo es siempre `1` o `0..1`; si se destruye el contenedor, se destruyen sus partes, p. ej., `Order *-- "1..*" OrderItem` o `Cart *-- "0..*" CartItem`).
-- **Generalización y Realización (`[Seidl2015, §§4.6–4.7]`):**
-  - Herencia entre clases (`is-a`): línea sólida con triángulo hueco (`--|>`), p. ej., `AddressesController --|> AppController`.
-  - Implementación de interfaz: línea punteada con triángulo hueco (`..|>`), p. ej., `SessionTokenManager ..|> ISessionTokenManager`.
-- **Clases de asociación (`[Seidl2015, §4.4, Fig. 4.15]`):** Cuando una relación `N:M` posee atributos propios (o representa una entidad de enlace con marcas de tiempo), puede modelarse mediante una clase de asociación conectada con línea punteada o descomponerse explícitamente en dos asociaciones `1` a `0..*` hacia la clase intermedia (`ProductCategory`).
-
-### 2.3 Estereotipos de Clase (`[Seidl2015, §4.8 y §9.3]`, `[Rosenberg2007, Cap. 5, pp. 105–112]`)
-
-Se adoptan los estereotipos estándar de análisis y diseño orientado a objetos:
-- `«boundary»`: Clases de frontera que reciben peticiones externas o presentan interfaz (`Controller`, `Route`, `ViewModel`, `Middleware`).
-- `«control»`: Clases de coordinación, lógica de negocio, validación o clientes HTTP (`Service`, `DelegatingHandler`, `Validator`).
-- `«entity»`: Objetos persistentes del dominio o modelos ORM (`Model`).
-- `«interface»`, `«enumeration»`, `«datatype»`, `«exception»`: Tipos estructurales del lenguaje.
+### 2.3 Estereotipos y mapeo del proyecto `[Seidl2015, Cap. 4, §4.8 y §9.3; Rosenberg2007, Cap. 5, pp. 105–112]`
+Se emplean los estereotipos estándar UML e ICONIX (Entity-Control-Boundary):
+- **`«entity»`**: Modelos persistentes de dominio (`backendnode/models/*.js` en Sequelize: `User`, `Admin`, `Buyer`, `Seller`, `UserAddress`, `Category`, `Product`, `ProductCategory`, `Cart`, `CartItem`, `Order`, `OrderItem`, `OrderStatusHistory`, `AuditLog`).
+- **`«control»`**: Servicios de negocio, middlewares y controladores (`backendnode/services/*.js`, `backendnode/controllers/*.js`, `backendnode/middlewares/*.js`; en `.NET`: `frontendnet/Services/*ClientService.cs`, `SessionTokenManager`, `DelegatingHandler`).
+- **`«boundary»`**: Routers HTTP/REST (`backendnode/routes/*.js`), controladores MVC/vistas Razor (`frontendnet/Controllers/*Controller.cs`) y adaptadores hacia proveedores externos (`CloudinaryService`, `GmailService`).
+- **`«dto»` / `«viewmodel»`**: Objetos de transferencia y modelos de vista (`frontendnet/Models/*.cs`).
+- **`«enumeration»`**: Enumeraciones cerradas de dominio (`UserProfile`, `UserStatus`, `SellerStatus`, `OrderStatus`, `AuditOutcome`).
 
 ---
 
 ## 3. Diagramas de Secuencia
 
-### 3.1 Líneas de Vida, Activaciones y Mensajes (`[Seidl2015, Cap. 6, §§6.1–6.3]`, `[Rosenberg2007, Cap. 8, pp. 185–212]`)
+### 3.1 Lifelines y activación `[Seidl2015, Cap. 6, §§6.1–6.2; Rosenberg2007, Cap. 8, pp. 185–212]`
+1. **Participantes (`participant`, `actor`, `boundary`, `control`, `entity`, `database`)**: Ordenados de izquierda a derecha siguiendo el flujo causal: Actor -> Frontera UI/HTTP -> Middleware/Controlador -> Servicio de Dominio -> Persistencia (`MySQL` / `Redis`) o Proveedor Externo `[Seidl2015, Cap. 6, §6.1, Fig. 6.1; Rosenberg2007, Cap. 8, Fig. 8-2, p. 191]`.
+2. **Formato del encabezado de lifeline**: `nombreInstancia : Clase` o `:Clase` con su estereotipo (`«boundary»`, `«control»`, `«entity»`, `«database»`).
+3. **Creación y destrucción**: Usar `create` cuando el flujo instancia un recurso o subproceso efímero (ej. worker de validación de imagen) y `destroy` (`!!`) al terminar su vida útil `[Seidl2015, Cap. 6, tema: mensajes de creación y destrucción de lifelines]`.
+4. **Especificación de ejecución (barras de activación)**: Usar `activate` / `deactivate` (o `autoactivate on` controlado) únicamente durante el intervalo en que el participante posee el foco de control `[Seidl2015, Cap. 6, §6.2, Fig. 6.2]`.
 
-- **Líneas de vida (*Lifelines*) (`[Seidl2015, §6.1]`):**
-  - El encabezado de cada participante debe escribirse con la notación `rol : Clase` o `: Clase` usando el **nombre real del módulo, servicio, controlador o middleware en el código** (p. ej., `:AuthController`, `:RefreshTokenDelegatingHandler`, `:auth-session.service`).
-  - El actor iniciador se coloca en el extremo izquierdo, seguido de los objetos de frontera (`«boundary»`), luego los controladores/servicios (`«control»`) y finalmente las entidades o almacenes (`«entity»` / base de datos / Redis) (`[Rosenberg2007, Cap. 8, Fig. 8-2, p. 190]`).
-- **Barras de activación (*Execution Specifications*) (`[Seidl2015, §6.2]`):**
-  - Todo participante que recibe un mensaje síncrono y ejecuta lógica debe mostrar su barra de activación (`activate` / `deactivate` en PlantUML) durante el intervalo exacto en que mantiene el control o espera una respuesta síncrona.
-- **Tipos de mensajes y retornos (`[Seidl2015, §6.2, Tabla 6.1]`):**
-  - **Mensaje síncrono (`->`):** Línea sólida con punta de flecha rellena. El emisor espera la respuesta.
-  - **Mensaje de retorno (`-->`):** Línea punteada con punta de flecha abierta. Debe incluirse siempre que el llamado devuelva un valor relevante, un estado HTTP o una excepción mapeada (`[Seidl2015, §6.2, Fig. 6.4]`).
-  - **Mensaje asíncrono (`->>`):** Línea sólida con punta abierta, reservado para operaciones que no bloquean al emisor (p. ej., ciclos de recuperación en segundo plano).
-  - **Creación y destrucción (`[Seidl2015, §6.2, Fig. 6.6]`):** La creación dinámica usa `create` apuntando al encabezado de la línea de vida; la destrucción o invalidación explícita de un recurso temporal se marca con `destroy` (`X`).
-- **Trazabilidad con el código y el diagrama de clases (`[Rosenberg2007, Cap. 8, pp. 191–204 y Cap. 9, p. 238]`):**
-  - Todo mensaje enviado hacia una línea de vida de software debe corresponder a una **operación real existente en el código** (método de clase, función exportada o endpoint HTTP real con su verbo y ruta exacta). Queda prohibido inventar nombres de funciones o rutas que no existan en `backendnode/` o `frontendnet/`.
+### 3.2 Tipos de flechas y mensajes `[Seidl2015, Cap. 6, tema: tipos y notación de mensajes síncronos, asíncronos y de retorno]`
+- **Llamada síncrona (`->`)**: Punta de flecha **rellena** (`solid arrowhead`). El emisor espera la respuesta (llamadas HTTP BFF -> API, consultas SQL/Redis, llamadas de controlador a servicio).
+- **Mensaje de retorno (`-->`)**: Línea **punteada con punta abierta** (`dashed open arrowhead`). Obligatorio al devolver un resultado significativo o código de estado HTTP (`200 OK`, `201 Created`, `401 Unauthorized`, `409 Conflict`, `429 Too Many Requests`). No dibujar retornos vacíos redundantes cuando la llamada es un paso interno obvio `[Seidl2015, Cap. 6, tema: tipos y notación de mensajes síncronos, asíncronos y de retorno]`.
+- **Mensaje asíncrono (`->>`)**: Línea sólida con **punta abierta** (`open arrowhead`). Reservado exclusivamente para operaciones reales sin bloqueo del emisor (ej. encolado en segundo plano de correo de recuperación o ciclo asíncrono de recuperación de imágenes huérfanas).
+- **Autollamada (`->` sobre la misma lifeline)**: Para validaciones o transformaciones internas relevantes del mismo componente (ej. verificación criptográfica local de firma RS256 o cálculo de `scrypt`).
+- **Consistencia con clases**: Todo mensaje enviado a una lifeline de clase debe corresponder a una operación real o endpoint verificable en el código (`BASELINE.md`) `[Rosenberg2007, Cap. 8, pp. 191–204 y Cap. 9, p. 238]`.
 
-### 3.2 Fragmentos Combinados (`alt`, `opt`, `loop`, `break`) (`[Seidl2015, Cap. 6, §6.4]`, `[Rosenberg2007, Apéndice A, pp. 401–402]`)
-
-- **`alt` (alternativas mutuamente excluyentes):** Obligatorio para modelar bifurcaciones entre el curso básico y los cursos alternos (p. ej., `[credenciales válidas]` vs. `[else: credenciales inválidas -> 401 / bloqueo 429]`, o `[refresh exitoso 200]` vs. `[401/403 definitivo -> SignOut]` vs. `[429/5xx transitorio -> conservar sesión]`). Cada operando se separa con línea horizontal punteada (`else`) y lleva su guarda entre corchetes `[condición]` (`[Seidl2015, §6.4.1, Fig. 6.10]`).
-- **`opt` (opcional):** Marco de un solo operando que solo se ejecuta si su guarda `[condición]` es verdadera (`[Seidl2015, §6.4.2]`).
-- **`loop` (iteración):** Marco con operador `loop` y guarda `[condición de continuación]` o límites `(min, max)` (`[Seidl2015, §6.4.3]`).
-- **`break` (interrupción temprana):** Marco con guarda `[condición de aborto]` cuyo contenido se ejecuta y **termina inmediatamente** el resto de la interacción envolvente (ideal para rechazos tempranos de middleware como `401 Unauthorized` o `429 Too Many Requests`) (`[Seidl2015, §6.4.4, Fig. 6.13]`).
+### 3.3 Fragmentos combinados (`alt`, `opt`, `loop`, `break`) `[Seidl2015, Cap. 6, §6.4, Tabla 6.1; Rosenberg2007, Apéndice A, pp. 401–402]`
+- **`alt [condición] ... else [condición]`**: Ramas mutuamente excluyentes (ej. `[credenciales válidas y cuenta ACTIVE]` vs. `[cuenta bloqueada o umbral superado -> 429]` vs. `[credenciales inválidas -> DUMMY_HASH + 401]`) `[Seidl2015, Cap. 6, §6.4.1, Fig. 6.10]`.
+- **`opt [condición]`**: Paso condicional sin rama `else` (ej. `[hash legado bcrypt detectado -> re-hash transparente a scrypt]`) `[Seidl2015, Cap. 6, §6.4.1, tema: fragmentos combinados de ramificación, bucle e interrupción]`.
+- **`loop [min..max / condición]`**: Iteración acotada con guarda explícita (ej. `[por cada sellerId en ítems del carrito]`) `[Seidl2015, Cap. 6, §6.4.1, tema: fragmentos combinados de ramificación, bucle e interrupción]`.
+- **`break [condición de aborto]`**: Interrupción inmediata del escenario ante fallo de guarda en middleware (ej. `[token JWT inválido, sesión revocada o cuota excedida]`) `[Seidl2015, Cap. 6, §6.4.1, tema: fragmentos combinados de ramificación, bucle e interrupción]`.
+- **Nivel máximo de anidamiento**: **2 niveles** de fragmentos combinados por diagrama. Si un flujo requiere mayor profundidad, debe extraerse a un diagrama separado o referenciarse con `ref over` (`Interaction Use`).
 
 ---
 
 ## 4. Diagramas de Componentes
 
-### 4.1 Componentes, Interfaces Provistas y Requeridas (`[Seidl2015, Cap. 2, §2.3.1, p. 18]`, `[Rosenberg2007, Cap. 7, pp. 173–175 y Apéndice A, pp. 397–398, 406]`)
-
-- **Separación respecto al despliegue (`[Rosenberg2007, Cap. 7, pp. 173–177]`):** El diagrama de componentes modela la **arquitectura modular de software** (subsistemas, capas, bibliotecas y contratos entre módulos), no las máquinas físicas ni contenedores Docker (que pertenecen al diagrama de despliegue).
-- **Notación de componente (`[Rosenberg2007, Apéndice A, Fig. A-12, p. 406]`):** Rectángulo con el estereotipo `«component»` o el ícono UML de componente en la esquina superior derecha, agrupado por paquetes o capas lógicas (Presentación/MVC, Pipeline HTTP, Capa de Aplicación/Servicios, Persistencia/Datos).
-- **Interfaces provistas (*Provided Interfaces* — notación *Lollipop*):** Círculo sólido conectado al componente por una línea continua (`() "NombreInterfaz" -- [Componente]`), que indica el contrato o API que dicho componente expone hacia otros módulos (`[Rosenberg2007, Apéndice A, Fig. A-2, p. 397]`).
-- **Interfaces requeridas (*Required Interfaces* — notación *Socket*):** Semicírculo abierto o dependencia estereotipada hacia la interfaz provista de otro componente (`[ComponenteA] ..> () "NombreInterfaz"` o conector *ball-and-socket* `-(0-`), que expresa qué contrato externo necesita el componente para funcionar (`[Rosenberg2007, Apéndice A, Fig. A-2 y A-12]`).
-- **Puertos (`[Rosenberg2007, Apéndice A, Fig. A-3, p. 398]`):** Cuando un subsistema expone puntos de entrada diferenciados en su frontera (p. ej., API REST `/api/*`), se indican los puntos de interacción y el protocolo o contrato asociado.
+### 4.1 Notación UML 2.x `[Seidl2015, Cap. 2, §2.3.1, p. 18; Rosenberg2007, Cap. 7, pp. 173–175 y Apéndice A, pp. 397–398, 406]`
+- Usar notación de componentes **UML 2.x** (`skinparam componentStyle uml2`): rectángulo con el estereotipo `«component»` y/o el ícono de componente en la esquina superior derecha `[Rosenberg2007, Apéndice A, Fig. A-12, p. 406]`.
+- **Interfaces provistas y requeridas (notación *ball-and-socket*)** `[Rosenberg2007, Apéndice A, Fig. A-2 y Fig. A-3, pp. 397–398]`:
+  - **Interfaz provista (*lollipop* `()`)**: Círculo sólido unido al componente que publica el contrato (ej. `REST API /api/* (JSON / Multipart)`, `MySQL Wire Protocol 3306`, `RESP TLS 6380`).
+  - **Interfaz requerida (*socket* `(`)**: Semicírculo conectado desde el componente consumidor hacia la interfaz provista.
+- **Dependencias (`..>`)**: Flecha punteada abierta cuando se modela dependencia directa entre subsistemas internos dentro de un mismo proceso (`Routes ..> Middlewares ..> Controllers ..> Services ..> Models`).
+- **Separación de vistas**: El diagrama de componentes modela la **arquitectura lógica de software, sus módulos y contratos**, sin mezclar puertos de host, direcciones IP ni topología física de contenedores (que pertenecen al diagrama de despliegue) `[Rosenberg2007, Cap. 7, pp. 173–175]`.
 
 ---
 
 ## 5. Diagramas de Despliegue
 
-### 5.1 Nodos, Entornos de Ejecución, Artefactos, Protocolos y Puertos (`[Seidl2015, Cap. 2, §2.3.1, p. 18]`, `[Rosenberg2007, Cap. 7, Fig. 7-9, p. 176 y Apéndice A, Fig. A-13, p. 407]`)
-
-- **Nodos (*Nodes*):** Cajas tridimensionales (`node` en PlantUML) que representan recursos computacionales en tiempo de ejecución (`[Rosenberg2007, Apéndice A, p. 407]`):
-  - `«device»`: Host físico, servidor o estación cliente.
-  - `«executionEnvironment»` / `«container»`: Entorno de ejecución o contenedor de sistema operativo/runtime (p. ej., contenedor `ecommerce_api` con `node:24-alpine` / `node:20-alpine`, contenedor `ecommerce_db` con `mysql:8.4` / `mysql:8.0`, contenedor `redis:8.2`, host `.NET 9.0 Kestrel`).
-- **Artefactos (*Artifacts*):** Elementos físicos desplegados dentro de los nodos (`artifact` con estereotipo `«artifact»`, `«secret»` o `«volume»`), tales como binarios/ensamblados (`FrontendNet.dll`), punto de entrada (`index.js`), archivos de configuración (`redis.conf`) y secretos montados en `/run/secrets/*` (`[Rosenberg2007, Apéndice A, Fig. A-13]`).
-- **Enlaces de comunicación, protocolos y puertos (`[Rosenberg2007, Apéndice A, p. 407]`):**
-  - Toda línea que conecte dos nodos debe rotularse con un estereotipo de protocolo (`«HTTPS»`, `«HTTP/REST»`, `«MySQL/TCP»`, `«RESP3/TLS 1.3»`) y especificar explícitamente el **puerto de red y dirección de enlace** verificados en el código (`127.0.0.1:3000`, `3306` / `127.0.0.1:3307`, `6379` / `127.0.0.1:6380`).
-  - Las redes aisladas de contenedores (como `app_edge` y `backend_internal` / `redis_private`) deben delimitarse mediante paquetes o marcos de red con su propiedad de aislamiento (`internal: true`, `host_binding_ipv4: 127.0.0.1`).
+### 5.1 Nodos, entornos de ejecución, artefactos y enlaces `[Seidl2015, Cap. 2, §2.3.1, p. 18; Rosenberg2007, Cap. 7, pp. 173–177 y Apéndice A, p. 407]`
+- **Nodo (`node`)**: Caja tridimensional que representa infraestructura física, host o contenedor aislado (`«device»`, `«container»`) `[Rosenberg2007, Apéndice A, Fig. A-13, p. 407]`.
+- **Entorno de ejecución (`«executionEnvironment»`)**: Subnodo de runtime dentro de un nodo (ej. `Node.js 24 LTS Runtime (node:24-alpine, USER node)`, `ASP.NET Core 9.0 Kestrel Runtime (net9.0)`, `MySQL Server 8.4`, `Redis 7.4 TLS`).
+- **Artefacto (`artifact`, `«artifact»`)**: Unidad física desplegada dentro de un entorno de ejecución (ej. `backendnode app`, `frontendnet.dll`, `users.acl`, certificados mTLS `/tls/*.crt` y secretos `/run/secrets/*`).
+- **Enlaces de comunicación (`--`)**: Líneas entre nodos rotuladas obligatoriamente con el **estereotipo de protocolo, puerto y mecanismo de seguridad verificable** (ej. `«HTTPS / REST JSON :3000»`, `«mTLS RESP :6380 (tls-auth-clients yes)»`, `«TCP MySQL :3306 / host 127.0.0.1:3309 (caching_sha2_password)»`, `«HTTPS API (Cloudinary / Gmail OAuth2)»`) `[Rosenberg2007, Cap. 7, tema: separación entre modelo de paquetes/componentes y arquitectura de despliegue]`.
+- **Fidelidad a la línea base**: Solo se representan nodos y parámetros verificables en `Dockerfile`, `compose.yaml` y `Program.cs` (o se marca como `PENDIENTE` / `NO_VERIFICABLE` cualquier infraestructura productiva externa no definida en el repositorio).
 
 ---
 
-## 6. Diagramas Entidad-Relación (Conceptual y Lógico/Físico)
+## 6. Diagramas de Modelo de Datos (Conceptual y Lógico/Físico)
 
-### 6.1 Distinción entre Modelo Conceptual y Esquema Lógico/Físico (`[Seidl2015, Cap. 4, §4.10, pp. 80–81]`, `[Rosenberg2007, Cap. 2, pp. 31–36 y Cap. 10, pp. 263–264, Fig. 10-1]`)
+El proyecto no utiliza notación Chen (elipses para atributos y rombos para relaciones). Siguiendo el enfoque UML de `[Seidl2015, Cap. 4, §4.10, pp. 80–81; Rosenberg2007, Cap. 10, pp. 263–264, Fig. 10-1]`, el modelo de datos se divide en dos vistas complementarias usando notación de clases/entidades UML con multiplicidades y estereotipos de base de datos:
 
-- **Diagrama Conceptual / Dominio (`der_conceptual.puml`):**
-  - Muestra las **14 entidades del dominio** y sus relaciones semánticas con cardinalidades exactas (`1`, `0..1`, `0..*`, `1..*`) y atributos de negocio esenciales, sin tipos físicos de motor SQL ni detalles de índices internos (`[Rosenberg2007, Cap. 2, pp. 31–36]`).
-  - Las relaciones de especialización 1:1 (`User` -> `Admin`, `Buyer`, `Seller`) deben reflejar con claridad la partición por perfil.
-- **Diagrama Lógico / Físico Relacional (`der_logico.puml`):**
-  - Representa fielmente las **14 tablas físicas** del esquema MySQL (`«table»`), con el nombre exacto de tabla en `snake_case` (`users`, `admins`, `buyers`, `sellers`, `user_addresses`, `categories`, `products`, `product_categories`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `audit_logs`) (`[Rosenberg2007, Cap. 10, Fig. 10-1, p. 264]`).
-  - Cada tabla debe separar la llave primaria (`PK`) encima del divisor horizontal (`--`) y listar debajo las columnas con sus tipos SQL reales (`CHAR(36)`, `VARCHAR(120)`, `DECIMAL(10,2)`, `DATETIME(3)`, `JSON`, `TINYINT(1)`), restricciones de nulidad (`NOT NULL` / `NULL`), llaves foráneas (`FK`), índices únicos (`UQ`) y columnas generadas (`GENERATED STORED`).
-  - Las líneas de relación utilizan notación *Crow's Foot* (`||--o{`, `||--|{`, `||--||`, `}o--||`) indicando la política de integridad referencial (`ON DELETE RESTRICT` / `CASCADE` / `SET NULL`) verificada en las migraciones.
+1. **Modelo Conceptual de Dominio (`der_conceptual_*.puml`)**:
+   - Modela las **14 entidades del dominio** como clases UML con estereotipo `«entity»`, mostrando únicamente atributos conceptuales de negocio (sin llaves foráneas artificiales ni tipos físicos de motor SQL) y asociaciones con multiplicidades exactas (`1`, `0..1`, `1..*`, `0..*`), composiciones (`*--`) y agregaciones (`o--`).
+2. **Modelo Lógico / Físico Relacional (`der_logico_*.puml`)** `[Rosenberg2007, Cap. 10, Fig. 10-1, p. 264]`:
+   - Modela las **14 tablas físicas** del esquema final MySQL 8.4 (`migrations/20260409000100-rebuild-secure-ecommerce-schema.js` y `20260418000100-expand-product-price-precision.js`) como clases/entidades con estereotipo `«table»` y sus **nombres reales en inglés** (`users`, `admins`, `buyers`, `sellers`, `user_addresses`, `categories`, `products`, `product_categories`, `carts`, `cart_items`, `orders`, `order_items`, `order_status_history`, `audit_logs`).
+   - Cada columna indica obligatoriedad (`*` para `NOT NULL`), tipo físico (`CHAR(36)`, `BIGINT UNSIGNED`, `VARCHAR(255)`, `DECIMAL(12,2)`, `ENUM(...)`, `JSON`, `DATETIME`) y estereotipos de restricción: `«PK»`, `«FK»`, `«UK»` (o `«UNIQUE»`) e `«IDX»`.
 
 ---
 
-## 7. Convenciones Específicas del Proyecto
+## 7. Convenciones Transversales del Proyecto
 
-### 7.1 Idioma de los Nombres y Etiquetas
+### 7.1 Idioma
+- **Títulos, notas explicativas, nombres de casos de uso, actores y etiquetas de flujo**: en **español** técnico claro.
+- **Identificadores de código, nombres de clases, métodos, rutas HTTP, tablas, columnas SQL, claims JWT y estados `ENUM`**: exactamente en su **idioma real en el código fuente** (inglés en `backendnode` y en el esquema MySQL; nombres reales de clases C# en `frontendnet`, ej. `ProductosController`, `SessionTokenManager`). **Prohibido** traducir tablas o modelos del backend a español (`usuarios`, `pedidos`, `archivos`).
 
-1. **Identificadores de código, tablas, columnas, rutas HTTP, clases, métodos y variables de entorno:** Se escriben **exactamente en inglés** tal como existen en el código fuente (`users`, `order_status_history`, `POST /api/auth/refresh`, `RefreshTokenDelegatingHandler`, `SessionTokenManager`, `catalog.service.js`). Queda estrictamente prohibido traducir nombres de tablas o clases al español (como `Usuario`, `Producto`, `Archivo` o `Bitacora`), ya que la migración `20261108000001-normalize-english-schema.js` estandarizó todo el esquema y contrato en inglés.
-2. **Títulos de diagramas, nombres de casos de uso, actores, notas explicativas, guardas de negocio y leyendas:** Se redactan en **español técnico claro y conciso** (p. ej., `Comprador`, `[stock disponible y vendedor activo]`, `«Flujo de renovación silenciosa»`).
+### 7.2 Tipografía y Paleta Sobria (`_skin.puml`)
+- Todos los diagramas deben incluir en su cabecera `!include _skin.puml`.
+- **Fuente principal**: Sans-serif limpia multiplataforma (`Segoe UI`, con fallback a `Inter`, `Liberation Sans`, `Arial`, `sans-serif`) y monoespaciada (`Cascadia Mono`, `Consolas`, `monospace`) para firmas técnicas, rutas HTTP y tipos SQL.
+- **Paleta sobria de alto contraste (máximo 5 tonos semánticos sobre fondo blanco `#FFFFFF`)**:
+  1. **Neutro / Entidades y Clases estándar**: Relleno `#F8FAFC`, borde `#334155`, texto `#0F172A`.
+  2. **Frontera / UI / HTTP (`«boundary»`)**: Relleno `#EFF6FF`, borde `#1D4ED8`.
+  3. **Control / Servicios / Seguridad (`«control»`)**: Relleno `#F0FDF4`, borde `#15803D`.
+  4. **Datos / Persistencia (`«entity»`, `«table»`, `«database»`)**: Relleno `#FEFCE8`, borde `#A16207`.
+  5. **Sistemas Externos / Alertas (`«external»`, `«threat»`)**: Relleno `#FEF2F2`, borde `#B91C1C`.
 
-### 7.2 Distinción Visual y Semántica entre Frontend y Backend
+### 7.3 Leyenda y Encabezado de Trazabilidad
+Todo archivo `.puml` debe contener:
+1. Un bloque de comentarios inicial (`' ...`) con: propósito del diagrama, archivos fuente de `backendnode`/`frontendnet` que lo respaldan y referencia a `docs/BASELINE.md`.
+2. Un `title` y `caption` o `legend right` sobrio cuando el diagrama utilice estereotipos o colores semánticos.
 
-Todo diagrama en el que participen elementos de ambos repositorios (o que represente uno de ellos) debe distinguirlos mediante:
-1. **Prefijo de paquete o contenedor explícito:** `Frontend (.NET 9 MVC)` vs. `Backend (Node.js / Express API)`.
-2. **Estereotipos dedicados definidos en `_skin.puml`:**
-   - `«frontend»`: Componentes, controladores, vistas Razor, handlers o modelos de `frontendnet/` (paleta azul índigo suave `#EEF2FF`, borde `#3730A3`).
-   - `«backend»`: Rutas, controladores, middlewares, servicios o modelos de `backendnode/` (paleta verde esmeralda suave `#ECFDF5`, borde `#065F46`).
-   - `«database»`: Tablas o nodos MySQL (paleta ámbar suave `#FFFBEB`, borde `#92400E`).
-   - `«cache»`: Nodos o estructuras Redis (paleta roja/coral suave `#FEF2F2`, borde `#991B1B`).
-   - `«security»`: Controles criptográficos, tokens RS256, secretos o políticas de bloqueo (paleta violeta suave `#F5F3FF`, borde `#5B21B6`).
-   - `«external»`: Servicios de terceros en la nube como Cloudinary, Gmail OAuth2 o Cloudflare Turnstile (paleta gris pizarra `#F1F5F9`, borde punteado `#475569`).
+### 7.4 Presupuesto de Complejidad Visual y Regla de División `[Seidl2015, Cap. 9, §9.1]`
+Para garantizar legibilidad inmediata en páginas A4/Carta y pantallas sin cruce caótico de líneas, ningún diagrama individual podrá exceder los siguientes límites:
 
-### 7.3 Paleta de Colores y Uso Obligatorio de `_skin.puml`
-
-- Todos los archivos `.puml` del directorio `backendnode/docs/diagrams/` deben incluir en su encabezado (inmediatamente después de `@startuml`) la directiva:
-  ```plantuml
-  !include _skin.puml
-  ```
-- No se permite redefinir colores arbitrarios ni fuentes inline en diagramas individuales salvo para resaltar un estado de error puntual, garantizando uniformidad tipográfica y alto contraste (WCAG AA) tanto en salida HTML como en PDF impreso.
-
-### 7.4 Límite Máximo de Elementos por Diagrama y Regla de División (`[Seidl2015, Cap. 9, §9.1]`, `[Rosenberg2007, Cap. 7, p. 177]`)
-
-Para garantizar que todo diagrama sea legible al 100 % del ancho de página sin requerir zoom excesivo:
-
-| Tipo de Diagrama | Límite Máximo por Archivo `.puml` | Regla de División Obligatoria si se Supera el Límite |
-| :--- | :--- | :--- |
-| **Casos de Uso** | Máximo **14 casos de uso** y **5 actores** por diagrama | Dividir por subsistema o actor principal (`uc_comprador.puml`, `uc_vendedor_admin.puml`) agrupando en paquetes funcionales (`[Seidl2015, §9.1]`). |
-| **Clases / DER** | Máximo **15 clases o tablas** por diagrama; máximo **12 atributos/operaciones visibles** por caja | Si un subsistema supera 15 clases, dividir por paquete arquitectónico o contexto delimitado (*Identidad y Sesiones*, *Catálogo*, *Carrito y Pedidos*), omitiendo getters/setters triviales. |
-| **Secuencia** | Máximo **7 líneas de vida** (*lifelines*), **16 mensajes** y **2 niveles de anidamiento** de fragmentos (`alt`/`loop`) | Extraer subflujos secundarios (p. ej., verificación criptográfica interna o envío de correo OAuth2) a un diagrama separado referenciado con un marco `ref over ...` (`[Seidl2015, §6.5, Fig. 6.18]`). |
-| **Componentes / Despliegue** | Máximo **14 componentes o nodos/artefactos** y **4 contenedores/paquetes** | Separar la vista lógica de componentes (`componentes.puml`) de la topología física de contenedores y red (`despliegue.puml`) (`[Rosenberg2007, Cap. 7, pp. 173–177]`). |
-
----
-
-## 8. Ejecución del Pipeline de Renderizado de Diagramas
-
-El script `backendnode/docs/generate-diagrams.js` utiliza una versión fija y verificada por hash SHA-256 de **PlantUML `1.2024.8`** (con Graphviz local o motor Smetana integrado) y falla con código de salida distinto de cero (`exit 1`) ante cualquier error de sintaxis:
-
-```powershell
-# Validar sintaxis de todos los archivos .puml sin modificar los .svg existentes
-node docs/generate-diagrams.js --check-only
-
-# Generar todos los archivos SVG en docs/asciidoc/assets/
-node docs/generate-diagrams.js
-
-# Validar o renderizar un único diagrama específico
-node docs/generate-diagrams.js --check-only --file uc_sistema.puml
-```
+| Tipo de Diagrama | Límite Máximo por Archivo `.puml` | Regla Obligatoria de División si se Supera el Límite |
+|---|---|---|
+| **Casos de Uso** | **14 casos de uso** y **5 actores** | Dividir por actor / contexto funcional (`uc_comprador.puml`, `uc_vendedor.puml`, `uc_administrador.puml`). |
+| **Clases** | **15 clases/interfaces** y **6 atributos + 6 operaciones visibles** por clase | Dividir por contexto acotado (`identidad y sesión`, `catálogo e imágenes`, `carrito, pedidos y auditoría`) o por capa (`backendnode` vs. `frontendnet`), mostrando en cada vista solo los miembros relevantes al contexto `[Seidl2015, Cap. 9, §9.1]`. |
+| **Secuencia** | **7 lifelines**, **16 mensajes** y **2 niveles** de fragmentos anidados (`alt`/`opt`/`loop`/`break`) | Dividir por caso de uso o subflujo y vincular con un bloque de referencia `ref over` `[Seidl2015, Cap. 6, §6.5.1, tema: referencias de interacción ref]`. |
+| **Componentes** | **14 componentes** y **4 paquetes/contenedores** | Separar vista global del sistema y vista interna detallada del subsistema si excede el tope. |
+| **Despliegue** | **8 nodos/contenedores** y **12 artefactos** | Separar topología de contenedores de ejecución respecto de flujos auxiliares. |
+| **Modelo de Datos (Conceptual / Lógico)** | **15 entidades/tablas** por diagrama | Si las relaciones o columnas comprometen la legibilidad, dividir por contexto de dominio (`Identidad + Catálogo` vs. `Carrito + Pedidos + Auditoría`) manteniendo las referencias de llave foránea (`«FK»`). |
