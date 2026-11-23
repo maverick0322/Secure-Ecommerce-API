@@ -1,6 +1,133 @@
 == Diseño Arquitectónico Seguro
 
+Este capítulo presenta la arquitectura visual UML 2.5.1 del sistema siguiendo los lineamientos normativos de `backendnode/docs/diagrams/GUIA_ESTILO_UML.md` y la planificación de `backendnode/docs/diagrams/PLAN_DIAGRAMAS.md`. Todos los diagramas se renderizan mediante el pipeline fijado (`PlantUML 1.2024.8`) en **PNG a 200 dpi** (con respaldo SVG vectorial) y mantienen trazabilidad 1:1 en `backendnode/docs/diagrams/TRAZABILIDAD_DIAGRAMAS.md`.
+
 [NOTE]
 ====
-Capítulo en redacción en la Etapa 3 del Incremento 1 junto con los 25 diagramas UML 2.5.1.
+La vista de **Modelado de Amenazas** corresponde al Capítulo 4 (`PENDIENTE`), y el diagrama de **Vista de Despliegue (`DEP-01` / `despliegue.puml`)** permanece marcado como **`PENDIENTE`** junto con el Capítulo 8 hasta definir la infraestructura productiva externa (`NO_VERIFICABLE`).
+====
+
+=== Vista de Casos de Uso
+
+La vista de casos de uso separa los flujos transversales (`Visitante` y actor general `Usuario Autenticado`) de los flujos propios de cada rol (`Comprador`, `Vendedor` y `Administrador`), evitando repetir autenticación, perfil y cierre de sesión en cada diagrama y respetando el principio de mínimo privilegio.
+
+.Casos de uso transversales — Visitante y Usuario Autenticado (`uc_visitante_usuario_autenticado.puml`)
+image::uc_visitante_usuario_autenticado.png[Casos de uso de Visitante y Usuario Autenticado,align="center"]
+
+* **Cómo leerlo y decisiones de seguridad:** El actor `Visitante` únicamente accede al registro en dos fases con OTP (`<<CU-01>>`), inicio de sesión (`<<CU-02>>`) y recuperación de contraseña (`<<CU-05>>`), protegidos por `CloudflareTurnstileService` y envío de OTP por `gmail.service.js`. El actor general `Usuario Autenticado` agrupa renovación (`<<CU-03>>`), cierre (`<<CU-04>>`) y gestión de perfil (`<<CU-06>>`), heredados automáticamente por los tres roles especializados.
+
+.Casos de uso del Comprador (`uc_comprador.puml`)
+image::uc_comprador.png[Casos de uso del Comprador,align="center"]
+
+* **Cómo leerlo y decisiones de seguridad:** El `Comprador` solo accede al catálogo (`<<CU-07>>`) tras autenticarse. La cancelación (`<<CU-11>>`) se modela como asociación independiente con precondición explícita (`PENDING`), nunca como `«extend»` de checkout.
+
+.Casos de uso del Vendedor aprobado (`uc_vendedor.puml`)
+image::uc_vendedor.png[Casos de uso del Vendedor aprobado,align="center"]
+
+* **Cómo leerlo y decisiones de seguridad:** Únicamente un `Seller` en estado `APPROVED` puede publicar productos (`<<CU-12>>`), cargar imágenes en Cloudinary (`<<CU-13>>`) o avanzar envíos propios (`<<CU-14>>`). Un vendedor en estado `PENDING` recibe denegación controlada en `authorize` salvo en sus rutas de perfil/sesión (`allowUnapprovedSeller: true`).
+
+.Casos de uso del Administrador (`uc_administrador.puml`)
+image::uc_administrador.png[Casos de uso del Administrador,align="center"]
+
+* **Cómo leerlo y decisiones de seguridad:** El `Administrador` gestiona categorías (`<<CU-15>>`), revisa y suspende vendedores (`<<CU-16>>`), administra cuentas no administradoras y supervisa pedidos (`<<CU-17>>`) y consulta la bitácora inmutable `audit_logs` (`<<CU-18>>`), sin publicar productos ni modificar inventarios de vendedores.
+
+=== Máquinas de Estado de Entidades Críticas
+
+Para hacer explícitas las guardas y efectos transaccionales que rigen el inventario y la moderación comercial, se modelan las máquinas de estado reales verificadas en `backendnode/services/orders.service.js` y `backendnode/services/accounts.service.js`.
+
+.Máquina de estados del pedido `Order` (`estado_pedido.puml`)
+image::estado_pedido.png[Máquina de estados de Order,align="center"]
+
+* **Decisiones de seguridad:** El `BUYER` propietario solo puede ejecutar `PENDING -> CANCELED` (`backendnode/services/orders.service.js:166`), mientras `SELLER` propietario y `ADMIN` avanzan `PENDING -> PREPARING -> SHIPPED -> DELIVERED` o cancelan antes del envío. Toda cancelación exige `reason` y dispara `restockCanceledOrder()` dentro de la misma transacción SQL (`backendnode/services/orders.service.js:169-171`).
+
+.Máquina de estados del vendedor `Seller` (`estado_vendedor.puml`)
+image::estado_vendedor.png[Máquina de estados de Seller,align="center"]
+
+* **Decisiones de seguridad y limitación conocida:** Un vendedor inicia siempre en `PENDING` tras verificar su correo; solo un `ADMIN` puede aprobarlo o rechazarlo (`reviewSeller`) y suspender vendedores activos (`suspendSeller`). En el código vigente, `REJECTED` y `SUSPENDED` son terminales (`[DECISIÓN PENDIENTE: reactivación de vendedor]`).
+
+=== Modelo de Datos (Conceptual y Lógico MySQL 8.4)
+
+El modelo de datos se divide en dos contextos acotados tanto en vista conceptual (`«entity»`) como en vista lógica/física (`«table»`), conservando los nombres reales exactos de las 14 tablas e identificadores de columna en `camelCase` del esquema MySQL 8.4 (`backendnode/migrations/20261110000001-create-secure-ecommerce-tables.js`).
+
+.Modelo conceptual — Identidad, Direcciones y Catálogo (`der_conceptual_identidad_catalogo.puml`)
+image::der_conceptual_identidad_catalogo.png[DER conceptual identidad y catálogo,align="center"]
+
+.Modelo conceptual — Carrito, Pedidos y Auditoría (`der_conceptual_carrito_pedidos_auditoria.puml`)
+image::der_conceptual_carrito_pedidos_auditoria.png[DER conceptual carrito, pedidos y auditoría,align="center"]
+
+.Modelo lógico/físico MySQL 8.4 — Identidad, Direcciones y Catálogo (`der_logico_identidad_catalogo.puml`)
+image::der_logico_identidad_catalogo.png[DER lógico identidad y catálogo,align="center"]
+
+.Modelo lógico/físico MySQL 8.4 — Carrito, Pedidos y Auditoría (`der_logico_carrito_pedidos_auditoria.puml`)
+image::der_logico_carrito_pedidos_auditoria.png[DER lógico carrito, pedidos y auditoría,align="center"]
+
+* **Decisiones de integridad y seguridad de datos:**
+  * La tabla `users` no almacena columna `profile` ni almacena secretos de sesión: la pertenencia a `admins`, `buyers` o `sellers` se impone mediante llaves foráneas `RESTRICT` 1:0..1.
+  * `categories` incorpora la columna generada `normalizedName` con índice único `categories_normalized_name_unique` para evitar colisiones por mayúsculas o espacios (`backendnode/migrations/20261119000001-add-categories-normalized-name-unique.js:35-37`).
+  * `products` almacena `imagePublicId` (nullable) y nunca URLs arbitrarias; `orders` conserva el snapshot JSON `deliveryAddressSnapshot` e `idempotencia` por llave única `(checkoutId, sellerId)`, mientras `order_items` congela `productTitle` y `unitPrice` en `DECIMAL(12,2)`.
+
+=== Vista Lógica (Diagramas de Clases Backend y Frontend)
+
+La vista lógica agrupa en tres contextos de `backendnode` y tres de `frontendnet` (`<= 15` clases por diagrama) las fronteras HTTP (`«boundary»`), controladores/servicios (`«control»`), entidades Sequelize (`«entity»`) y DTOs/modelos C# (`«dto»`).
+
+.Clases Backend — Identidad, Autenticación y Sesiones (`clases_backend_identidad_sesion.puml`)
+image::clases_backend_identidad_sesion.png[Clases backend identidad y sesión,align="center"]
+
+.Clases Backend — Catálogo e Imágenes (`clases_backend_catalogo_imagenes.puml`)
+image::clases_backend_catalogo_imagenes.png[Clases backend catálogo e imágenes,align="center"]
+
+.Clases Backend — Direcciones, Carrito, Checkout, Pedidos y Auditoría (`clases_backend_carrito_pedidos_auditoria.puml`)
+image::clases_backend_carrito_pedidos_auditoria.png[Clases backend carrito, pedidos y auditoría,align="center"]
+
+.Clases Frontend (.NET 9.0) — Identidad, Sesión BFF y Perfil (`clases_frontend_identidad_sesion.puml`)
+image::clases_frontend_identidad_sesion.png[Clases frontend identidad y sesión,align="center"]
+
+.Clases Frontend (.NET 9.0) — Catálogo, Direcciones, Carrito y Pedidos (`clases_frontend_catalogo_carrito_pedidos.puml`)
+image::clases_frontend_catalogo_carrito_pedidos.png[Clases frontend catálogo, carrito y pedidos,align="center"]
+
+.Clases Frontend (.NET 9.0) — Administración, Categorías, Auditoría y Soporte (`clases_frontend_admin_auditoria.puml`)
+image::clases_frontend_admin_auditoria.png[Clases frontend administración y auditoría,align="center"]
+
+=== Vista de Procesos (Diagramas de Secuencia)
+
+Cada flujo crítico respeta la cadena real verificada (`middleware -> controller -> service -> persistencia`) y se mantiene por debajo del límite de la guía (`<= 7` lifelines, `<= 16` mensajes, `<= 2` niveles de fragmentos). La secuencia transversal `SEQ-06` encapsula la autorización en tiempo real para ser referenciada (`ref over`) por los flujos de negocio.
+
+.Autorización en tiempo real y validación de entradas (`seq_autorizacion_validacion.puml`)
+image::seq_autorizacion_validacion.png[Secuencia de autorización y validación,align="center"]
+
+.Inicio de sesión con rate limit y bloqueo exponencial (`seq_inicio_sesion.puml`)
+image::seq_inicio_sesion.png[Secuencia de inicio de sesión,align="center"]
+
+.Renovación de sesión single-flight y detección de reúso (`seq_renovacion_sesion.puml`)
+image::seq_renovacion_sesion.png[Secuencia de renovación de sesión,align="center"]
+
+.Registro de cuenta en dos fases con OTP (`seq_registro_cuenta.puml`)
+image::seq_registro_cuenta.png[Secuencia de registro con OTP,align="center"]
+
+.Publicación de producto por vendedor aprobado (`seq_publicacion_producto.puml`)
+image::seq_publicacion_producto.png[Secuencia de publicación de producto,align="center"]
+
+.Carga, validación aislada y almacenamiento de imagen (`seq_carga_imagen_producto.puml`)
+image::seq_carga_imagen_producto.png[Secuencia de carga de imagen,align="center"]
+
+.Gestión del carrito de compras (`seq_carrito.puml`)
+image::seq_carrito.png[Secuencia de carrito de compras,align="center"]
+
+.Cotización firmada y confirmación idempotente de checkout (`seq_checkout_cotizacion_confirmacion.puml`)
+image::seq_checkout_cotizacion_confirmacion.png[Secuencia de checkout y confirmación,align="center"]
+
+=== Vista de Implementación (Diagrama de Componentes)
+
+El diagrama de componentes sintetiza la arquitectura lógica UML 2.x en 4 contenedores y 13 componentes conectados mediante interfaces provistas y requeridas (*ball-and-socket*).
+
+.Arquitectura lógica de componentes UML 2.5.1 (`componentes.puml`)
+image::componentes.png[Diagrama de componentes UML 2.5.1,align="center"]
+
+* **Cómo leerlo y decisiones de seguridad:** El cliente web `frontendnet` nunca accede directamente a MySQL, Redis, Cloudinary ni Gmail; toda operación pasa por la interfaz REST `backendnode` autenticada con JWT RS256 de vida corta (`{jwt-ttl-seg}` s) y validada en vivo en cada petición contra Redis 8.2 TLS y MySQL 8.4.
+
+=== Vista de Despliegue (`DEP-01` — PENDIENTE)
+
+[IMPORTANT]
+====
+**PENDIENTE:** El diagrama de despliegue `DEP-01` (`despliegue.puml`) y su descripción física quedan fuera del Incremento 1 (`NO_VERIFICABLE` la infraestructura productiva externa), alineados con el Capítulo 8 (`08_despliegue_seguro.adoc`).
 ====
