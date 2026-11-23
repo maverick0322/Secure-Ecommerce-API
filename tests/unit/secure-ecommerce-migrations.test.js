@@ -243,4 +243,51 @@ describe('secure_ecommerce migrations (recorded SQL, no database)', () => {
     expect(statements[1]).toContain('DROP INDEX `categories_normalized_name_unique`');
     expect(statements[1]).toContain('DROP COLUMN `normalizedName`');
   });
+
+  it('enforces products.description NOT NULL only when no null/empty rows exist and supports reversible down', async () => {
+    const descMigration = require('../../migrations/20261123000001-require-products-description-not-null');
+    const makeQi = ({ column = [{ columnType: 'text', isNullable: 'YES', charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' }], invalidCount = 0, sample = [] } = {}) => {
+      const statements = [];
+      return {
+        statements,
+        queryInterface: {
+          sequelize: {
+            query: jest.fn(async sql => {
+              const s = sql.trim();
+              if (s.startsWith('SELECT DATABASE()')) return [{ db: 'secure_ecommerce', version: '8.4.13', sqlMode: 'STRICT_TRANS_TABLES', foreignKeyChecks: 1 }];
+              if (s.includes('information_schema.COLUMNS')) return column;
+              if (s.includes('COUNT(*) AS total')) return [{ total: invalidCount }];
+              if (s.includes('SELECT id')) return sample;
+              statements.push(s);
+              return [];
+            })
+          }
+        }
+      };
+    };
+
+    const dirty = makeQi({ invalidCount: 2, sample: [{ id: 4 }, { id: 9 }] });
+    await expect(descMigration.up(dirty.queryInterface)).rejects.toThrow(/found 2 product row\(s\) with NULL or empty description \(sample ids: 4, 9\)/);
+    expect(dirty.statements).toHaveLength(0);
+
+    const missing = makeQi({ column: [] });
+    await expect(descMigration.up(missing.queryInterface)).rejects.toThrow(/does not exist/);
+    expect(missing.statements).toHaveLength(0);
+
+    const alreadyTight = makeQi({ column: [{ columnType: 'text', isNullable: 'NO', charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' }] });
+    await descMigration.up(alreadyTight.queryInterface);
+    expect(alreadyTight.statements).toHaveLength(0);
+
+    const clean = makeQi();
+    await descMigration.up(clean.queryInterface);
+    expect(clean.statements).toEqual(['ALTER TABLE products\n  MODIFY COLUMN `description` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL']);
+
+    const revert = makeQi({ column: [{ columnType: 'text', isNullable: 'NO', charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' }] });
+    await descMigration.down(revert.queryInterface);
+    expect(revert.statements).toEqual(['ALTER TABLE products\n  MODIFY COLUMN `description` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL']);
+
+    const alreadyNullable = makeQi({ column: [{ columnType: 'text', isNullable: 'YES', charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' }] });
+    await descMigration.down(alreadyNullable.queryInterface);
+    expect(alreadyNullable.statements).toHaveLength(0);
+  });
 });

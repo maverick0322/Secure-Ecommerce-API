@@ -23,7 +23,7 @@ it('allows an approved seller to create and derives sellerId on the server', asy
   const create = jest.spyOn(catalog, 'createProduct').mockResolvedValue(sample);
   const result = await request(app).post('/api/products').set('Authorization', header(seller)).send({ title: 'Fixture', description: 'Descripción válida', price: '12.5', stock: 2 });
   expect(result.status).toBe(201);
-  expect(result.body).toMatchObject({ productId: 1, sellerId: seller.account.id, description: 'Descripción válida', price: '12.50', imagePublicId: null });
+  expect(result.body).toMatchObject({ productId: 1, sellerId: seller.account.id, description: 'Descripción válida', price: '12.50', imagePublicId: null, hasImage: false });
   expect(create).toHaveBeenCalledWith(expect.objectContaining({ id: seller.account.id }), { title: 'Fixture', description: 'Descripción válida', price: '12.50', stock: 2 },{ipAddress:expect.any(String)});
 });
 
@@ -69,14 +69,78 @@ it.each([
 });
 
 it('permits buyers to query the active catalog and sanitizes failures', async () => {
-  jest.spyOn(catalog, 'listProducts').mockResolvedValue([sample]);
+  jest.spyOn(catalog, 'listProducts').mockResolvedValue([{ ...sample, imagePublicId: 'managed-img' }]);
   const result = await request(app).get('/api/products?s=Fixture').set('Authorization', header(buyer));
   expect(result.status).toBe(200);
   expect(result.body[0]).not.toHaveProperty('fileId');
+  expect(result.body[0]).not.toHaveProperty('hasImage');
   jest.spyOn(catalog, 'getProduct').mockRejectedValue(new Error('secret SQL diagnostics'));
   const failed = await request(app).get('/api/products/1').set('Authorization', header(buyer));
   expect(failed.status).toBe(500);
   expect(failed.text).not.toContain('secret');
+});
+
+it('enforces draft visibility rules by role (BUYER/ADMIN vs owning SELLER) and exposes hasImage only to sellers', async () => {
+  const { Product, Sequelize } = require('../../models');
+  const { Op } = Sequelize;
+  const otherSeller = tokenFor('SELLER', { seller: { status: 'APPROVED' } });
+  const rows = [
+    { id: 10, sellerId: seller.account.id, title: 'Borrador Propio', description: 'Sin foto aún', price: '10.00', stock: 1, imagePublicId: null, categories: [] },
+    { id: 11, sellerId: seller.account.id, title: 'Publicado Propio', description: 'Con foto propia', price: '20.00', stock: 2, imagePublicId: 'prod-11', categories: [] },
+    { id: 12, sellerId: otherSeller.account.id, title: 'Borrador Ajeno', description: 'Sin foto ajena', price: '30.00', stock: 3, imagePublicId: null, categories: [] },
+    { id: 13, sellerId: otherSeller.account.id, title: 'Publicado Ajeno', description: 'Con foto ajena', price: '40.00', stock: 4, imagePublicId: 'prod-13', categories: [] }
+  ];
+  const matches = (row, where) => {
+    if (where.id !== undefined && row.id !== where.id) return false;
+    if (where.imagePublicId && where.imagePublicId[Op.ne] === null && row.imagePublicId === null) return false;
+    if (where[Op.or]) {
+      const ok = where[Op.or].some(branch =>
+        (branch.imagePublicId?.[Op.ne] === null && row.imagePublicId !== null) ||
+        (branch.sellerId !== undefined && row.sellerId === branch.sellerId));
+      if (!ok) return false;
+    }
+    if (where.title?.[Op.like]) {
+      const term = where.title[Op.like].slice(1, -1).toLowerCase();
+      if (!row.title.toLowerCase().includes(term)) return false;
+    }
+    return true;
+  };
+  jest.spyOn(Product, 'findAll').mockImplementation(async ({ where }) => rows.filter(row => matches(row, where)));
+  jest.spyOn(Product, 'findOne').mockImplementation(async ({ where }) => rows.find(row => matches(row, where)) || null);
+
+  // BUYER: solo productos con imagen en lista y detalle; 404 en borrador; sin campo hasImage
+  const buyerList = await request(app).get('/api/products').set('Authorization', header(buyer));
+  expect(buyerList.status).toBe(200);
+  expect(buyerList.body.map(item => item.productId)).toEqual([11, 13]);
+  expect(buyerList.body.every(item => !Object.hasOwn(item, 'hasImage'))).toBe(true);
+  expect((await request(app).get('/api/products/10').set('Authorization', header(buyer))).status).toBe(404);
+  const buyerDetail = await request(app).get('/api/products/11').set('Authorization', header(buyer));
+  expect(buyerDetail.status).toBe(200);
+  expect(buyerDetail.body).not.toHaveProperty('hasImage');
+  expect((await request(app).get('/api/products?s=Borrador').set('Authorization', header(buyer))).body).toEqual([]);
+
+  // ADMIN: solo productos con imagen; 404 en borrador; sin campo hasImage
+  const adminList = await request(app).get('/api/products').set('Authorization', header(admin));
+  expect(adminList.status).toBe(200);
+  expect(adminList.body.map(item => item.productId)).toEqual([11, 13]);
+  expect(adminList.body.every(item => !Object.hasOwn(item, 'hasImage'))).toBe(true);
+  expect((await request(app).get('/api/products/10').set('Authorization', header(admin))).status).toBe(404);
+
+  // SELLER dueño: ve sus borradores (hasImage: false) + productos con imagen (hasImage: true), pero 404 en borrador ajeno
+  const sellerList = await request(app).get('/api/products').set('Authorization', header(seller));
+  expect(sellerList.status).toBe(200);
+  expect(sellerList.body.map(item => ({ id: item.productId, hasImage: item.hasImage }))).toEqual([
+    { id: 10, hasImage: false },
+    { id: 11, hasImage: true },
+    { id: 13, hasImage: true }
+  ]);
+  const sellerDraftDetail = await request(app).get('/api/products/10').set('Authorization', header(seller));
+  expect(sellerDraftDetail.status).toBe(200);
+  expect(sellerDraftDetail.body.hasImage).toBe(false);
+  expect((await request(app).get('/api/products/12').set('Authorization', header(seller))).status).toBe(404);
+  const sellerSearch = await request(app).get('/api/products?s=Borrador').set('Authorization', header(seller));
+  expect(sellerSearch.status).toBe(200);
+  expect(sellerSearch.body.map(item => item.productId)).toEqual([10]);
 });
 
 it('validates category assignment and uses logical product mutations', async () => {
