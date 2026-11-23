@@ -147,9 +147,16 @@ El proyecto no utiliza notación Chen (elipses para atributos y rombos para rela
 - **Títulos, notas explicativas, nombres de casos de uso, actores y etiquetas de flujo**: en **español** técnico claro.
 - **Identificadores de código, nombres de clases, métodos, rutas HTTP, tablas, columnas SQL, claims JWT y estados `ENUM`**: exactamente en su **idioma real en el código fuente** (inglés en `backendnode` y en el esquema MySQL; nombres reales de clases C# en `frontendnet`, ej. `ProductosController`, `SessionTokenManager`). **Prohibido** traducir tablas o modelos del backend a español (`usuarios`, `pedidos`, `archivos`).
 
-### 7.2 Tipografía y Paleta Sobria (`_skin.puml`)
+### 7.2 Tipografía, Formato de Entrega y Paleta Sobria (`_skin.puml`)
 - Todos los diagramas deben incluir en su cabecera `!include _skin.puml`.
-- **Fuente principal**: Sans-serif limpia multiplataforma (`Segoe UI`, con fallback a `Inter`, `Liberation Sans`, `Arial`, `sans-serif`) y monoespaciada (`Cascadia Mono`, `Consolas`, `monospace`) para firmas técnicas, rutas HTTP y tipos SQL.
+- **Fuentes elegidas y justificación:**
+  - **Sans-serif (`Segoe UI`)**: aplicada a títulos, actores, casos de uso, **nombres de clase en negrita** (`Class.FontName Segoe UI`, `FontStyle bold`), lifelines, componentes y nodos. Se eligió `Segoe UI` como nombre simple (sin lista CSS entre comillas, para evitar fallbacks inesperados de Java AWT en PlantUML) por su alta legibilidad a tamaños pequeños (`11–12 pt`) en pantallas e impresión PDF y disponibilidad nativa en Windows.
+  - **Monoespaciada (`Consolas`)**: aplicada **exclusivamente** a los atributos y operaciones de clases y columnas de tablas ER (`Class.AttributeFontName Consolas`) para alinear visualmente visibilidad (`+`/`-`), nombres de campo y tipos sin confundirlos con el encabezado sans-serif en negrita de la clase ni provocar artefactos de glifos en negrita.
+- **Formato de entrega de diagramas:** Todos los diagramas definitivos se entregan renderizados en **PNG a 200 dpi** mediante `node docs/generate-diagrams.js --format png` (o `--format both` cuando también se requiera el SVG vectorial para inspección o inclusión web).
+- **Reglas de limpieza visual en `_skin.puml` y diagramas:**
+  - `hide empty members` para omitir compartimentos vacíos en clases y enumeraciones.
+  - `skinparam linetype polyline` en diagramas de casos de uso para trazos rectos sin curvas superpuestas.
+  - `hide footbox` en diagramas de secuencia y guardas de `alt`/`else` escritas en texto plano **sin corchetes ni formato de enlace** (evitando que PlantUML o el visor las interprete como hipervínculos).
 - **Paleta sobria de alto contraste (máximo 5 tonos semánticos sobre fondo blanco `#FFFFFF`)**:
   1. **Neutro / Entidades y Clases estándar**: Relleno `#F8FAFC`, borde `#334155`, texto `#0F172A`.
   2. **Frontera / UI / HTTP (`«boundary»`)**: Relleno `#EFF6FF`, borde `#1D4ED8`.

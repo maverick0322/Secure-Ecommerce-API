@@ -6,6 +6,7 @@
 
 @startuml muestra_01_casos_uso
 !include _skin.puml
+skinparam linetype polyline
 left to right direction
 title Muestra 1 — Diagrama de Casos de Uso (UML 2.5.1)
 caption Verificación de estilo _skin.puml: actores, límite del sistema y asociaciones independientes
@@ -21,8 +22,7 @@ rectangle "Tienda en Línea Segura (Contexto Muestra)" {
 
 note right of UC_CancelOrder
   Precondición: pedido propio
-  en estado PENDING (asociación
-  independiente, no <<extend>>)
+  en estado PENDING
 end note
 
 Buyer -- UC_Register
@@ -45,15 +45,15 @@ enum OrderStatus <<enumeration>> {
 }
 
 class OrdersController <<boundary>> {
-  + quote(req : Request, res : Response) : Promise<void>
-  + confirm(req : Request, res : Response) : Promise<void>
+  + quote(req, res) : Promise<void>
+  + confirm(req, res) : Promise<void>
 }
 
 class OrdersService <<control>> {
   - {static} QUOTE_TTL_SECONDS : int = 600
-  + quote(account : Account, input : object) : Promise<CheckoutQuote>
-  + confirm(account : Account, input : object, ipAddress : string) : Promise<Order[]>
-  + transition(account : Account, id : bigint, input : object, ipAddress : string) : Promise<Order>
+  + quote(account, input) : Promise<Quote>
+  + confirm(account, input, ip) : Promise<Order[]>
+  + transition(account, id, input, ip) : Promise<Order>
 }
 
 class Order <<entity>> {
@@ -79,9 +79,10 @@ Order ..> OrderStatus
 
 @startuml muestra_03_secuencia
 !include _skin.puml
+hide footbox
 autonumber "<b>[00]"
 title Muestra 3 — Diagrama de Secuencia (UML 2.5.1)
-caption Cadena real verificada en routes/auth.routes.js:8 -> middleware -> auth.controller.login -> authentication.service.login
+caption Cadena real routes/auth.routes.js:8 (14 mensajes; límite de la guía: máx. 16 mensajes)
 
 actor "Comprador" as ActorBuyer
 boundary "AuthController\n(frontendnet)" as FeAuth <<boundary>>
@@ -96,9 +97,6 @@ activate FeAuth
 FeAuth -> RateLimit : POST /api/auth { email, password }
 activate RateLimit
 RateLimit -> Redis : Verificar límite IP (120/60s), cuenta (10/60s) y lockout
-activate Redis
-Redis --> RateLimit : allowed = true, locked = false
-deactivate Redis
 RateLimit -> AuthCtrl : next() -> auth.controller.login(req, res)
 deactivate RateLimit
 activate AuthCtrl
@@ -106,24 +104,16 @@ activate AuthCtrl
 AuthCtrl -> AuthSvc : authentication.login(req.body, { ipAddress })
 activate AuthSvc
 AuthSvc -> MySQL : Buscar User + Buyer/Seller por email
-activate MySQL
-MySQL --> AuthSvc : User (status, passwordHash)
-deactivate MySQL
-AuthSvc -> AuthSvc : verify(password, hash o createDummyHash()) [scrypt N=32768,r=8,p=3]
+AuthSvc -> AuthSvc : verify(password, hash o createDummyHash()) — scrypt N=32768, r=8, p=3
 
-alt [Credenciales válidas y cuenta ACTIVE]
+alt Credenciales válidas y cuenta ACTIVE
   AuthSvc -> Redis : Crear sesión (IDLE=30m, ABS=8h) y emitir refreshToken
-  activate Redis
-  Redis --> AuthSvc : OK
-  deactivate Redis
   AuthSvc --> AuthCtrl : { id, jwt (RS256, 300s), refreshToken }
-  AuthCtrl -> Redis : clearLoginFailures(emailKey)
-  AuthCtrl --> FeAuth : 200 OK
-  FeAuth --> ActorBuyer : Set-Cookie .frontendnet (HttpOnly, SameSite=Lax) + 302
-else [Credenciales inválidas (401)]
+  AuthCtrl --> FeAuth : 200 OK (clearLoginFailures)
+  FeAuth --> ActorBuyer : Set-Cookie .frontendnet + 302 Redirect
+else Credenciales inválidas (401)
   AuthSvc --> AuthCtrl : AccountError(401)
-  AuthCtrl -> Redis : recordLoginFailure(emailKey) [umbral 5 en 15m]
-  AuthCtrl --> FeAuth : 401 Unauthorized
+  AuthCtrl --> FeAuth : 401 Unauthorized (recordLoginFailure)
   FeAuth --> ActorBuyer : Vista Login con error sanitizado
 end
 deactivate AuthSvc
@@ -152,8 +142,8 @@ package "backendnode (Node.js 24 LTS / Express 4)" {
   BeServices ..> BeModels
 }
 
-interface "RESP TLS :6379" as IRedis
-interface "MySQL Protocol :3306" as IMySql
+interface "RESP TLS\n:6379" as IRedis
+interface "MySQL Protocol\n:3306" as IMySql
 
 database "Redis 8.2 TLS" as CompRedis <<database>>
 database "MySQL 8.4" as CompMySql <<database>>

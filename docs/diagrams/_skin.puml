@@ -9,12 +9,13 @@ skinparam shadowing false
 skinparam roundCorner 6
 skinparam handwritten false
 skinparam responseMessageBelowArrow true
-skinparam maxMessageSize 220
-skinparam wrapWidth 220
+skinparam maxMessageSize 320
+skinparam wrapWidth 460
 skinparam defaultTextAlignment left
+skinparam linetype polyline
 
 ' --- Tipografía y grosores de línea legibles en documento HTML/PDF ---
-skinparam defaultFontName "Segoe UI", "Liberation Sans", "Helvetica Neue", Arial, sans-serif
+skinparam defaultFontName Segoe UI
 skinparam defaultFontSize 12
 skinparam defaultFontColor #0F172A
 skinparam monochrome false
@@ -97,18 +98,20 @@ skinparam Usecase {
 }
 
 ' --- Clases, Interfaces y Entidades Relacionales (DER) ---
+hide empty members
 skinparam classAttributeIconSize 0
 skinparam Class {
   BackgroundColor #FFFFFF
   HeaderBackgroundColor #F1F5F9
   BorderColor #334155
   BorderThickness 1.4
+  FontName Segoe UI
   FontColor #0F172A
   FontSize 12
   FontStyle bold
   AttributeFontColor #1E293B
   AttributeFontSize 11
-  AttributeFontName "Cascadia Mono", "Consolas", "Liberation Mono", monospace
+  AttributeFontName Consolas
   StereotypeFontColor #475569
   StereotypeFontSize 10
 }
