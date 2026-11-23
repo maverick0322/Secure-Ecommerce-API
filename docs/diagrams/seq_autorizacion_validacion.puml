@@ -1,0 +1,44 @@
+' TRACE: backendnode/middlewares/http-logging.middleware.js; backendnode/middlewares/auth.middleware.js; backendnode/services/rs256-access-token.service.js; backendnode/services/auth-runtime.service.js; backendnode/services/accounts.service.js; backendnode/services/auth-session.service.js; backendnode/validators/uuid.js; backendnode/validators/orders.js; backendnode/middlewares/audit-logs.middleware.js
+@startuml seq_autorizacion_validacion
+!include _skin.puml
+hide footbox
+autonumber "<b>[00]"
+title Secuencia — Autorización en Tiempo Real y Validación de Entradas (SEQ-06)
+caption 7 lifelines, 13 mensajes, 2 niveles máx. (límite: 7 lifelines, 16 mensajes, 2 niveles)
+
+participant "Cliente BFF\n(frontendnet)" as Client <<boundary>>
+control "http-logging +\naudit-logs" as HttpLog <<control>>
+control "auth.middleware\n(authorize)" as AuthMw <<control>>
+control "rs256-access-token\n(verify)" as JwtSvc <<control>>
+database "MySQL 8.4\n(:3306)" as MySQL <<database>>
+database "Redis 8.2\n(TLS :6379)" as Redis <<database>>
+control "Validator +\nController" as Handler <<control>>
+
+Client -> HttpLog : Request + Authorization: Bearer <jwt>
+activate HttpLog
+HttpLog -> AuthMw : Asignar X-Request-Id y contexto AsyncLocalStorage
+activate AuthMw
+
+AuthMw -> JwtSvc : runtime.getTokens().verify(token)
+JwtSvc --> AuthMw : decoded (sub, sid, jti, iss, aud, exp)
+
+AuthMw -> MySQL : accounts.findAccountById(decoded.sub)
+MySQL --> AuthMw : account (status, passwordHash, seller.status)
+
+AuthMw -> Redis : sessions.check(userId, sessionId, credentialVersion, touch)
+Redis --> AuthMw : Sesión activa + touch sliding (IDLE = 30 min)
+
+alt Perfil autorizado y Seller APPROVED (si aplica)
+  AuthMw -> Handler : next() -> validar params/body (validators/*.js)
+  activate Handler
+  Handler --> HttpLog : 2xx / 400 si payload inválido
+  deactivate Handler
+else Cuenta inactiva, perfil no permitido o Seller no aprobado
+  AuthMw -> MySQL : logAudit('access.denied', account.id, 'DENIED')
+  AuthMw --> HttpLog : 403 Forbidden
+end
+
+deactivate AuthMw
+HttpLog --> Client : Respuesta JSON + Cache-Control: no-store + X-Request-Id
+deactivate HttpLog
+@enduml

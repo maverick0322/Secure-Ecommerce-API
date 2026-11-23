@@ -1,0 +1,111 @@
+' TRACE: frontendnet/Controllers/AppController.cs; frontendnet/Controllers/AuthController.cs; frontendnet/Controllers/ProfileController.cs; frontendnet/Middlewares/BearerTokenDelegatingHandler.cs; frontendnet/Middlewares/RefreshTokenDelegatingHandler.cs; frontendnet/Middlewares/ClientIpForwardingDelegatingHandler.cs; frontendnet/Middlewares/SecurityHeadersMiddleware.cs; frontendnet/Services/ISessionTokenManager.cs; frontendnet/Services/SessionTokenManager.cs; frontendnet/Services/AuthClientService.cs; frontendnet/Services/ProfileClientService.cs; frontendnet/Services/CloudflareTurnstileService.cs; frontendnet/Validation/SecurePasswordAttribute.cs; frontendnet/Models/AuthUser.cs; frontendnet/Models/Login.cs
+@startuml clases_frontend_identidad_sesion
+!include _skin.puml
+left to right direction
+title Clases Frontend (.NET 9.0) — Identidad, Sesión BFF y Perfil
+caption 15 clases/interfaces reales <= 15 (máx. 6 atrib. y 6 oper. por clase)
+
+abstract class AppController <<boundary>> {
+  # HandleUnauthorizedAsync() : Task<IActionResult>
+  # HandleApiErrorAsync(ex, key) : Task<IActionResult?>
+  # IsUnapprovedSeller() : bool
+  # {static} GetUserMessage(ex) : string
+}
+
+class AuthController <<boundary>> {
+  + Index() : IActionResult
+  + IndexAsync(model) : Task<IActionResult>
+  + LogoutAsync() : Task<IActionResult>
+  + RegisterAsync(model) : Task<IActionResult>
+  + VerifyRegistrationAsync(model) : Task<IActionResult>
+}
+
+class ProfileController <<boundary>> {
+  + Index() : Task<IActionResult>
+  + EditAsync(model) : Task<IActionResult>
+  + ChangePasswordAsync(model) : Task<IActionResult>
+}
+
+class BearerTokenDelegatingHandler <<control>> {
+  # SendAsync(request, ct) : Task<HttpResponseMessage>
+}
+
+class RefreshTokenDelegatingHandler <<control>> {
+  # SendAsync(request, ct) : Task<HttpResponseMessage>
+}
+
+class ClientIpForwardingDelegatingHandler <<control>> {
+  # SendAsync(request, ct) : Task<HttpResponseMessage>
+}
+
+class SecurityHeadersMiddleware <<control>> {
+  + {static} BuildCsp(config, env) : string
+  + InvokeAsync(context) : Task
+}
+
+interface ISessionTokenManager <<control>> {
+  + CreateSession(auth) : ClaimsPrincipal
+  + GetCurrentAccessToken(user) : string?
+  + EnsureValidAccessTokenAsync(ctx, refresh, ct) : Task<string?>
+  + RefreshAfterUnauthorizedAsync(ctx, jwt, refresh, ct) : Task<string?>
+  + RemoveSession(user) : void
+}
+
+class SessionTokenManager <<control>> {
+  - _sessions : ConcurrentDictionary
+  + CreateSession(auth) : ClaimsPrincipal
+  + EnsureValidAccessTokenAsync(ctx, refresh, ct) : Task<string?>
+  + RefreshAfterUnauthorizedAsync(ctx, jwt, refresh, ct) : Task<string?>
+  + RemoveSession(user) : void
+}
+
+class AuthClientService <<boundary>> {
+  + LoginAsync(email, password) : Task<AuthUser>
+  + TryRefreshAsync(refreshToken, ct) : Task<AuthUser?>
+  + RegisterAsync(model) : Task<string?>
+  + VerifyRegistrationAsync(email, code) : Task<VerifyRegistrationResult>
+}
+
+class ProfileClientService <<boundary>> {
+  + GetProfileAsync() : Task<UserProfile?>
+  + UpdateProfileAsync(model) : Task<UserProfile?>
+  + ChangePasswordAsync(model) : Task
+  + LogoutAsync() : Task
+}
+
+class CloudflareTurnstileService <<boundary>> {
+  + VerifyTokenAsync(token, ip) : Task<bool>
+}
+
+class SecurePasswordAttribute <<control>> {
+  + {static} MinCodePoints : int = 8
+  + {static} MaxCodePoints : int = 128
+  + {static} MaxUtf8Bytes : int = 512
+  + ValidatePassword(value, name) : string?
+}
+
+class AuthUser <<dto>> {
+  + Id : string
+  + Email : string
+  + Profile : string
+  + Jwt : string
+  + RefreshToken : string
+  + ExpiresIn : int
+}
+
+class Login <<dto>> {
+  + Email : string
+  + Password : string
+}
+
+AppController <|-- AuthController
+AppController <|-- ProfileController
+SessionTokenManager ..|> ISessionTokenManager
+AuthController ..> AuthClientService
+AuthController ..> CloudflareTurnstileService
+ProfileController ..> ProfileClientService
+BearerTokenDelegatingHandler ..> ISessionTokenManager
+RefreshTokenDelegatingHandler ..> ISessionTokenManager
+RefreshTokenDelegatingHandler ..> AuthClientService
+AuthController ..> AuthUser
+@enduml

@@ -1,0 +1,113 @@
+' TRACE: backendnode/controllers/categories.controller.js; backendnode/controllers/products.controller.js; backendnode/middlewares/catalog-rate-limit.middleware.js; backendnode/middlewares/image-limits.middleware.js; backendnode/middlewares/upload.middleware.js; backendnode/services/catalog.service.js; backendnode/services/product-images.service.js; backendnode/services/image-limits.service.js; backendnode/services/image-validation.service.js; backendnode/services/image-container.service.js; backendnode/services/image-decoder.service.js; backendnode/services/cloudinary.service.js; backendnode/models/category.js; backendnode/models/product.js; backendnode/models/product-category.js
+@startuml clases_backend_catalogo_imagenes
+!include _skin.puml
+title Clases Backend — Contexto Catálogo e Imágenes
+caption 15 clases reales <= 15 (máx. 6 atrib. y 6 oper. por clase)
+
+class CategoriesController <<boundary>> {
+  + getAll(req, res) : Promise<void>
+  + get(req, res) : Promise<void>
+  + create(req, res) : Promise<void>
+  + update(req, res) : Promise<void>
+  + remove(req, res) : Promise<void>
+}
+
+class ProductsController <<boundary>> {
+  + getAll(req, res) : Promise<void>
+  + get(req, res) : Promise<void>
+  + create(req, res) : Promise<void>
+  + update(req, res) : Promise<void>
+  + remove(req, res) : Promise<void>
+  + replaceImage(req, res) : Promise<void>
+}
+
+class CatalogRateLimitMiddleware <<control>> {
+  + createSellerProductWriteLimiter() : Middleware
+}
+
+class ImageLimitsMiddleware <<control>> {
+  + imageAdmission(req, res, next) : Promise<void>
+}
+
+class UploadMiddleware <<control>> {
+  + {static} MAX_IMAGE_BYTES : int = 2097152
+  + upload : Multer
+  + validateImage(req, res, next) : Promise<void>
+  + uploadErrorHandler(err, req, res, next) : void
+}
+
+class CatalogService <<control>> {
+  + listProducts(search) : Promise<Product[]>
+  + createProduct(account, input, ctx) : Promise<Product>
+  + updateProduct(account, id, input, ctx) : Promise<Product>
+  + changeCategory(account, pid, cid, rem, ctx) : Promise<void>
+  + mutateCategory(account, id, name, rem, ctx) : Promise<Category>
+}
+
+class ProductImagesService <<control>> {
+  + replace(account, productId, file, ctx) : Promise<object>
+  + remove(account, productId, ctx) : Promise<void>
+  + recover() : Promise<void>
+}
+
+class ImageLimitsService <<control>> {
+  + {static} LIMITS : object
+  + createImageLimits(connection) : object
+}
+
+class ImageValidationService <<control>> {
+  + normalize(buffer, options) : Promise<Buffer>
+}
+
+class ImageContainerService <<control>> {
+  + validateContainer(buffer, options) : object
+}
+
+class ImageDecoderService <<control>> {
+  + decode(buffer, policy) : Promise<Buffer>
+}
+
+class CloudinaryService <<boundary>> {
+  + upload(buffer, publicId) : Promise<object>
+  + destroy(publicId) : Promise<void>
+  + deliveryUrl(publicId) : string
+}
+
+class Category <<entity>> {
+  + id : int
+  + name : string
+  + normalizedName : string
+  + protected : boolean
+}
+
+class Product <<entity>> {
+  + id : int
+  + title : string
+  + description : text
+  + price : decimal
+  + stock : uint
+  + imagePublicId : string
+}
+
+class ProductCategory <<entity>> {
+  + productId : int
+  + categoryId : int
+  + createdAt : Date
+}
+
+CategoriesController ..> CatalogService
+ProductsController ..> CatalogService
+ProductsController ..> ProductImagesService
+ProductsController ..> CatalogRateLimitMiddleware
+ProductsController ..> ImageLimitsMiddleware
+ProductsController ..> UploadMiddleware
+ImageLimitsMiddleware ..> ImageLimitsService
+UploadMiddleware ..> ImageValidationService
+ImageValidationService ..> ImageContainerService
+ImageValidationService ..> ImageDecoderService
+ProductImagesService ..> CloudinaryService
+CatalogService ..> Product
+CatalogService ..> Category
+Product "1" *-- "0..10" ProductCategory
+Category "1" *-- "0..*" ProductCategory
+@enduml

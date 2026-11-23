@@ -1,0 +1,46 @@
+' TRACE: frontendnet/Controllers/OrdersController.cs; frontendnet/Services/Orders/OrdersClientService.cs; backendnode/routes/checkout.routes.js; backendnode/controllers/orders.controller.js; backendnode/services/orders.service.js; backendnode/services/checkout-quote.service.js; backendnode/validators/orders.js
+@startuml seq_checkout_cotizacion_confirmacion
+!include _skin.puml
+hide footbox
+autonumber "<b>[00]"
+title Secuencia — Cotización Firmada y Confirmación Idempotente de Checkout (SEQ-04B)
+caption 6 lifelines, 16 mensajes, 2 niveles máx. (límite: 7 lifelines, 16 mensajes, 2 niveles)
+
+actor "Comprador" as Buyer
+boundary "OrdersController\n(frontendnet)" as FeOrders <<boundary>>
+control "orders.controller\n(quote / confirm)" as OrdCtrl <<control>>
+control "orders.service\n(quote / confirm)" as OrdSvc <<control>>
+control "checkout-quote\n(HMAC JWT 600s)" as QuoteSvc <<control>>
+database "MySQL 8.4\n(:3306)" as MySQL <<database>>
+
+Buyer -> FeOrders : GET /Orders/Checkout?addressId=...
+activate FeOrders
+FeOrders -> OrdCtrl : POST /api/checkout/quote { addressId }
+activate OrdCtrl
+OrdCtrl -> OrdSvc : orders.quote(req.account, body)
+OrdSvc -> MySQL : Leer carrito (1..100 ítems) y precios
+OrdSvc -> QuoteSvc : quote.sign(payload) [600s, <=90000 chars]
+OrdCtrl --> FeOrders : 200 OK { checkoutId, quote, orders }
+deactivate OrdCtrl
+
+Buyer -> FeOrders : POST /Orders/ConfirmCheckout { quote }
+FeOrders -> OrdCtrl : POST /api/checkout { quote }
+activate OrdCtrl
+OrdCtrl -> OrdSvc : orders.confirm(req.account, body, req.ip)
+OrdSvc -> QuoteSvc : quote.verify(quote) [<=100000 chars]
+OrdSvc -> MySQL : LOCK.UPDATE + verificar idempotencia (checkoutId, sellerId)
+
+alt Cotización válida, sin cambio de precio/stock
+  loop Por cada sellerId agrupado en la cotización
+    OrdSvc -> MySQL : INSERT orders, items, history + descontar stock
+  end
+  OrdSvc --> OrdCtrl : 201 Created { orders } (vaciar cart_items)
+else Expirada, sin stock o precio cambiado
+  OrdSvc --> OrdCtrl : 409 Conflict
+end
+
+OrdCtrl --> FeOrders : 201 Created / 200 OK / 409 Conflict
+deactivate OrdCtrl
+FeOrders --> Buyer : Detalle o listado de pedidos
+deactivate FeOrders
+@enduml

@@ -1,0 +1,120 @@
+' TRACE: frontendnet/Controllers/ShoppingController.cs; frontendnet/Controllers/ProductsController.cs; frontendnet/Controllers/AddressesController.cs; frontendnet/Controllers/ShoppingCartController.cs; frontendnet/Controllers/OrdersController.cs; frontendnet/Services/ProductClientService.cs; frontendnet/Services/AddressesClientService.cs; frontendnet/Services/ShoppingCart/IShoppingCartService.cs; frontendnet/Services/ShoppingCart/ShoppingCartClientService.cs; frontendnet/Services/Orders/IOrdersService.cs; frontendnet/Services/Orders/OrdersClientService.cs; frontendnet/Helpers/ImageUploadValidator.cs; frontendnet/ViewComponents/ShoppingCartSummaryViewComponent.cs; frontendnet/Models/Product.cs; frontendnet/Models/Order.cs
+@startuml clases_frontend_catalogo_carrito_pedidos
+!include _skin.puml
+left to right direction
+title Clases Frontend (.NET 9.0) — Catálogo, Direcciones, Carrito y Pedidos
+caption 15 clases/interfaces reales <= 15 (máx. 6 atrib. y 6 oper. por clase)
+
+class ShoppingController <<boundary>> {
+  + Index(s, categoryId, order, page) : Task<IActionResult>
+  + Details(id) : Task<IActionResult>
+}
+
+class ProductsController <<boundary>> {
+  + Index(s, page) : Task<IActionResult>
+  + CreateAsync(model) : Task<IActionResult>
+  + EditAsync(id, model) : Task<IActionResult>
+  + UploadImageAsync(id, image) : Task<IActionResult>
+}
+
+class AddressesController <<boundary>> {
+  + Index() : Task<IActionResult>
+  + CreateAsync(model) : Task<IActionResult>
+  + EditAsync(id, model) : Task<IActionResult>
+  + DeleteAsync(id) : Task<IActionResult>
+}
+
+class ShoppingCartController <<boundary>> {
+  + Index() : Task<IActionResult>
+  + AddAsync(productId, qty, returnUrl) : Task<IActionResult>
+  + UpdateAsync(productId, qty) : Task<IActionResult>
+  + ClearAsync() : Task<IActionResult>
+}
+
+class OrdersController <<boundary>> {
+  + Index(status, page) : Task<IActionResult>
+  + Checkout(addressId) : Task<IActionResult>
+  + ConfirmCheckoutAsync(quote, addressId) : Task<IActionResult>
+  + CancelAsync(id, reason) : Task<IActionResult>
+  + UpdateStatusAsync(id, status, reason) : Task<IActionResult>
+}
+
+class ProductClientService <<boundary>> {
+  + GetAsync(search) : Task<List<Product>?>
+  + GetAsync(id) : Task<Product?>
+  + CreateAsync(model) : Task<Product?>
+  + UploadImageAsync(id, file) : Task
+}
+
+class AddressesClientService <<boundary>> {
+  + GetAsync() : Task<List<Address>>
+  + CreateAsync(model) : Task<Address?>
+  + UpdateAsync(id, model) : Task
+  + SetDefaultAsync(id) : Task
+}
+
+interface IShoppingCartService <<control>> {
+  + GetAsync() : Task<ShoppingCart>
+  + AddAsync(productId, qty) : Task<ShoppingCart>
+  + UpdateAsync(productId, qty) : Task<ShoppingCart>
+  + ClearAsync() : Task
+}
+
+class ShoppingCartClientService <<boundary>> {
+  + GetAsync() : Task<ShoppingCart>
+  + AddAsync(productId, qty) : Task<ShoppingCart>
+  + UpdateAsync(productId, qty) : Task<ShoppingCart>
+  + ClearAsync() : Task
+}
+
+interface IOrdersService <<control>> {
+  + GetAsync(status) : Task<List<OrderSummary>>
+  + GetQuoteAsync(addressId) : Task<CheckoutQuoteResponse>
+  + ConfirmCheckoutAsync(quote) : Task<CheckoutConfirmResponse>
+  + CancelAsync(id, reason) : Task
+}
+
+class OrdersClientService <<boundary>> {
+  + GetAsync(status) : Task<List<OrderSummary>>
+  + GetQuoteAsync(addressId) : Task<CheckoutQuoteResponse>
+  + ConfirmCheckoutAsync(quote) : Task<CheckoutConfirmResponse>
+  + CancelAsync(id, reason) : Task
+}
+
+class ImageUploadValidator <<control>> {
+  + {static} Validate(file, config) : string?
+}
+
+class ShoppingCartSummaryViewComponent <<boundary>> {
+  + InvokeAsync() : Task<IViewComponentResult>
+}
+
+class Product <<dto>> {
+  + ProductId : int
+  + Title : string
+  + Price : decimal
+  + Stock : int
+  + ImageUrl : string?
+}
+
+class Order <<dto>> {
+  + Id : string
+  + CheckoutId : string
+  + Status : string
+  + Total : decimal
+}
+
+ShoppingController ..> ProductClientService
+ProductsController ..> ProductClientService
+ProductsController ..> ImageUploadValidator
+AddressesController ..> AddressesClientService
+ShoppingCartClientService ..|> IShoppingCartService
+ShoppingCartController ..> IShoppingCartService
+ShoppingCartSummaryViewComponent ..> IShoppingCartService
+OrdersClientService ..|> IOrdersService
+OrdersController ..> IOrdersService
+OrdersController ..> IShoppingCartService
+OrdersController ..> AddressesClientService
+ProductClientService ..> Product
+OrdersClientService ..> Order
+@enduml

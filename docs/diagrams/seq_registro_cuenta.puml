@@ -1,0 +1,44 @@
+' TRACE: frontendnet/Controllers/AuthController.cs; frontendnet/Services/AuthClientService.cs; backendnode/routes/auth.routes.js; backendnode/middlewares/auth-rate-limit.middleware.js; backendnode/controllers/auth.controller.js; backendnode/services/personal-account.service.js; backendnode/services/password-policy.service.js; backendnode/services/password-hash.service.js; backendnode/services/email-verification.service.js; backendnode/services/registration-email.service.js; backendnode/services/gmail.service.js; backendnode/services/accounts.service.js
+@startuml seq_registro_cuenta
+!include _skin.puml
+hide footbox
+autonumber "<b>[00]"
+title Secuencia — Registro de Cuenta en Dos Fases con OTP (SEQ-03)
+caption 7 lifelines, 15 mensajes, 2 niveles máx. (límite: 7 lifelines, 16 mensajes, 2 niveles)
+
+actor "Visitante" as Visitor
+boundary "AuthController\n(frontendnet)" as FeAuth <<boundary>>
+control "auth-rate-limit +\nauth.controller" as AuthEdge <<control>>
+control "personal-account.\nservice" as PersonalSvc <<control>>
+control "email-verification +\ngmail.service" as OtpMail <<control>>
+control "accounts.service\n(DB Tx)" as AcctSvc <<control>>
+database "MySQL 8.4\n(:3306)" as MySQL <<database>>
+
+Visitor -> FeAuth : POST /Auth/Register (datos + password)
+activate FeAuth
+FeAuth -> AuthEdge : POST /api/auth/register
+activate AuthEdge
+AuthEdge -> PersonalSvc : beginRegistration(req.body)
+activate PersonalSvc
+PersonalSvc -> MySQL : Verificar correo único en users (paranoid: false)
+PersonalSvc -> PersonalSvc : input.registration() + hashes.hash(password)
+PersonalSvc -> OtpMail : otp.issue() -> enviar OTP 6 dígitos (TTL 10m)
+deactivate PersonalSvc
+AuthEdge --> FeAuth : 202 Accepted
+deactivate AuthEdge
+FeAuth --> Visitor : Redirect a VerifyRegistration
+
+Visitor -> FeAuth : POST /Auth/VerifyRegistration { email, code }
+FeAuth -> AuthEdge : POST /api/auth/register/verify
+activate AuthEdge
+AuthEdge -> PersonalSvc : finishRegistration(req.body, { ipAddress })
+activate PersonalSvc
+PersonalSvc -> OtpMail : otp.verify(email, code) — máx. 5 intentos
+PersonalSvc -> AcctSvc : createVerifiedRegistration(pending, context)
+AcctSvc -> MySQL : INSERT users + buyers/sellers (PENDING) + audit_logs
+deactivate PersonalSvc
+AuthEdge --> FeAuth : 201 Created
+deactivate AuthEdge
+FeAuth --> Visitor : Redirect a /Auth/Index
+deactivate FeAuth
+@enduml
