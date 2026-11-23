@@ -1,6 +1,200 @@
 == Construcción Segura
 
-[NOTE]
-====
-Capítulo en redacción en la Etapa 4 del Incremento 1.
-====
+Este capítulo documenta los controles de seguridad implementados directamente en el código fuente de `backendnode/` y `frontendnet/`, su entorno de ejecución en contenedores, las validaciones de entrada, la gestión de credenciales y secretos, las mitigaciones frente a amenazas clave y el registro de auditoría. Todo mecanismo descrito indica explícitamente su estado real (`IMPLEMENTADO Y VERIFICADO`, `IMPLEMENTADO SIN VERIFICAR` o `PLANIFICADO`).
+
+=== Stack Tecnológico y Justificación de Seguridad
+
+[cols="2,2,4,2",options="header"]
+|===
+| Capa | Tecnología / Versión | Justificación y Controles de Seguridad | Estado
+
+| API REST (`backendnode/`)
+| Node.js 24 (`node:24-alpine`), Express `^4.21.2`, CommonJS
+| Primitivas criptográficas nativas en `node:crypto` (`scrypt`, RS256, `timingSafeEqual`, HMAC-SHA256, `randomUUID`), ejecución multi-etapa sin `devDependencies` y usuario no privilegiado `node` (`backendnode/Dockerfile`).
+| `IMPLEMENTADO Y VERIFICADO`
+
+| Persistencia Relacional
+| MySQL 8.4 (`mysql:8.4`), Sequelize `^6.37.8`, `mysql2` `^3.11.3`
+| Autenticación `caching_sha2_password`, consultas parametrizadas por defecto, bloqueo pesimista `LOCK.UPDATE` en transacciones críticas y columnas normalizadas únicas (`normalizedName`).
+| `IMPLEMENTADO Y VERIFICADO`
+
+| Almacén de Sesiones y Cuotas
+| Redis 8.2 (`redis:8.2`), cliente `redis` `6.3.1`
+| Sesiones distribuidas con expiración por inactividad y tope absoluto, detección de reúso de refresh tokens, ventanas deslizantes de tasa y cuotas de imagen sobre TLS mutuo/ACLs (`backendnode/services/redis-tls-config.service.js`).
+| `IMPLEMENTADO Y VERIFICADO`
+
+| Frontend BFF / MVC (`frontendnet/`)
+| .NET 9 (`net9.0`), ASP.NET Core MVC / Razor
+| Patrón _Backend for Frontend_: la cookie cifrada `.frontendnet` mantiene ocultos los tokens JWT RS256 y refresh tokens al navegador; codificación contextual automática en Razor y filtro global antifalsificación (`AutoValidateAntiforgeryTokenAttribute`).
+| `IMPLEMENTADO Y VERIFICADO`
+
+| Procesamiento y Almacenamiento Multimedia
+| Multer `^2.0.1`, Sharp `0.35.5`, Cloudinary `^2.11.0`
+| Desacopla los binarios de imagen de MySQL (`RDBMS`) hacia almacenamiento externo HTTPS; validación previa de encabezados y decodificación aislada en subproceso con tope de memoria.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| Correo Transaccional OTP
+| `googleapis` `171.4.0` (Gmail OAuth2)
+| Envío autenticado sin credenciales SMTP en texto plano; soporte opcional configurable y plantillas con escape seguro (`backendnode/services/email-template.service.js`).
+| `IMPLEMENTADO Y VERIFICADO`
+|===
+
+=== Patrón Arquitectónico y Entorno de Desarrollo Seguro
+
+La solución sigue una arquitectura de tres capas con BFF (_Backend for Frontend_) descrita en el <<SEC-03,Diseño Arquitectónico>>:
+
+* **Backend (`backendnode/`):** Separa rutas (`backendnode/routes/*.js`), middlewares transversales de seguridad (`backendnode/middlewares/*.js`), controladores HTTP (`backendnode/controllers/*.js`), validadores (`backendnode/validators/*.js`), lógica de dominio (`backendnode/services/*.js`) y modelos relacionales (`backendnode/models/*.js`). En entorno productivo desactiva `X-Powered-By`, expone únicamente la API JSON y suprime `/swagger` (`backendnode/index.js`).
+* **Frontend (`frontendnet/`):** Opera como BFF en ASP.NET Core MVC. El navegador interactúa mediante formularios protegidos con token CSRF y cookie de sesión cifrada, mientras `frontendnet/Extensions/ApiClientExtensions.cs` (`AddApiClient`) encadena `ClientIpForwardingDelegatingHandler`, `RefreshTokenDelegatingHandler` y `BearerTokenDelegatingHandler` para comunicarse con `backendnode/`.
+* **Entorno contenedorizado (`backendnode/compose.yaml`, `backendnode/compose.dev.yaml`, `backendnode/Dockerfile`):**
+  * **Construcción multi-etapa:** `backendnode/Dockerfile` genera `swagger-output.json` en la etapa `builder`, instala dependencias de producción en `deps` con `npm ci --omit=dev --ignore-scripts`, y ejecuta la imagen final bajo `USER node` sobre `node:24-alpine`.
+  * **Endurecimiento en tiempo de ejecución:** En `backendnode/compose.yaml`, los servicios aplican `read_only: true` donde corresponde, `cap_drop: ALL`, `no-new-privileges:true`, enlace local restringido (`127.0.0.1:3000:3000` para API; puertos locales en `backendnode/compose.dev.yaml` para MySQL y Redis), límites `mem_limit`, `cpus`, `pids_limit`, política `restart: unless-stopped` y healthchecks por servicio (`mysqladmin ping`, `/health` y `redis-cli --tls ... ping`) (`IMPLEMENTADO Y VERIFICADO`, ejecución en vivo `NO_VERIFICABLE` sin demonio Docker local).
+
+=== Autenticación, Sesiones y Control de Acceso
+
+==== Tokens RS256 y Gestión de Sesiones Distribuidas
+
+* **Firma asimétrica RS256 (`backendnode/services/rs256-access-token.service.js`):** Emite access tokens JWT con clave RSA de `{jwt-rsa-bits}` bits, cabecera `typ: at+jwt`, identificador único `jti`, parámetro `kid` para rotación (hasta `{jwt-max-llaves}` claves activas) y tamaño máximo aceptado de `{jwt-max-bytes}` bytes. El tiempo de vida es estricto de `{jwt-ttl-seg}` s (`{jwt-ttl-min}` min) (`<<RN-01>>`, `<<RNF-02>>`).
+* **Sesión en Redis y rotación single-use (`backendnode/services/auth-session.service.js`, `backendnode/services/auth-redis.service.js`):** Cada inicio de sesión registra un estado en Redis con ventana de inactividad de `{sesion-inactividad-min}` min (`{sesion-inactividad-ms}` ms) y tope absoluto de `{sesion-absoluto-h}` h (`{sesion-absoluto-ms}` ms). El refresh token tiene formato opaco de `{refresh-bytes}` bytes aleatorios en Base64URL (`{refresh-chars}` caracteres). Ante un intento de reutilizar un refresh token ya rotado, el backend detecta la anomalía (`REFRESH_REUSED`), revoca inmediatamente la sesión completa e invalida credenciales (`<<RSG-05>>`). Si Redis no está accesible, el backend responde con fallo cerrado `503` (`<<RNF-07>>`).
+* **Sincronización y single-flight en BFF (`frontendnet/`):** `SessionTokenManager` y `RefreshTokenDelegatingHandler` ejecutan renovación proactiva `{refresh-proactivo-seg}` s antes de expirar el JWT o reactiva ante `401`, serializada por sesión mediante `SemaphoreSlim` para impedir carreras de rotación. La cookie `.frontendnet` utiliza `HttpOnly`, `SameSite=Lax`, `SecurePolicy=Always` fuera de `Development`, `SlidingExpiration` de `{sesion-inactividad-min}` min y control absoluto de `{sesion-absoluto-h}` h (`<<RN-01>>`).
+
+==== Autorización Basada en Roles, Propiedad y Estado Vivo
+
+El middleware `Authorize` en `backendnode/middlewares/auth.middleware.js` valida la firma RS256 del access token, verifica el estado de la sesión y la versión de credenciales, y **recarga desde MySQL** en cada petición los campos actuales de la cuenta (`User.status`, perfil y estado del vendedor) antes de autorizar la ruta (`<<RSG-06>>`). Aunque existe el mapa interno de compatibilidad `legacyPermissions`, la autorización operativa exige únicamente los perfiles canónicos `ADMIN`, `BUYER` y `SELLER`:
+
+* **Principio de mínimo privilegio (`<<RN-04>>`):** Únicamente usuarios con perfil `SELLER` y registro en estado `APPROVED` pueden publicar productos, cargar imágenes y avanzar sus pedidos asignados. El perfil `ADMIN` administra categorías, usuarios, solicitudes de vendedor y bitácora, sin permisos de creación/edición de productos ajenos. El catálogo general se muestra únicamente a usuarios autenticados (`<<RN-12>>`).
+* **Aislamiento de propietario y prohibición de autocompra (`<<RN-09>>`):** Todos los endpoints de direcciones, carrito, pedidos y productos verifican `buyerId` o `sellerId` derivado del actor autenticado, rechazando accesos cruzados (`403` / `404`) y bloqueando que un `SELLER` añada productos propios al carrito.
+
+=== Protección de Datos Relacionales y Comunicación Frontend–Backend
+
+==== Uso Seguro del ORM (Sequelize) y Bloqueo Transaccional
+
+* **Consultas parametrizadas:** Todo acceso SQL se realiza mediante métodos tipados de Sequelize (`findOne`, `findAll`, `create`, `update`, `destroy`) y parámetros enlazados en `mysql2`, eliminando concatenación dinámica de SQL (`<<RSG-03>>`).
+* **Escape explícito en búsquedas `LIKE`:** La búsqueda por parámetro `?s=` en `backendnode/services/catalog.service.js` (`escapeLike`) escapa los caracteres `\`, `%` y `_` antes de construir el patrón `LIKE ... ESCAPE '\\'`, neutralizando inyección de comodines y denegación de servicio por patrones degenerados (`<<RF-07>>`, `<<RSG-03>>`).
+* **Consistencia transaccional e idempotencia (`backendnode/services/orders.service.js`, `backendnode/services/checkout-quote.service.js`):** La confirmación de compra valida una cotización firmada HMAC-SHA256 con vigencia de `{quote-ttl-seg}` s (tamaño máx. `{quote-max-sign-chars}` caracteres al firmar y `{quote-max-verify-chars}` al verificar), adquiere bloqueos de fila `LOCK.UPDATE` dentro de transacciones ACID para descontar o restituir stock y garantiza idempotencia por clave única `(checkoutId, sellerId)` (`<<RN-07>>`, `<<RN-08>>`, `<<RSG-08>>`).
+
+==== Comunicación Segura, Cabeceras HTTP, CORS y Proxy
+
+[cols="2,3,3,2",options="header"]
+|===
+| Superficie | Configuración Implementada | Propósito de Seguridad | Estado
+
+| Proxy confiable (`TRUST_PROXY`)
+| `resolveTrustProxy` en `backendnode/index.js`: `false` por defecto; rechaza `*` y `true`; acepta únicamente IPs/CIDRs explícitos. `frontendnet/Program.cs` usa `TrustedProxyCidrs` y `ClientIpForwardingDelegatingHandler`.
+| Evitar falsificación de `X-Forwarded-For` para eludir rate limiting o adulterar la IP registrada en `audit_logs`.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| CORS (`backendnode/index.js`)
+| Política restrictiva: deniega todo origen cruzado por defecto salvo lista explícita en `CORS_ORIGIN` (rechaza `*`); métodos `GET`, `PUT`, `POST`, `DELETE`, `OPTIONS`; cabeceras `Content-Type`, `Authorization`.
+| Impedir consumo no autorizado desde orígenes arbitrarios en navegador.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| Cabeceras HTTP API (`backendnode/index.js`)
+| `helmet` (`defaultSrc: ["'none'"]`, `frameAncestors: ["'none'"]`, `frameguard: deny`, `referrerPolicy: no-referrer`, `xContentTypeOptions: true`), `app.disable('x-powered-by')` y `Cache-Control: no-store` en `NO_STORE_PREFIXES`.
+| Aislamiento estricto de respuestas JSON y no almacenamiento en caché de datos sensibles.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| Cabeceras HTTP BFF (`frontendnet/Middlewares/SecurityHeadersMiddleware.cs`)
+| `BuildCsp` aplica `default-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`, `img-src` limitado a `'self'`, `data:`, `https://placehold.co` y hosts configurados (`https://res.cloudinary.com` por defecto), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` restrictiva y `no-store` dinámico. _Nota:_ `style-src` mantiene `'unsafe-inline'`.
+| Defensa en profundidad contra XSS, clickjacking, MIME sniffing y fuga de vistas dinámicas en caché; se documenta `'unsafe-inline'` en estilos como área de mejora futura (`PLANIFICADO`).
+| `IMPLEMENTADO Y VERIFICADO`
+
+| Protección CSRF BFF (`frontendnet/Program.cs`)
+| `AutoValidateAntiforgeryTokenAttribute` global y cookie `.frontendnet.af` (`SameSite=Lax`, `SecurePolicy=Always` fuera de Dev).
+| Prevenir falsificación de peticiones en acciones mutantes del portal web (`<<RSG-02>>`).
+| `IMPLEMENTADO Y VERIFICADO`
+|===
+
+=== Validación de Entradas en Cliente y Servidor
+
+Ningún control en navegador sustituye al servidor; ambos extremos aplican reglas alineadas sin confiar jamás en la entrada externa:
+
+* **Capa cliente / BFF (`frontendnet/`):** DataAnnotations y validación personalizada en modelos como `ProductFormModel` (`Validate`) verifican longitudes, rangos de precio/stock y tamaño en bytes UTF-8 de la descripción (`1` a `{desc-max-bytes}` bytes) antes de invocar la API. Las vistas Razor codifican automáticamente toda salida interpolada y `ProductClientService` sanea parámetros mediante `UrlHelper.Encode` y nombres de archivo con `Path.GetFileName`.
+* **Capa servidor (`backendnode/validators/*.js`, `backendnode/services/user-input.service.js`, `backendnode/services/accounts.service.js`, `backendnode/services/catalog.service.js`):**
+  * Rechazo estricto de propiedades inesperadas y comprobación de tipos mediante listas blancas de campos (`object`, `name`, `phone`, `registration` en `backendnode/services/user-input.service.js`), neutralizando asignación masiva (_mass assignment_) y contaminación de prototipos.
+  * Validación explícita de UUIDs (`backendnode/validators/uuid.js`), direcciones (`backendnode/validators/address.js`), carrito (`backendnode/validators/cart.js`) y pedidos (`backendnode/validators/orders.js`).
+  * Normalización Unicode y comprobación de contraseña fuerte en cliente y servidor (`backendnode/services/password-policy.service.js`): `{pwd-min-chars}`–`{pwd-max-chars}` puntos de código, máx. `{pwd-max-utf16}` unidades UTF-16 y `{pwd-max-bytes}` bytes UTF-8, con letra, dígito y símbolo Unicode (`<<RN-02>>`).
+  * **Manejo seguro de errores (`backendnode/middlewares/errorhandler.middleware.js`):** `errorHandler` evita filtrar trazas de pila o respuestas de proveedores externos: si `headersSent` destruye el socket parcial y ante cualquier `5xx` responde con un mensaje genérico sanitizado (`<<RNF-04>>`).
+  * **Nota sobre dependencias declaradas (`docs/BASELINE.md`):** `express-validator` se utiliza de forma parcial en validadores puntuales (`address.js`, `cart.js`, `orders.js`, `uuid.js`) mientras el resto usa validación explícita propia; `request-ip` figura declarada en `package.json` sin uso activo (su eliminación queda `PLANIFICADO` en una iteración posterior de mantenimiento).
+
+=== Matriz Consolidada de Mitigaciones de Seguridad
+
+[cols="1,2,4,2",options="header"]
+|===
+| Riesgo | Vector de Ataque | Controles Implementados en Código | Estado
+
+| `<<RSG-01>>`
+| XSS almacenado o reflejado en vistas o descripciones
+| Codificación HTML automática en Razor, rechazo de caracteres de control en `user-input.service.js`, CSP en `helmet` (`default-src 'none'`) y `SecurityHeadersMiddleware`, además de sanitización de metadatos en `audit.service.js`.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| `<<RSG-02>>`
+| CSRF sobre sesiones autenticadas
+| `AutoValidateAntiforgeryTokenAttribute` global en `frontendnet/Program.cs`, cookies `.frontendnet` y `.frontendnet.af` con `SameSite=Lax` y `HttpOnly`; el backend exige `Authorization: Bearer` explícito.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| `<<RSG-03>>`
+| Inyección SQL y abuso de comodines `LIKE`
+| Consultas parametrizadas con Sequelize ORM, validación estricta de UUIDs/IDs y `escapeLike` sobre `%`, `_` y `\` en `catalog.service.js` para el parámetro `?s=`.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| `<<RSG-04>>`
+| Fuerza bruta, relleno de credenciales y enumeración
+| Ventanas deslizantes en Redis (`auth-rate-limit.middleware.js`, `auth-rate-limit.service.js`), lockout exponencial tras `{lockout-umbral}` fallos, `createDummyHash()` para cuentas inexistentes y respuesta `202` uniforme en recuperación.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| `<<RSG-05>>`
+| Secuestro, expiración o reúso de sesión / refresh token
+| JWT RS256 de `{jwt-ttl-seg}` s, validación en Redis con expiración inactiva `{sesion-inactividad-min}` min y absoluta `{sesion-absoluto-h}` h, detección `REFRESH_REUSED` con revocación total y bloqueo single-flight `SemaphoreSlim` en BFF.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| `<<RSG-06>>`
+| IDOR y escalamiento de privilegios horizontal/vertical
+| Recarga en vivo de cuenta/estado/vendedor en `Authorize`, separación estricta `ADMIN` vs `SELLER`, verificación de propiedad en productos/direcciones/pedidos y prohibición de autocompra.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| `<<RSG-07>>`
+| Carga de polyglots, SVG con script o bombas de descompresión
+| Pipeline de 6 capas (`upload.middleware.js`, `image-container.service.js`, `image-decoder.service.js`, `image-validation.service.js` + worker `--max-old-space-size={img-worker-mem-mb}` con timeout `{img-timeout-ms}` ms y recodificación Sharp sin SVG/frames animados).
+| `IMPLEMENTADO Y VERIFICADO`
+
+| `<<RSG-08>>`
+| Manipulación de precios y condición de carrera en checkout
+| Cotización HMAC-SHA256 con TTL de `{quote-ttl-seg}` s, bloqueo pesimista `LOCK.UPDATE` en MySQL, validación en vivo de vendedor `APPROVED` y clave de idempotencia `(checkoutId, sellerId)`.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| `<<RSG-09>>`
+| SSRF y seguimiento externo mediante URLs de imagen
+| Carga multipart restringida al backend hacia Cloudinary con lista blanca de origen `https://res.cloudinary.com` en BFF y CSP `img-src`; retiro `410 Gone` de `{endpoints-retirados}` rutas heredadas.
+| `IMPLEMENTADO Y VERIFICADO`
+
+| `<<RSG-10>>`
+| Credencial de desarrollo obsoleta en historial Git
+| Secreto antiguo eliminado en `c8a22f3` del código vigente, permaneciendo únicamente en el commit histórico `7b2e983`. Catalogado como **riesgo residual revocado** sin exposición de valores; purga de historial `PLANIFICADO`.
+| `IMPLEMENTADO SIN VERIFICAR` (`NO_VERIFICABLE` rotación externa)
+|===
+
+=== Contraseñas, Secretos y Límites Operativos
+
+==== Hashing de Contraseñas y Manejo de Credenciales
+
+* **Algoritmo principal `scrypt` (`backendnode/services/password-hash.service.js`):** Parámetros `N={scrypt-n}`, `r={scrypt-r}`, `p={scrypt-p}`, clave derivada de `{scrypt-clave-bytes}` bytes, sal aleatoria de `{scrypt-sal-bytes}` bytes y límite `maxmem` de `{scrypt-maxmem-mib}` MiB bajo cola acotada de concurrencia (`active >= 2`, cola máxima de `16` peticiones pendientes que rechaza con error controlado ante saturación). La comparación se efectúa en tiempo constante con `timingSafeEqual`.
+* **Compatibilidad heredada `bcrypt`:** Soporta verificación de hashes legados (`isEncodedHash`) rechazando contraseñas que excedan `{bcrypt-max-bytes}` bytes UTF-8 para evitar el truncamiento silencioso propio de `bcrypt`, sin dejar de consumir trabajo computacional equivalente.
+* **Protección anti-enumeración:** Cuando una cuenta no existe durante el inicio de sesión, `createDummyHash()` genera un hash sintético para ejecutar la derivación `scrypt` completa y equiparar tiempos de respuesta (`<<RNF-01>>`).
+
+==== Gestión de Secretos y Hallazgo Residual en Git
+
+* **Carga desacoplada por archivo (`backendnode/services/secret-env.service.js`, `backendnode/services/secure-config-file.service.js`):** `readEnvSecret` prioriza la lectura de variables `*_FILE` montadas en `/run/secrets/*` (mediante `readConfigFile` con límite estricto de tamaño en memoria y verificación de permisos/enlace simbólico) sobre variables de entorno convencionales. Ningún archivo `.env` ni directorio `.secrets/` forma parte del código fuente ni de la documentación.
+* **Hallazgo histórico en Git (`<<RSG-10>>`):** Se identificó una credencial obsoleta eliminada en el commit `c8a22f3` (introducida en `7b2e983`). Al estar invalidada/eliminada del árbol actual, se documenta exclusivamente como **riesgo residual revocado**, sin reproducir secreto alguno en repositorios o reportes, recomendándose su rotación definitiva y reescritura de historial antes de liberar el repositorio públicamente (`PLANIFICADO`).
+
+==== Cuotas, Límites de Tasa y Procesamiento de Imágenes
+
+Todos los umbrales de contención están respaldados por el registro central de hechos (`docs/asciidoc/_hechos.adoc`):
+
+* **Autenticación y OTP (`backendnode/middlewares/auth-rate-limit.middleware.js`):** Ventana por IP de `{rl-ip-ventana-seg}` s (`{rl-ip-generico-max}` genéricas, `{rl-login-ip-max}` login, `{rl-refresh-ip-max}` refresh, `{rl-logout-ip-max}` logout, `{rl-registro-ip-max}` registro, `{rl-pwd-change-ip-max}` cambio de contraseña); ventana por cuenta/sesión de `{rl-cuenta-ventana-min}` min (`{rl-login-cuenta-max}` login, `{rl-refresh-sesion-max}` refresh/sesión, `{rl-registro-cuenta-max}` registro, `{rl-otp-cuenta-max}` OTP, `{rl-recovery-cuenta-max}` recuperación, `{rl-reset-cuenta-max}` reset); bloqueo exponencial desde `{lockout-umbral}` fallos en `{lockout-ventana-min}` min (base `{lockout-base-seg}` s hasta `{lockout-max-min}` min). OTP de `{otp-digitos}` dígitos con TTL `{otp-ttl-min}` min, enfriamiento `{otp-cooldown-seg}` s, `{otp-max-intentos}` intentos y tope global de `{otp-max-pendientes}` pendientes (`<<RF-01>>`, `<<RF-05>>`).
+* **Catálogo y carrito (`backendnode/middlewares/catalog-rate-limit.middleware.js`):** Máximo `{catalogo-escrituras-max}` escrituras/min por usuario autenticado; cuotas de `{cuota-productos-activos}` productos activos por vendedor y `{cuota-categorias-producto}` categorías activas por producto respondidas con `409 Conflict` (`<<RN-05>>`); hasta `{cart-max-items}` ítems en el carrito.
+* **Imágenes (`backendnode/middlewares/upload.middleware.js`, `backendnode/middlewares/image-limits.middleware.js`, `backendnode/services/image-policy.js`, `backendnode/services/image-validation.service.js`):** Recepción acotada a `{img-receive-seg}` s y `{img-max-mib}` MiB (`{img-max-bytes}` bytes); solo JPEG/PNG/WebP estáticos (`{img-max-frames}` frame), hasta `{img-max-dim-px}` px por lado y `{img-max-mp}` MP (`{img-max-pixels}` píxeles totales); worker aislado con tope `{img-worker-mem-mb}` MiB y timeout `{img-timeout-ms}` ms; cuotas Redis de `{img-vendedor-min}`/min y `{img-vendedor-conc}` en vuelo por vendedor (`{img-global-min}`/min y `{img-global-conc}` en vuelo globales), lease de `{img-lease-seg}` s y heartbeat de `{img-heartbeat-seg}` s (`<<RN-11>>`, `<<RSG-07>>`).
+
+=== Registro de Auditoría Inmutable y Trazabilidad HTTP
+
+* **Bitácora de seguridad en base de datos (`backendnode/middlewares/audit-logs.middleware.js`, `backendnode/services/audit.service.js`):** Registra eventos críticos de negocio y seguridad de forma _append-only_ en la tabla `audit_logs` con correlación por `X-Request-Id`. Todo acceso denegado `401` o `403` no auditado explícitamente dispara el evento de respaldo `'access.denied'` (`outcome: 'DENIED'`). Los metadatos pasan por `sanitize`, `redactEmails` y `reasonPrefix` para enmascarar correos, contraseñas, tokens u OTPs antes de persistir, y la consulta administrativa (`GET /api/audit-logs`, `<<RF-18>>`) omite el campo `details` para prevenir exposición accidental.
+* **Bitácora técnica HTTP (`backendnode/middlewares/http-logging.middleware.js`):** `createHttpLogger` genera un `requestId` (`randomUUID`) por petición y usa `normalizedRoute` para registrar exclusivamente patrones de ruta constantes de servidor sin incluir `req.url`, parámetros de consulta ni cuerpos de petición (`<<RNF-04>>`).
