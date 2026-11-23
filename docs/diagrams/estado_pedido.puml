@@ -1,0 +1,19 @@
+' TRACE: backendnode/models/order.js; backendnode/services/orders.service.js; backendnode/models/order-status-history.js; frontendnet/Models/Order.cs
+@startuml estado_pedido
+!include _skin.puml
+title Máquina de Estados — Ciclo de Vida del Pedido (Order)
+caption Fuente: backendnode/models/order.js:6 y backendnode/services/orders.service.js:164-171
+
+[*] --> PENDING : confirm()\n/ crea OrderItem y descuenta stock
+
+PENDING --> PREPARING : transition()\n[SELLER propietario o ADMIN]
+PENDING --> CANCELED : transition()\n[BUYER, SELLER o ADMIN; reason != vacío]\n/ restockCanceledOrder()
+
+PREPARING --> SHIPPED : transition()\n[SELLER propietario o ADMIN]
+PREPARING --> CANCELED : transition()\n[SELLER propietario o ADMIN; reason != vacío]\n/ restockCanceledOrder()
+
+SHIPPED --> DELIVERED : transition()\n[SELLER propietario o ADMIN]
+
+DELIVERED --> [*]
+CANCELED --> [*]
+@enduml

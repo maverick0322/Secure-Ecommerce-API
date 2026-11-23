@@ -1,56 +1,62 @@
+' TRACE: backendnode/index.js; backendnode/routes/auth.routes.js; backendnode/routes/products.routes.js; backendnode/routes/orders.routes.js; backendnode/middlewares/auth.middleware.js; backendnode/services/catalog.service.js; backendnode/models/index.js; frontendnet/Program.cs; frontendnet/Controllers/AuthController.cs; frontendnet/Services/SessionTokenManager.cs; frontendnet/Middlewares/RefreshTokenDelegatingHandler.cs
 @startuml componentes
-!theme plain
-skinparam componentStyle rectangle
-skinparam component {
-  BackgroundColor #EEF4FF
-  BorderColor #3366CC
-}
-skinparam node {
-  BackgroundColor #F8F9FA
-  BorderColor #6C757D
-}
-skinparam database {
-  BackgroundColor #FFF3CD
-  BorderColor #856404
-}
+!include _skin.puml
+left to right direction
+skinparam Nodesep 48
+skinparam Ranksep 64
+title Diagrama de Componentes UML 2.5.1 — Arquitectura Lógica (CMP-01)
+caption 13 componentes y 4 contenedores/paquetes (límite: máx. 14 componentes y 4 paquetes)
 
-title Vista de Implementación — Diagrama de Componentes en 3 Capas
+package "frontendnet (ASP.NET Core 9.0 MVC BFF)" <<frontend>> {
+  component "SecurityHeadersMiddleware +\nCloudflareTurnstileService" as C_FeSec <<control>>
+  component "Controllers MVC + Razor Views\n(12 Controllers, 56 .cshtml)" as C_FeMvc <<boundary>>
+  component "SessionTokenManager +\nDelegatingHandlers" as C_FeSession <<control>>
+  component "Typed HttpClients\n(Auth, Product, Cart, Orders...)" as C_FeClients <<boundary>>
 
-node "Capa 1: Presentación (ASP.NET Core 8.0 MVC — :8080)" as CAPA1 {
-  component "Controladores MVC\n(Auth, Productos, Categorias,\nArchivos, Usuarios, Bitacora)" as MVC_CTRL
-  component "Vistas Razor (.cshtml)\n+ Bootstrap 5 + Validación JS" as RAZOR
-  component "EnviaBearerDelegatingHandler\n(Inyecta Bearer JWT)" as EBH
-  component "RefrescaTokenDelegatingHandler\n(Captura Set-Authorization)" as RTH
-  database "Cookie .frontendnet\n(AES-256 HttpOnly Sliding)" as COOKIE
+  C_FeSec ..> C_FeMvc
+  C_FeMvc ..> C_FeClients
+  C_FeClients ..> C_FeSession
 }
 
-node "Capa 2: Negocio / API (Node.js 20 LTS / Express — :3000)" as CAPA2 {
-  component "Enrutadores REST Express\n(auth, productos, categorias,\narchivos, usuarios, bitacora)" as ROUTES
-  component "Middlewares de Seguridad\n(Helmet, CORS, ErrorHandler)" as SEC_MW
-  component "Auth Middleware\n(HS256 verify + Rolling Token)" as AUTH_MW
-  component "Authorize RBAC\n(Deny by Default + Check Roles)" as RBAC_MW
-  component "Validación de Entrada\n(express-validator + Multer 2MB)" as VAL_MW
-  component "Controladores de Negocio\n(auth, productos, categorias,\narchivos, usuarios, bitacora)" as API_CTRL
+interface "REST API\n/api/* + /health" as I_RestApi
+
+package "backendnode (Node.js 24 LTS / Express 4)" <<backend>> {
+  component "Security Edge + Routes\n(Helmet, CORS, RateLimit, Authorize)" as C_BeEdge <<boundary>>
+  component "HTTP Controllers\n(11 Controllers)" as C_BeCtrl <<boundary>>
+  component "Identity, Auth & Session Services\n(RS256, scrypt, OTP, Lockout)" as C_BeAuth <<control>>
+  component "Catalog, Image Pipeline,\nCart & Orders Services" as C_BeDomain <<control>>
+  component "Sequelize Models & Validators\n(14 Models, 4 Validators)" as C_BeModels <<entity>>
+
+  C_BeEdge ..> C_BeCtrl
+  C_BeCtrl ..> C_BeAuth
+  C_BeCtrl ..> C_BeDomain
+  C_BeAuth ..> C_BeModels
+  C_BeDomain ..> C_BeModels
 }
 
-node "Capa 3: Persistencia (MySQL 8.0 — :3306)" as CAPA3 {
-  component "Sequelize ORM v6\n(Pool de conexiones + SQL Parametrizado)" as ORM
-  database "Base de Datos MySQL\n(mercadolibrenode)\n- rol, usuario, categoria\n- producto, archivo, bitacora" as DB
+package "Persistencia y Estado" {
+  interface "RESP TLS :6379" as I_Redis
+  interface "MySQL :3306" as I_MySql
+  component "Redis 8.2 TLS\n(Sesiones, RateLimit, Cuotas)" as C_Redis <<cache>>
+  component "MySQL 8.4\n(14 tablas InnoDB)" as C_MySql <<database>>
+  I_Redis - C_Redis
+  I_MySql - C_MySql
 }
 
-RAZOR --> MVC_CTRL : "Petición HTTP Usuario"
-MVC_CTRL --> EBH : "Invocación HttpClient"
-EBH --> COOKIE : "Lee claim JWT"
-EBH --> RTH : "Pipeline Handler"
-RTH --> COOKIE : "Actualiza Cookie si renovó"
+package "Proveedores Externos" {
+  interface "HTTPS Gmail\nOAuth2" as I_Gmail
+  interface "HTTPS\nCloudinary" as I_Cloud
+  component "Gmail OAuth2 API" as C_Gmail <<external>>
+  component "Cloudinary Media API" as C_Cloud <<external>>
+  I_Gmail - C_Gmail
+  I_Cloud - C_Cloud
+}
 
-RTH --> SEC_MW : "HTTP REST :3000"
-SEC_MW --> ROUTES : "Petición filtrada"
-ROUTES --> AUTH_MW : "Valida Token"
-AUTH_MW --> RBAC_MW : "Valida Rol"
-RBAC_MW --> VAL_MW : "Saneamiento DTO"
-VAL_MW --> API_CTRL : "Datos limpios"
-API_CTRL --> ORM : "Consultas de Entidad"
-ORM --> DB : "TCP :3306 SQL Preparado"
-
+C_FeClients -( I_RestApi
+I_RestApi - C_BeEdge
+C_BeAuth -( I_Redis
+C_BeDomain -( I_Redis
+C_BeModels -( I_MySql
+C_BeAuth -( I_Gmail
+C_BeDomain -( I_Cloud
 @enduml

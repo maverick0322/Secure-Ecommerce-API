@@ -1,0 +1,26 @@
+' TRACE: backendnode/models/seller.js; backendnode/services/accounts.service.js; frontendnet/Models/Roles.cs
+@startuml estado_vendedor
+!include _skin.puml
+title Máquina de Estados — Ciclo de Vida del Vendedor (Seller)
+caption Fuente: backendnode/models/seller.js:7 y backendnode/services/accounts.service.js:115,123-173
+
+[*] --> PENDING : createVerifiedRegistration()\n[profile == SELLER]
+
+PENDING --> APPROVED : reviewSeller()\n[ADMIN] / audita seller.approved
+PENDING --> REJECTED : reviewSeller()\n[ADMIN; rejectionReason <= 255]\n/ audita seller.rejected
+
+APPROVED --> SUSPENDED : suspendSeller()\n[ADMIN; reason 1..255]\n/ audita seller.suspended
+
+note right of REJECTED
+  Estado terminal en código actual
+  (DECISIÓN PENDIENTE: reactivación)
+end note
+
+note right of SUSPENDED
+  Estado terminal en código actual
+  (DECISIÓN PENDIENTE: reactivación)
+end note
+
+REJECTED --> [*]
+SUSPENDED --> [*]
+@enduml
