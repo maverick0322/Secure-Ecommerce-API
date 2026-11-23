@@ -8,24 +8,27 @@
 !include _skin.puml
 left to right direction
 title Muestra 1 — Diagrama de Casos de Uso (UML 2.5.1)
-caption Verificación de estilo _skin.puml: actores, límite del sistema, «include» y «extend»
+caption Verificación de estilo _skin.puml: actores, límite del sistema y asociaciones independientes
 
 actor "Comprador" as Buyer
 actor "Gmail OAuth2 API" as Gmail <<external>>
 
 rectangle "Tienda en Línea Segura (Contexto Muestra)" {
   usecase "UC-01: Registrar cuenta\nde comprador" as UC_Register
-  usecase "UC-02: Verificar código\nOTP por correo" as UC_VerifyOtp
-  usecase "UC-03: Realizar pedido\nen checkout" as UC_Checkout
-  usecase "UC-04: Cancelar pedido\nen estado PENDING" as UC_CancelOrder
+  usecase "UC-02: Realizar pedido\nen checkout" as UC_Checkout
+  usecase "UC-03: Cancelar pedido\npendiente" as UC_CancelOrder
 }
+
+note right of UC_CancelOrder
+  Precondición: pedido propio
+  en estado PENDING (asociación
+  independiente, no <<extend>>)
+end note
 
 Buyer -- UC_Register
 Buyer -- UC_Checkout
 Buyer -- UC_CancelOrder
-UC_Register ..> UC_VerifyOtp : <<include>>
-UC_VerifyOtp -- Gmail
-UC_CancelOrder ..> UC_Checkout : <<extend>>\n{status == PENDING}
+UC_Register -- Gmail
 @enduml
 
 @startuml muestra_02_clases
@@ -42,15 +45,15 @@ enum OrderStatus <<enumeration>> {
 }
 
 class OrdersController <<boundary>> {
-  + createQuote(req : Request, res : Response) : Promise<void>
-  + confirmCheckout(req : Request, res : Response) : Promise<void>
+  + quote(req : Request, res : Response) : Promise<void>
+  + confirm(req : Request, res : Response) : Promise<void>
 }
 
 class OrdersService <<control>> {
   - {static} QUOTE_TTL_SECONDS : int = 600
-  + createCheckoutQuote(buyerId : UUID, addressId : bigint) : Promise<CheckoutQuoteDto>
-  + confirmCheckoutQuote(buyerId : UUID, quoteToken : string) : Promise<Order[]>
-  + updateOrderStatus(actor : Actor, orderId : bigint, status : OrderStatus) : Promise<Order>
+  + quote(account : Account, input : object) : Promise<CheckoutQuote>
+  + confirm(account : Account, input : object, ipAddress : string) : Promise<Order[]>
+  + transition(account : Account, id : bigint, input : object, ipAddress : string) : Promise<Order>
 }
 
 class Order <<entity>> {
@@ -58,7 +61,6 @@ class Order <<entity>> {
   + checkoutId : UUID
   + status : OrderStatus = PENDING
   + total : decimal
-  + cancelReason : string [0..1]
 }
 
 class OrderItem <<entity>> {
@@ -79,52 +81,53 @@ Order ..> OrderStatus
 !include _skin.puml
 autonumber "<b>[00]"
 title Muestra 3 — Diagrama de Secuencia (UML 2.5.1)
-caption Verificación de lifelines, activación, mensajes síncronos/retorno y fragmento alt
+caption Cadena real verificada en routes/auth.routes.js:8 -> middleware -> auth.controller.login -> authentication.service.login
 
 actor "Comprador" as ActorBuyer
 boundary "AuthController\n(frontendnet)" as FeAuth <<boundary>>
-control "AuthRateLimitMiddleware\n(backendnode)" as RateLimit <<control>>
-control "AuthenticationService\n(backendnode)" as AuthSvc <<control>>
-database "Redis 7.4\n(mTLS :6380)" as Redis <<database>>
+control "auth-rate-limit\n(middleware)" as RateLimit <<control>>
+control "auth.controller\n(login)" as AuthCtrl <<control>>
+control "authentication.service\n(login)" as AuthSvc <<control>>
+database "Redis 8.2\n(TLS :6379)" as Redis <<database>>
 database "MySQL 8.4\n(:3306)" as MySQL <<database>>
 
 ActorBuyer -> FeAuth : POST /Auth/Index (email, password)
 activate FeAuth
 FeAuth -> RateLimit : POST /api/auth { email, password }
 activate RateLimit
-RateLimit -> Redis : EVAL script ventana deslizante (IP 120/60s, cuenta 10/60s)
+RateLimit -> Redis : Verificar límite IP (120/60s), cuenta (10/60s) y lockout
 activate Redis
 Redis --> RateLimit : allowed = true, locked = false
 deactivate Redis
+RateLimit -> AuthCtrl : next() -> auth.controller.login(req, res)
+deactivate RateLimit
+activate AuthCtrl
 
-RateLimit -> AuthSvc : authenticate(email, password, ipAddress)
+AuthCtrl -> AuthSvc : authentication.login(req.body, { ipAddress })
 activate AuthSvc
-AuthSvc -> MySQL : SELECT user, buyer, seller WHERE email = ?
+AuthSvc -> MySQL : Buscar User + Buyer/Seller por email
 activate MySQL
-MySQL --> AuthSvc : User (status = ACTIVE, passwordHash = $scrypt$v1$32768$8$3$...)
+MySQL --> AuthSvc : User (status, passwordHash)
 deactivate MySQL
-
-AuthSvc -> AuthSvc : verifyPassword(password, passwordHash) [scrypt N=32768,r=8,p=3]
+AuthSvc -> AuthSvc : verify(password, hash o createDummyHash()) [scrypt N=32768,r=8,p=3]
 
 alt [Credenciales válidas y cuenta ACTIVE]
-  AuthSvc -> Redis : HSET session:<sid> + SET alive:<sid> (IDLE=30m, ABS=8h)
+  AuthSvc -> Redis : Crear sesión (IDLE=30m, ABS=8h) y emitir refreshToken
   activate Redis
   Redis --> AuthSvc : OK
   deactivate Redis
-  AuthSvc --> RateLimit : 200 OK { jwt (RS256, 300s), refreshToken (43 chars) }
-  RateLimit --> FeAuth : 200 OK
-  FeAuth --> ActorBuyer : Set-Cookie .frontendnet (HttpOnly, SameSite=Lax) + 302 Redirect
-else [Credenciales inválidas]
-  AuthSvc -> Redis : INCR fallo de cuenta (umbral lockout = 5 en 15m)
-  activate Redis
-  Redis --> AuthSvc : failures
-  deactivate Redis
-  AuthSvc --> RateLimit : 401 Unauthorized
-  RateLimit --> FeAuth : 401 Unauthorized
+  AuthSvc --> AuthCtrl : { id, jwt (RS256, 300s), refreshToken }
+  AuthCtrl -> Redis : clearLoginFailures(emailKey)
+  AuthCtrl --> FeAuth : 200 OK
+  FeAuth --> ActorBuyer : Set-Cookie .frontendnet (HttpOnly, SameSite=Lax) + 302
+else [Credenciales inválidas (401)]
+  AuthSvc --> AuthCtrl : AccountError(401)
+  AuthCtrl -> Redis : recordLoginFailure(emailKey) [umbral 5 en 15m]
+  AuthCtrl --> FeAuth : 401 Unauthorized
   FeAuth --> ActorBuyer : Vista Login con error sanitizado
 end
 deactivate AuthSvc
-deactivate RateLimit
+deactivate AuthCtrl
 deactivate FeAuth
 @enduml
 
@@ -149,10 +152,10 @@ package "backendnode (Node.js 24 LTS / Express 4)" {
   BeServices ..> BeModels
 }
 
-interface "RESP mTLS :6380" as IRedis
+interface "RESP TLS :6379" as IRedis
 interface "MySQL Protocol :3306" as IMySql
 
-database "Redis 7.4 TLS" as CompRedis <<database>>
+database "Redis 8.2 TLS" as CompRedis <<database>>
 database "MySQL 8.4" as CompMySql <<database>>
 
 FeSession -( IRestApi
@@ -169,28 +172,28 @@ title Muestra 5 — Diagrama de Despliegue (UML 2.5.1)
 caption Verificación de nodos, entornos de ejecución, artefactos y enlaces con protocolo
 
 node "Host / Red Interna Docker (backend_internal)" as DockerHost <<device>> {
-  node "Contenedor backend\n(node:24-alpine, USER node)" as NodeContainer <<container>> {
+  node "Contenedor app\n(node:24-alpine, USER node)" as NodeContainer <<container>> {
     node "Node.js 24 LTS Runtime" as NodeEnv <<executionEnvironment>> {
-      artifact "backendnode (/app/index.js)" as ArtBackend <<artifact>>
+      artifact "backendnode (/usr/src/app/index.js)" as ArtBackend <<artifact>>
       artifact "/run/secrets/* (*_FILE)" as ArtSecrets <<artifact>>
     }
   }
 
-  node "Contenedor redis\n(redis:7.4-alpine)" as RedisContainer <<container>> {
-    node "Redis Server 7.4" as RedisEnv <<executionEnvironment>> {
-      artifact "users.acl + /tls/redis.*" as ArtRedisTls <<artifact>>
+  node "Contenedor redis\n(redis:8.2)" as RedisContainer <<container>> {
+    node "Redis Server 8.2" as RedisEnv <<executionEnvironment>> {
+      artifact "redis.conf + /run/secrets/redis_*" as ArtRedisTls <<artifact>>
     }
   }
 
   node "Contenedor db\n(mysql:8.4)" as MysqlContainer <<container>> {
     node "MySQL 8.4 Engine" as MysqlEnv <<executionEnvironment>> {
-      artifact "ecommerce_db (14 tablas)" as ArtMysqlDb <<artifact>>
+      artifact "secure_ecommerce (14 tablas)" as ArtMysqlDb <<artifact>>
     }
   }
 }
 
-NodeContainer -- RedisContainer : "<<mTLS RESP :6380>>\ntls-auth-clients yes"
-NodeContainer -- MysqlContainer : "<<TCP MySQL :3306>>\ncaching_sha2_password"
+NodeContainer -- RedisContainer : "<<TLS RESP :6379>>\n(dev: 127.0.0.1:6380)"
+NodeContainer -- MysqlContainer : "<<TCP MySQL :3306>>\n(dev: 127.0.0.1:3307)"
 @enduml
 
 @startuml muestra_06_er
