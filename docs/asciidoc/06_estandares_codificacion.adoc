@@ -1,6 +1,85 @@
-== Estándar de Codificación para C# y Node.js
+== Estándares de Codificación para C# y Node.js
 
-[NOTE]
-====
-Capítulo en redacción en la Etapa 4 del Incremento 1.
-====
+Este capítulo establece los estándares de codificación observados actualmente en ambos repositorios (`backendnode/` y `frontendnet/`) y distingue de manera explícita las convenciones ya adoptadas en el código fuente (`IMPLEMENTADO Y VERIFICADO`) de las herramientas de linting, formateo y análisis estático cuya adopción queda propuesta (`PLANIFICADO`).
+
+=== Estándar para Node.js (`backendnode/`)
+
+==== Convenciones Implementadas en Código (`IMPLEMENTADO Y VERIFICADO`)
+
+[cols="2,4,2",options="header"]
+|===
+| Aspecto | Convención Verificada en `backendnode/` | Evidencia
+
+| Versión y módulos
+| Node.js 24 (`engines.node: ">=24.0.0 <25.0.0"`), sistema de módulos CommonJS (`require` / `module.exports`) y directiva `'use strict'` en servicios, middlewares y validadores.
+| `backendnode/package.json`, `backendnode/services/*.js`
+
+| Nomenclatura de archivos
+| Estilo `kebab-case` con sufijo de capa funcional: `*.controller.js`, `*.service.js`, `*.middleware.js`, `*.routes.js`, `*.js` para modelos y validadores, y prefijo temporal `YYYYMMDDNNNNNN-*.js` en migraciones.
+| `backendnode/controllers/`, `backendnode/services/`, `backendnode/middlewares/`, `backendnode/migrations/`
+
+| Identificadores en código
+| `camelCase` para funciones, variables y propiedades JSON; `PascalCase` para modelos Sequelize (`Product`, `Order`, `AuditLog`) y errores tipados (`AccountError`); mayúsculas con guiones bajos para constantes globales (`NO_STORE_PREFIXES`).
+| `backendnode/index.js`, `backendnode/models/*.js`, `backendnode/services/accounts.service.js`
+
+| Validación y listas blancas
+| Comprobación explícita de tipo, propiedades permitidas y obligatorias en funciones dedicadas (`object`, `name`, `phone`, `registration`) y escape explícito en consultas `LIKE` (`escapeLike`).
+| `backendnode/services/user-input.service.js`, `backendnode/services/catalog.service.js`
+
+| Manejo de errores y registro seguro
+| Lanzamiento de errores funcionales controlados (`AccountError`) con código HTTP explícito; captura centralizada en `errorHandler` sin exponer trazas ni detalles de proveedores; registro estructurado con correlación `requestId` y enmascaramiento de datos sensibles (`sanitize`, `redactEmails`, `reasonPrefix`).
+| `backendnode/middlewares/errorhandler.middleware.js`, `backendnode/middlewares/http-logging.middleware.js`, `backendnode/services/audit.service.js`
+
+| Pruebas automatizadas
+| Suite Jest (`"jest": "^30.0.0"`) ejecutada en serie con detección de handles abiertos (`--runInBand --detectOpenHandles`) y cobertura LCOV dirigida (`coverage/lcov.info`).
+| `backendnode/package.json`, `backendnode/sonar-project.properties`
+|===
+
+==== Reglas de Seguridad y Calidad Operativa en Node.js
+
+. **Sin concatenación de SQL ni expresiones regulares inseguras:** Toda consulta emplea métodos parametrizados de Sequelize o parámetros enlazados de `mysql2`, y todo filtro textual pasa por `escapeLike` antes de construir patrones `LIKE`.
+. **Sin secretos en código ni en logs:** Ningún módulo debe contener credenciales literales ni registrar `req.url`, parámetros de consulta, contraseñas o tokens en salida estándar o `audit_logs` (`readEnvSecret`, `normalizedRoute`).
+. **Subprocesos acotados para binarios no confiables:** Operaciones intensivas de decodificación de imágenes se aíslan mediante `fork` con límite de memoria (`--max-old-space-size={img-worker-mem-mb}`) y timeout (`{img-timeout-ms}` ms) en `backendnode/services/image-validation.service.js`.
+
+==== Herramientas Faltantes y Mejoras Propuestas (`PLANIFICADO`)
+
+La inspección del repositorio confirma que `backendnode/` **no cuenta actualmente** con archivos `.eslintrc*`, `.prettierrc*` ni `.editorconfig`, aunque sí dispone de configuración para análisis continuo en `backendnode/sonar-project.properties` y `.github/workflows/sonar.yml`:
+
+* **`PLANIFICADO` — Reglas ESLint + Security Plugin:** Incorporar ESLint como verificación previa al commit y en CI para detectar variables sin usar, comparaciones no estrictas (`==`), uso inseguro de objetos dinámicos y dependencias declaradas sin uso (como `request-ip`).
+* **`PLANIFICADO` — Formato unificado (`.editorconfig` y Prettier):** Estandarizar indentación de 2 espacios, punto y coma y fin de línea LF entre desarrolladores.
+
+=== Estándar para C# / .NET 9 (`frontendnet/`)
+
+==== Convenciones Implementadas en Código (`IMPLEMENTADO Y VERIFICADO`)
+
+[cols="2,4,2",options="header"]
+|===
+| Aspecto | Convención Verificada en `frontendnet/` | Evidencia
+
+| Plataforma y compilación
+| .NET 9 (`net9.0`) con nulabilidad estricta habilitada (`<Nullable>enable</Nullable>`) e importaciones implícitas (`<ImplicitUsings>enable</ImplicitUsings>`).
+| `frontendnet/FrontendNet.csproj`, `frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj`
+
+| Estilo moderno C#
+| Constructores primarios en controladores, clientes tipados (`ProductClientService`) y middlewares (`SecurityHeadersMiddleware`, `ClientIpForwardingDelegatingHandler`); uso de comentarios XML en miembros públicos.
+| `frontendnet/Services/ProductClientService.cs`, `frontendnet/Middlewares/SecurityHeadersMiddleware.cs`
+
+| Nomenclatura C#
+| `PascalCase` para espacios de nombres, clases, métodos públicos y propiedades; sufijo asíncrono en acciones y clientes (`CreateAsync`, `UpdateAsync`, `DeleteAsync`, `UploadImageAsync`, `DeleteImageAsync`, `InvokeAsync`, `SendAsync`); prefijo con guion bajo en campos privados de solo lectura (`_csp`).
+| `frontendnet/Middlewares/SecurityHeadersMiddleware.cs`, `frontendnet/Services/ProductClientService.cs`
+
+| Seguridad en MVC y HTTP
+| Registro global de `AutoValidateAntiforgeryTokenAttribute`, cadena tipada `AddApiClient`, cabeceras CSP/`no-store` en `SecurityHeadersMiddleware`, codificación contextual en vistas Razor, validación en modelos (`ProductFormModel`, método `Validate`) y saneamiento de rutas y nombres (`UrlHelper.Encode`).
+| `frontendnet/Program.cs`, `frontendnet/Extensions/ApiClientExtensions.cs`, `frontendnet/Models/ProductFormModel.cs`
+
+| Pruebas automatizadas
+| Proyecto de pruebas xUnit (`xunit` `2.9.2`) con `Microsoft.AspNetCore.Mvc.Testing` (`9.0.0`) excluido del artefacto web publicado.
+| `frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj`, `frontendnet/FrontendNet.csproj`
+|===
+
+==== Herramientas Faltantes y Mejoras Propuestas (`PLANIFICADO`)
+
+La inspección de `frontendnet/` confirma que **no existen actualmente** archivos `.editorconfig`, `stylecop.json`, analizadores Roslyn externos ni paquete `coverlet` en `FrontendNet.Tests.csproj`, ni flujos de integración continua bajo `.github/workflows/`:
+
+* **`PLANIFICADO` — `.editorconfig` y analizadores `.NET`:** Activar reglas de estilo IDE/CA (_AnalysisLevel=latest-recommended_, compilación estricta sin advertencias por etapas) y archivo de configuración StyleCop para verificar nomenclatura y documentación XML en compilación.
+* **`PLANIFICADO` — Cobertura y CI de `frontendnet/`:** Agregar `coverlet` a `frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj` y un flujo de GitHub Actions que ejecute compilación, pruebas xUnit y publicación de cobertura hacia SonarCloud.
