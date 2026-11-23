@@ -2,12 +2,15 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const tls = require('node:tls');
 
 describe('config/config.js security guards and *_FILE selection', () => {
   let tmpDir;
   const envKeys = [
     'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_DATABASE', 'DB_PASSWORD', 'DB_PASSWORD_FILE',
+    'DB_SSL', 'DB_SSL_CA_PATH',
     'TEST_DB_USER', 'TEST_DB_DATABASE', 'TEST_DB_PASSWORD', 'TEST_DB_PASSWORD_FILE',
+    'TEST_DB_SSL', 'TEST_DB_SSL_CA_PATH',
     'PROD_DB_USERNAME', 'PROD_DB_NAME', 'PROD_DB_PASSWORD', 'PROD_DB_PASSWORD_FILE',
     'AUTH_CONFIG_ALLOWED_ROOTS'
   ];
@@ -79,5 +82,47 @@ describe('config/config.js security guards and *_FILE selection', () => {
     expect(fallback.development.password).toBe('base-secret');
     expect(fallback.test.password).toBe('base-secret');
     expect(fallback.production.password).toBe('base-secret');
+  });
+
+  it('configures MySQL TLS options only when DB_SSL=true and validates optional CA bundles', () => {
+    const plain = loadConfig({ DB_SSL: undefined, DB_SSL_CA_PATH: undefined });
+    expect(plain.development.dialectOptions.ssl).toBeUndefined();
+    expect(plain.production.dialectOptions.ssl).toBeUndefined();
+    expect(plain.test.dialectOptions.ssl).toBeUndefined();
+
+    const strictDefaultCa = loadConfig({ DB_SSL: 'true', DB_SSL_CA_PATH: undefined });
+    expect(strictDefaultCa.development.dialectOptions.ssl).toEqual({ rejectUnauthorized: true });
+    expect(strictDefaultCa.production.dialectOptions.ssl).toEqual({ rejectUnauthorized: true });
+
+    const caFile = path.join(tmpDir, 'mysql-ca.crt');
+    const pemBundle = tls.rootCertificates.slice(0, 2).join('\n');
+    fs.writeFileSync(caFile, pemBundle);
+    const withCustomCa = loadConfig({
+      AUTH_CONFIG_ALLOWED_ROOTS: JSON.stringify([tmpDir]),
+      DB_SSL: 'true',
+      DB_SSL_CA_PATH: caFile
+    });
+    expect(withCustomCa.development.dialectOptions.ssl).toEqual({ rejectUnauthorized: true, ca: pemBundle });
+    expect(withCustomCa.production.dialectOptions.ssl).toEqual({ rejectUnauthorized: true, ca: pemBundle });
+
+    expect(() => loadConfig({
+      AUTH_CONFIG_ALLOWED_ROOTS: JSON.stringify([tmpDir]),
+      DB_SSL: 'false',
+      DB_SSL_CA_PATH: caFile
+    })).toThrow('MySQL CA requires DB_SSL=true.');
+
+    fs.writeFileSync(caFile, 'not a certificate');
+    expect(() => loadConfig({
+      AUTH_CONFIG_ALLOWED_ROOTS: JSON.stringify([tmpDir]),
+      DB_SSL: 'true',
+      DB_SSL_CA_PATH: caFile
+    })).toThrow('Invalid MySQL CA bundle.');
+
+    fs.writeFileSync(caFile, '-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----');
+    expect(() => loadConfig({
+      AUTH_CONFIG_ALLOWED_ROOTS: JSON.stringify([tmpDir]),
+      DB_SSL: 'true',
+      DB_SSL_CA_PATH: caFile
+    })).toThrow();
   });
 });
