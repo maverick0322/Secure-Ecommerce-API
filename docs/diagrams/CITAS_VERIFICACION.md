@@ -56,6 +56,7 @@
 ## 2. Resumen Estadístico de la Verificación
 
 - **Total de bloques de citas auditados en `GUIA_ESTILO_UML.md`:** `37`
-- **Citas localizadas exactamente (capítulo, sección, página/figura coinciden con el PDF):** `27`
-- **Citas cuyo tema existe en el capítulo citado pero tenían desfase de página, figura, tabla o subsección y fueron reescritas citando solo capítulo y tema:** `10` (filas `#6`, `#7`, `#8`, `#13`, `#18`, `#23`, `#25`, `#29`, `#31`, `#33`, `#35`, `#37`).
+- **Citas localizadas exactamente y conservadas:** `25` (filas `#1`–`#5`, `#9`–`#12`, `#14`–`#17`, `#19`–`#22`, `#24`, `#26`–`#28`, `#30`, `#32`, `#34`, `#36`)
+- **Citas cuyo tema existe en el capítulo citado pero tenían desfase de página, figura, tabla o subsección y fueron reescritas citando solo capítulo y tema:** `12` (filas `#6`, `#7`, `#8`, `#13`, `#18`, `#23`, `#25`, `#29`, `#31`, `#33`, `#35`, `#37`).
+- **Verificación aritmética:** `25 conservadas + 12 reescritas = 37 total`.
 - **Citas inventadas o sin respaldo temático en los dos libros de referencia:** `0` (todos los conceptos pertenecen efectivamente a los capítulos citados de `[Seidl2015]` y `[Rosenberg2007]`).
