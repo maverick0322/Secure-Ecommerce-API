@@ -3,25 +3,35 @@ const images = require('../services/product-images.service');
 const cloud = require('../services/cloudinary.service');
 const { AccountError } = require('../services/accounts.service');
 
-function serialize(product) {
+function serialize(product, { includeHasImage = false } = {}) {
   return { productId: product.id, sellerId: product.sellerId, title: product.title, description: product.description ?? null,
     price: String(product.price), stock: product.stock, imagePublicId: product.imagePublicId ?? null,
-    imageUrl: cloud.deliveryUrl(product.imagePublicId), categories: (product.categories || []).map(category =>
+    imageUrl: cloud.deliveryUrl(product.imagePublicId),
+    ...(includeHasImage ? { hasImage: Boolean(product.imagePublicId) } : {}),
+    categories: (product.categories || []).map(category =>
       ({ categoryId: category.id, name: category.name, protected: category.protected })) };
 }
 
 async function getAll(req, res) {
-  try { return res.json((await catalog.listProducts(req.query.s)).map(serialize)); } catch (error) { return catalog.catalogError(res, error); }
+  try {
+    const includeHasImage = req.account?.profile === 'SELLER';
+    const items = await catalog.listProducts(req.query.s, req.account);
+    return res.json(items.map(product => serialize(product, { includeHasImage })));
+  } catch (error) { return catalog.catalogError(res, error); }
 }
 
 async function get(req, res) {
-  try { return res.json(serialize(await catalog.getProduct(catalog.positiveId(req.params.id)))); } catch (error) { return catalog.catalogError(res, error); }
+  try {
+    const includeHasImage = req.account?.profile === 'SELLER';
+    const product = await catalog.getProduct(catalog.positiveId(req.params.id), req.account);
+    return res.json(serialize(product, { includeHasImage }));
+  } catch (error) { return catalog.catalogError(res, error); }
 }
 
 async function create(req, res) {
   try {
     const product = await catalog.createProduct(req.account, catalog.productInput(req.body, true), {ipAddress:req.ip});
-    return res.status(201).json(serialize(product));
+    return res.status(201).json(serialize(product, { includeHasImage: true }));
   } catch (error) { return catalog.catalogError(res, error); }
 }
 
