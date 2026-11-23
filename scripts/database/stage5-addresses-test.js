@@ -37,7 +37,7 @@ async function main() {
     }
     assert(root,'Isolated MySQL did not become ready');
     const [[identity]] = await root.query('SELECT @@hostname AS host,@@server_uuid AS uuid,VERSION() AS version,CURRENT_USER() AS account');
-    assert.equal(identity.host,name); assert.match(identity.version,/^8\.0\./);
+    assert.equal(identity.host,name); assert.match(identity.version,/^8\.4\./);
     assert(['root@%','root@localhost'].includes(identity.account));
     const socketUuid = external ? process.env.STAGE5_EXTERNAL_UUID : docker(['exec','-i',name,'sh','-c',
       'export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; exec mysql --protocol=SOCKET --user=root --batch --skip-column-names'],
@@ -91,7 +91,7 @@ async function main() {
     await root.query(`INSERT INTO users (id,name,email,passwordHash,emailVerifiedAt,createdAt,updatedAt)
       VALUES (?,'Synthetic seller',?,'synthetic-not-a-login-hash',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))`,[seller,`${seller}@example.invalid`]);
     await root.query("INSERT INTO sellers (userId,storeName,status,requestedAt,updatedAt) VALUES (?,'Synthetic','APPROVED',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))",[seller]);
-    const [product] = await root.query("INSERT INTO products (sellerId,title,price,stock,createdAt,updatedAt) VALUES (?,'Synthetic product',12.50,10,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))",[seller]);
+    const [product] = await root.query("INSERT INTO products (sellerId,title,description,price,stock,createdAt,updatedAt) VALUES (?,'Synthetic product','Synthetic product description',12.50,10,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))",[seller]);
     const post = () => request(app).post('/api/cart/items').set('Authorization',headers[0]).send({productId:product.insertId,quantity:2});
     const added = await Promise.all([post(),post()]);
     assert(added.every(r => r.status === 200),JSON.stringify(added.map(r => r.body)));
@@ -181,11 +181,11 @@ async function main() {
       assert.equal(registered.status,201,JSON.stringify(registered.body));assert(!registered.body.passwordHash);
       const logged=await request(app).post('/api/auth').send({email,password:accountPassword});assert.equal(logged.status,200);
       const sellerHeader=`Bearer ${logged.body.jwt}`;
-      assert.equal((await request(app).post('/api/products').set('Authorization',sellerHeader).send({title:'Not approved',price:'1.00'})).status,403);
+      assert.equal((await request(app).post('/api/products').set('Authorization',sellerHeader).send({title:'Not approved',description:'Not approved description',price:'1.00'})).status,403);
       const reviews=await Promise.all([1,2].map(()=>request(app).put(`/api/users/sellers/${registered.body.id}/review`).set('Authorization',adminHeader).send({status:'APPROVED'})));
       assert.deepEqual(reviews.map(r=>r.status).sort(),[200,409]);
       const category=await request(app).post('/api/categories').set('Authorization',adminHeader).send({name:'Synthetic HTTP category'});assert.equal(category.status,201);
-      const createdProduct=await request(app).post('/api/products').set('Authorization',sellerHeader).send({title:'HTTP product',price:'123.45',stock:5});assert.equal(createdProduct.status,201,JSON.stringify(createdProduct.body));
+      const createdProduct=await request(app).post('/api/products').set('Authorization',sellerHeader).send({title:'HTTP product',description:'HTTP product description',price:'123.45',stock:5});assert.equal(createdProduct.status,201,JSON.stringify(createdProduct.body));
       const productId=createdProduct.body.productId;
       assert.equal((await request(app).post(`/api/products/${productId}/categories`).set('Authorization',sellerHeader).send({categoryId:category.body.categoryId})).status,204);
       assert.equal((await request(app).get('/api/products').set('Authorization',headers[0])).status,200);

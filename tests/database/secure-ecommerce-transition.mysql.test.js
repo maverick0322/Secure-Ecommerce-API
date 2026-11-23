@@ -82,7 +82,7 @@ stage25('MySQL 8 isolated secure_ecommerce transition', () => {
       VERSION() AS version, DATABASE() AS db, CURRENT_USER() AS account,
       @@session.foreign_key_checks AS foreignKeys, @@session.sql_mode AS mode`);
     expect(identity).toMatchObject({ host: 'secure-ecommerce-stage25', uuid: expectedUuid, port: 3306,
-      version: expect.stringMatching(/^8\.0\./), db: 'secure_ecommerce', account: 'ecommerce_migrator@%', foreignKeys: 1,
+      version: expect.stringMatching(/^8\.4\./), db: 'secure_ecommerce', account: 'ecommerce_migrator@%', foreignKeys: 1,
       mode: expect.stringMatching(/STRICT_(TRANS|ALL)_TABLES/) });
     historicalNames = (await query('SELECT name FROM SequelizeMeta ORDER BY name')).map(row => row.name);
     expect(historicalNames).toHaveLength(8);

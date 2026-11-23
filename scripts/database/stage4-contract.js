@@ -22,7 +22,7 @@ const contract = {
     exteriorNumber: 'varchar(20)', interiorNumber: opt('varchar(20)'), neighborhood: 'varchar(120)', city: 'varchar(120)',
     state: 'varchar(120)', postalCode: 'varchar(12)', country: def('char(2)', 'MX'), isDefault: def('tinyint(1)', '0'), ...dates, ...soft },
   categories: { id: 'int', name: 'varchar(120)', normalizedName: 'varchar(120)', protected: def('tinyint(1)', '0'), ...dates, ...soft },
-  products: { id: 'int', sellerId: uuid, title: 'varchar(255)', description: opt('text'), price: 'decimal(12,2)',
+  products: { id: 'int', sellerId: uuid, title: 'varchar(255)', description: 'text', price: 'decimal(12,2)',
     stock: def('int unsigned', '0'), imagePublicId: opt('varchar(255)'), ...dates, ...soft },
   product_categories: { productId: 'int', categoryId: 'int', createdAt: date, ...soft },
   carts: { id: big, buyerId: uuid, ...dates, ...soft },

@@ -50,7 +50,7 @@ async function main(){
     }
     assert(connection);
     const [[identity]]=await connection.query('SELECT @@hostname AS host,@@server_uuid AS uuid,VERSION() AS version,CURRENT_USER() AS account');
-    assert.equal(identity.host,name);assert.equal(identity.account,'root@%');assert.match(identity.version,/^8\.0\./);
+    assert.equal(identity.host,name);assert.equal(identity.account,'root@%');assert.match(identity.version,/^8\.4\./);
     const socket=docker(['exec','-i',name,'sh','-c','export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; exec mysql --protocol=SOCKET --user=root --batch --skip-column-names'],'SELECT @@server_uuid;').trim();
     assert.equal(socket,identity.uuid);
     docker(['exec','-i',name,'sh','-c','export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; exec mysql --protocol=SOCKET --user=root'],dump);

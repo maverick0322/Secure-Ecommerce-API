@@ -69,7 +69,7 @@ function verifyAdmin(db = false) {
   const [uuid, port, version, selected, account, fks] = lines.at(-1).split('\t');
   assert.equal(uuid, expectedUuid);
   assert.equal(port, '3306');
-  assert.match(version, /^8\.0\./);
+  assert.match(version, /^8\.4\./);
   assert.equal(selected, db ? database : 'NONE');
   assert.equal(account, 'root@localhost');
   assert.equal(fks, '1');
@@ -89,7 +89,7 @@ async function connect(user) {
     assert.equal(identity.port, 3306);
     assert.equal(identity.db, database);
     assert.equal(identity.account, `${user}@%`);
-    assert.match(identity.version, /^8\.0\./);
+    assert.match(identity.version, /^8\.4\./);
     assert.equal(identity.fks, 1);
     assert.match(identity.mode, /STRICT_(TRANS|ALL)_TABLES/);
     await connection.query("SET time_zone = '+00:00'");
