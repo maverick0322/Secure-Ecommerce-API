@@ -87,7 +87,7 @@
 | [[RNF-04]]`RNF-04` | Seguridad | Trazabilidad inmutable append-only en `audit_logs` y correlación por `X-Request-Id` sin registrar contraseñas ni tokens. | `IMPLEMENTADO Y VERIFICADO`
 | [[RNF-05]]`RNF-05` | Desempeño | Contención de latencia y abuso mediante cola acotada de `scrypt`, workers aislados de imagen con timeout de `{img-timeout-ms}` ms, recepción máx. `{img-receive-seg}` s y cuotas distribuidas en Redis (`Retry-After`). | `IMPLEMENTADO Y VERIFICADO`
 | [[RNF-06]]`RNF-06` | Desempeño | Meta propuesta de percentil 95 (`p95 <= 500 ms` en lecturas de catálogo y `<= 1500 ms` en autenticación/checkout bajo carga nominal); medición en vivo pendiente de pruebas k6. | `PLANIFICADO` (`NO_VERIFICABLE` en ejecución actual) |
-| [[RNF-07]]`RNF-07` | Disponibilidad | Sonda pública `GET /health` verificando MySQL (`SELECT 1`) y Redis, políticas `restart: unless-stopped`, límites CPU/RAM/PIDs en `compose.yaml` y tolerancia controlada (`503`) ante caída del almacén de sesiones. | `IMPLEMENTADO Y VERIFICADO` |
+| [[RNF-07]]`RNF-07` | Disponibilidad | Sonda HTTP mínima `GET /health` (`200 { status: 'ok' }` con `Cache-Control: no-store` en `backendnode/index.js:127-130`), healthchecks de contenedor en `compose.yaml` (`mysqladmin ping`, `/health` y `redis-cli --tls ... ping`), `restart: unless-stopped`, cuotas CPU/RAM/PIDs y rechazo controlado `503` ante caída del almacén de sesiones. | `IMPLEMENTADO Y VERIFICADO` |
 | [[RNF-08]]`RNF-08` | Disponibilidad | Meta propuesta de disponibilidad operativa del `{99.5}%` mensual (`RPO <= 24 h`, `RTO <= 2 h`) con estrategia de respaldos y despliegue redundante en producción. | `PLANIFICADO` |
 |===
 

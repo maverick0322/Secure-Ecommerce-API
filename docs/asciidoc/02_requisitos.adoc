@@ -265,7 +265,7 @@ Se separan explícitamente los controles verificados en el código fuente (`IMPL
   * _Controles implementados:_ cola acotada de `scrypt`, subprocesos Sharp con `--max-old-space-size={img-worker-mem-mb}` MB y timeout de `{img-timeout-ms}` ms, timeout de carga `{img-receive-seg}` s y cuotas Redis (`IMPLEMENTADO Y VERIFICADO`).
   * _Metas propuestas (`PLANIFICADO`, medición en vivo `NO_VERIFICABLE` hasta ejecutar `k6`):_ tiempo de respuesta `p95 <= 500 ms` en consultas autenticadas de catálogo y `<= 1500 ms` en autenticación/checkout bajo carga nominal.
 * **Disponibilidad (`<<RNF-07>>`–`<<RNF-08>>`):**
-  * _Controles implementados:_ endpoint `GET /health` verificando `SELECT 1` en MySQL y conectividad Redis, reinicio automático `restart: unless-stopped` y cuotas de recursos (`mem_limit`, `cpus`, `pids_limit`) en `backendnode/compose.yaml`, más rechazo controlado `503` si Redis no está disponible (`IMPLEMENTADO Y VERIFICADO`).
+  * _Controles implementados:_ endpoint `GET /health` en `backendnode/index.js:127-130` (`200 { status: 'ok' }` sin consultar bases de datos desde HTTP), healthchecks de contenedor (`mysqladmin ping`, `/health` y `redis-cli --tls ... ping`), reinicio automático `restart: unless-stopped` y cuotas de recursos (`mem_limit`, `cpus`, `pids_limit`) en `backendnode/compose.yaml`, más rechazo controlado `503` si Redis no está disponible (`IMPLEMENTADO Y VERIFICADO`).
   * _Metas propuestas (`PLANIFICADO`, sin despliegue productivo aún `NO_VERIFICABLE`):_ disponibilidad objetivo de `99.5%` mensual en operación con `RPO <= 24 h` y `RTO <= 2 h`.
 
 === Reglas de Negocio Verificadas (`RN`)
