@@ -1,0 +1,6 @@
+== Estándar de Codificación para C# y Node.js
+
+[NOTE]
+====
+Capítulo en redacción en la Etapa 4 del Incremento 1.
+====

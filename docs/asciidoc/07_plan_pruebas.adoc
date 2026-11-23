@@ -1,0 +1,6 @@
+== Plan de Pruebas de Seguridad
+
+[NOTE]
+====
+Capítulo en redacción en la Etapa 5 del Incremento 1.
+====

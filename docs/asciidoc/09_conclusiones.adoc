@@ -1,0 +1,6 @@
+== Conclusiones
+
+[IMPORTANT]
+====
+**PENDIENTE:** Este capítulo de cierre queda explícitamente fuera del alcance del Incremento 1 y se redactará al completar el modelado de amenazas (Capítulo 4), el despliegue seguro (Capítulo 8) y las pruebas de seguridad planificadas (Capítulo 7).
+====

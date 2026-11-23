@@ -1,0 +1,6 @@
+== Construcción Segura
+
+[NOTE]
+====
+Capítulo en redacción en la Etapa 4 del Incremento 1.
+====

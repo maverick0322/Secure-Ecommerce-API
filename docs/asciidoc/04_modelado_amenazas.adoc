@@ -1,0 +1,6 @@
+== Modelado de Amenazas (OWASP Threat Dragon)
+
+[IMPORTANT]
+====
+**PENDIENTE:** Este capítulo queda explícitamente fuera del alcance del Incremento 1. El modelo de amenazas (OWASP Threat Dragon / STRIDE) y sus artefactos derivados se integrarán en el incremento dedicado de modelado de amenazas.
+====

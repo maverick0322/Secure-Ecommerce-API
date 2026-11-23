@@ -1,0 +1,6 @@
+== Estrategia de Despliegue Seguro
+
+[IMPORTANT]
+====
+**PENDIENTE:** Este capítulo queda explícitamente fuera del alcance del Incremento 1, junto con el diagrama de despliegue `DEP-01` (`despliegue.puml`), hasta definir el entorno de despliegue objetivo y la estrategia productiva de respaldos y respuesta a incidentes (`NO_VERIFICABLE` en el código fuente actual).
+====
