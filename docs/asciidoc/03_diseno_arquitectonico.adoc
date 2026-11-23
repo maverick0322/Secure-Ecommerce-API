@@ -125,9 +125,9 @@ image::componentes.png[Diagrama de componentes UML 2.5.1,align="center"]
 
 * **Cómo leerlo y decisiones de seguridad:** El cliente web `frontendnet` nunca accede directamente a MySQL, Redis, Cloudinary ni Gmail; toda operación pasa por la interfaz REST `backendnode` autenticada con JWT RS256 de vida corta (`{jwt-ttl-seg}` s) y validada en vivo en cada petición contra Redis 8.2 TLS y MySQL 8.4.
 
-=== Vista de Despliegue (`DEP-01` — PENDIENTE)
+=== Vista de Despliegue (`DEP-01`)
 
-[IMPORTANT]
-====
-**PENDIENTE:** El diagrama de despliegue `DEP-01` (`despliegue.puml`) y su descripción física quedan fuera del Incremento 1 (`NO_VERIFICABLE` la infraestructura productiva externa), alineados con el Capítulo 8 (`08_despliegue_seguro.adoc`).
-====
+El diagrama de despliegue detalla la distribución física y de contenedores en tres máquinas virtuales Ubuntu 24.04.5 LTS conectadas en red local puenteada, separando presentación (Apache 2 + `frontendnet`), lógica y caché (Apache 2 + `backendnode` + `redis:8.2` TLS en red privada interna) y datos (`mysql:8.4` con TLS obligatorio). La estrategia completa de endurecimiento, red, certificados y operación se desarrolla en el Capítulo 8 (`08_despliegue_seguro.adoc`).
+
+.Topología física y de contenedores en 3 VMs (`despliegue.puml`)
+image::despliegue.png[Diagrama de despliegue UML 2.5.1,align="center"]

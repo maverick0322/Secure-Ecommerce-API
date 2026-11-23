@@ -16,8 +16,8 @@
  *        nunca repetirse en duro en los capítulos (salvo en _hechos.adoc o // annex-begin..// annex-end).
  *  1d. Trazas: invoca docs/verify-traces.js (rutas, símbolos y cabeceras `' TRACE:` en .puml).
  *  1e. Compilación AsciiDoctor sin advertencias + existencia de todas las imágenes referenciadas.
- *  1f. Diagramas: `node docs/generate-diagrams.js --check-only` + existencia de los 25 .puml del plan
- *      (todos salvo DEP-01 / despliegue.puml) y sus archivos SVG y PNG en docs/asciidoc/assets/.
+ *  1f. Diagramas: `node docs/generate-diagrams.js --check-only` + existencia de los 26 .puml del plan
+ *      y sus archivos SVG y PNG en docs/asciidoc/assets/.
  *
  * Uso:
  *   node docs/verify-docs.js                # Ejecuta todas las compuertas 1a..1f
@@ -293,7 +293,7 @@ function checkAsciidoctor() {
   return errors;
 }
 
-function getPlannedDiagramsExceptDep01() {
+function getPlannedDiagrams() {
   if (!fs.existsSync(PLAN_PATH)) {
     return [];
   }
@@ -302,8 +302,7 @@ function getPlannedDiagramsExceptDep01() {
   for (const line of lines) {
     const m = line.match(/^\|\s*\*\*`([^`]+)`\*\*\s*\|[^|]+\|\s*`([^`]+\.puml)`\s*\|/);
     if (!m) continue;
-    const [, id, pumlName] = m;
-    if (id === 'DEP-01') continue;
+    const [, , pumlName] = m;
     files.push(pumlName);
   }
   return files;
@@ -324,9 +323,9 @@ function checkDiagrams(skipStage3) {
     errors.push(`[1f DIAGRAMAS] generate-diagrams.js --check-only falló (código ${res.status}):\n${res.stderr || res.stdout}`);
   }
 
-  const planned = getPlannedDiagramsExceptDep01();
-  if (planned.length !== 25) {
-    errors.push(`[1f DIAGRAMAS] Se esperaban 25 diagramas planificados (sin DEP-01) en PLAN_DIAGRAMAS.md, encontrados: ${planned.length}.`);
+  const planned = getPlannedDiagrams();
+  if (planned.length !== 26) {
+    errors.push(`[1f DIAGRAMAS] Se esperaban 26 diagramas planificados en PLAN_DIAGRAMAS.md, encontrados: ${planned.length}.`);
   }
 
   for (const pumlName of planned) {
@@ -355,7 +354,7 @@ function main() {
     { name: '1d. Trazas de rutas y símbolos', errors: checkTraces(skipStage3) },
     { name: '1e. Compilación AsciiDoctor e imágenes', errors: checkAsciidoctor() },
     {
-      name: `1f. Diagramas PlantUML v${PLANTUML_VERSION} (${skipStage3 ? 'OMITIDO por --skip-stage3' : '25 diagramas'})`,
+      name: `1f. Diagramas PlantUML v${PLANTUML_VERSION} (${skipStage3 ? 'OMITIDO por --skip-stage3' : '26 diagramas'})`,
       errors: checkDiagrams(skipStage3)
     }
   ];

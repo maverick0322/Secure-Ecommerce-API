@@ -10,7 +10,7 @@
  *     - docs/diagrams/PLAN_DIAGRAMAS.md
  *     - docs/asciidoc/*.adoc
  *     - Cabeceras `' TRACE: ruta1; ruta2; ...` de docs/diagrams/*.puml
- *       (excluyendo _skin.puml, _muestra.puml y despliegue.puml si está PENDIENTE).
+ *       (excluyendo _skin.puml y _muestra.puml).
  *  2. Toda clase o método citado entre comillas invertidas (`...`) en
  *     docs/BASELINE.md, docs/diagrams/PLAN_DIAGRAMAS.md y docs/asciidoc/*.adoc.
  *
@@ -280,7 +280,7 @@ function getDefaultTargets({ requireDiagramTraceHeaders = true } = {}) {
   const pumlFiles = [];
   if (fs.existsSync(DIAGRAMS_DIR)) {
     const pmls = fs.readdirSync(DIAGRAMS_DIR)
-      .filter((f) => f.endsWith('.puml') && !f.startsWith('_') && f !== 'despliegue.puml')
+      .filter((f) => f.endsWith('.puml') && !f.startsWith('_'))
       .sort()
       .map((f) => path.join(DIAGRAMS_DIR, f));
     pumlFiles.push(...pmls);

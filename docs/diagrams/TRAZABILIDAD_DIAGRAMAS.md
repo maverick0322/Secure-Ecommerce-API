@@ -1,7 +1,7 @@
 # Matriz de Trazabilidad de Diagramas UML 2.5.1 (`TRAZABILIDAD_DIAGRAMAS.md`)
 
 - **Fecha de verificación:** `2026-11-22`
-- **Cobertura:** `25` diagramas generados (SVG + PNG a 200 dpi) + `1` diagrama (`DEP-01`) marcado explícitamente como **`PENDIENTE`**.
+- **Cobertura:** `26` diagramas generados (SVG + PNG a 200 dpi), incluyendo `DEP-01`.
 - **Regla de verificación:** Cada archivo `.puml` incluye cabecera `' TRACE:` validada automáticamente por `node docs/verify-traces.js` y `node docs/verify-docs.js`.
 
 ---
@@ -33,4 +33,4 @@
 | `SEQ-04A` | `seq_carrito.puml` | `ShoppingCartController` -> `ShoppingCartClientService` -> `cart.controller` -> `cart.service.put` -> MySQL `LOCK.UPDATE` | `frontendnet/Controllers/ShoppingCartController.cs:25-38`, `backendnode/routes/cart.routes.js`, `backendnode/services/cart.service.js:55-73` | Aprobada (14 mensajes <= 16) |
 | `SEQ-04B` | `seq_checkout_cotizacion_confirmacion.puml` | `OrdersController` -> `orders.controller` -> `orders.service` (`quote`/`confirm`) -> `checkout-quote.service` (`sign`/`verify`) -> loop por `sellerId` | `frontendnet/Controllers/OrdersController.cs:59-137`, `backendnode/routes/checkout.routes.js`, `backendnode/services/orders.service.js`, `backendnode/services/checkout-quote.service.js` | Verificada tras ajuste (<= 16 mensajes) |
 | `CMP-01` | `componentes.puml` | 13 componentes en 4 paquetes (`frontendnet`, `backendnode`, `Persistencia y Estado`, `Proveedores Externos`) con conectores ball-and-socket | `backendnode/index.js`, `backendnode/routes/*.js`, `backendnode/services/*.js`, `backendnode/models/index.js`, `frontendnet/Program.cs` | Aprobada (0 encimamientos) |
-| `DEP-01` | `despliegue.puml` (**`PENDIENTE`**) | **PENDIENTE:** Topología de despliegue queda fuera del Incremento 1 junto con el Capítulo 8 (`NO_VERIFICABLE` infraestructura productiva externa). | `backendnode/compose.yaml`, `backendnode/compose.dev.yaml`, `backendnode/Dockerfile` | **`PENDIENTE`** |
+| `DEP-01` | `despliegue.puml` | 5 nodos (`Evaluador`, `VM 1`, `VM 2`, `VM 3`, `Externos`) y 12 artefactos (Apache 2 TLS, `frontendnet`, `ecommerce_api`, `redis:8.2` TLS, `/run/secrets/*`, `mysql:8.4` TLS, respaldos, `Cloudinary`, `Gmail`, `Turnstile`) | `backendnode/Dockerfile`, `backendnode/compose.yaml`, `backendnode/compose.dev.yaml`, `backendnode/config/redis/redis.conf`, `backendnode/services/database.service.js`, `frontendnet/Program.cs`, `frontendnet/appsettings.json`, `frontendnet/Services/CloudflareTurnstileService.cs` | Aprobada (0 cortes) |

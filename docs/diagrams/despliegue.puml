@@ -1,0 +1,52 @@
+' TRACE: backendnode/Dockerfile; backendnode/compose.yaml; backendnode/compose.dev.yaml; backendnode/config/redis/redis.conf; backendnode/index.js; backendnode/services/database.service.js; backendnode/services/redis-tls-config.service.js; frontendnet/Program.cs; frontendnet/appsettings.json; frontendnet/Services/CloudflareTurnstileService.cs
+@startuml despliegue
+!include _skin.puml
+top to bottom direction
+skinparam Nodesep 32
+skinparam Ranksep 42
+
+title Diagrama de Despliegue UML 2.5.1 — Topología Distribuida en 3 VMs (DEP-01)
+caption 5 nodos y 12 artefactos (límite: máx. 8 nodos y 12 artefactos · Red Adaptador Puente + Hotspot)
+
+node "Evaluador / Cliente" as N_Client {
+  artifact "Navegador HTTPS\n(HTTP/2, Cookies HttpOnly)" as A_Browser <<frontend>>
+}
+
+node "VM 1: Presentación\n(Ubuntu 24.04.5 · tienda.lan)" <<frontend>> as N_VM1 {
+  artifact "Apache 2 Proxy Inverso\nTLS :443 -> 127.0.0.1:5000\nRedir. :80->:443, CA Equipo" as A_Apache1 <<security>>
+  artifact "Contenedor frontendnet\n.NET 9.0 Kestrel :5000\nForwardedForHeaderName" as A_Fe <<frontend>>
+}
+
+node "VM 2: Lógica de Negocio\n(Ubuntu 24.04.5 · api.tienda.lan)" <<backend>> as N_VM2 {
+  artifact "Apache 2 Proxy Inverso\nTLS :443 -> 127.0.0.1:3000\nUFW solo desde IP VM 1" as A_Apache2 <<security>>
+  artifact "Contenedor ecommerce_api\nnode:24-alpine :3000\nExpress 4, RS256, Sharp" as A_Be <<backend>>
+  artifact "Contenedor redis:8.2 (TLS)\nRed privada backend_internal\n:6379 RESP TLS + ACL + AOF" as A_Redis <<cache>>
+  artifact "Secretos /run/secrets/*\nJWT RS256, DB, Gmail, Cloud." as A_Secrets <<secret>>
+}
+
+together {
+  node "VM 3: Capa de Datos\n(Ubuntu 24.04.5 · db.tienda.lan)" <<database>> as N_VM3 {
+    artifact "Contenedor mysql:8.4\n:3306 require_secure_transport=ON\necommerce_app@IP_VM2" as A_MySql <<database>>
+    artifact "Volumen mysql_data +\nRespaldos cifrados mysqldump" as A_Backup <<database>>
+  }
+
+  node "Proveedores Externos" <<external>> as N_Ext {
+    artifact "Cloudinary Media API\nAlmacenamiento + CDN" as A_Cloud <<external>>
+    artifact "Gmail OAuth2 API\nOTP y Notificaciones" as A_Gmail <<external>>
+    artifact "Cloudflare Turnstile\nOpcional / Claves Prueba" as A_Turn <<external>>
+  }
+}
+
+A_Browser --> A_Apache1 : "HTTPS :443 (LAN)"
+A_Apache1 -> A_Fe : "HTTP loopback\nX-Forwarded-For"
+A_Fe --> A_Apache2 : "HTTPS :443\nBearer RS256 + IP"
+A_Apache2 -> A_Be : "HTTP loopback"
+A_Be -> A_Redis : "RESP TLS :6379\n(red interna)"
+A_Secrets .up.> A_Be : "Solo lectura"
+A_Be --> A_MySql : "MySQL TLS :3306\nUFW solo VM 2"
+A_MySql .> A_Backup : "Persistencia"
+A_Fe ..> A_Turn : "HTTPS /siteverify"
+A_Be --> A_Cloud : "HTTPS Upload/CDN"
+A_Be --> A_Gmail : "HTTPS OAuth2"
+
+@enduml
