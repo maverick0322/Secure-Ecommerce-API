@@ -88,7 +88,7 @@ if(pm.response.code===${status}) { ${tests} }`;
   add(categories,'Catalogo de categorias (SELLER)','GET','/api/categories',200,{token:'sellerToken',tests:"pm.test('Seller reads categories',()=>pm.expect(Array.isArray(b)).to.eql(true));"});
   const products=folder('05 Productos e imagenes simuladas (cuotas: 200 activos, 30 escrituras/min, 10 categorias/producto)');
   for(const [role,id,title,price,stock]of [['seller','productId','Postman primary','10.00',10],['sellerOther','otherProductId','Postman secondary','5.50',20]]){
-    add(products,'Crear '+title,'POST','/api/products',201,{token:role+'Token',body:{title,description:'Descripcion '+title,price,stock},tests:`pm.variables.set('${id}',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string'));`});
+    add(products,'Crear '+title,'POST','/api/products',201,{token:role+'Token',body:{title,description:'Descripcion '+title,price,stock},tests:`pm.variables.set('${id}',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string'));pm.test('Draft starts with hasImage false',()=>pm.expect(b.hasImage).to.eql(false));`});
   }
   add(products,'BUYER no publica','POST','/api/products',403,{token:'buyerToken',body:{title:'Forbidden',price:'1.00'}});
   add(products,'SELLER ajeno no modifica','PUT','/api/products/{{productId}}',404,{token:'sellerOtherToken',body:{title:'Foreign'}});
@@ -104,7 +104,13 @@ if(pm.response.code===${status}) { ${tests} }`;
   add(products,'No asociar categoria a producto ajeno','POST','/api/products/{{otherProductId}}/categories',404,{token:'sellerToken',body:{categoryId:'{{categoryId}}'}});
   add(products,'Subir PNG a Cloudinary simulado','PUT','/api/products/{{productId}}/image',200,{token:'sellerToken',file:'scripts/fixtures/product.png',tests:"pm.test('Only public image reference',()=>pm.expect(typeof b.imagePublicId).to.eql('string'));pm.variables.set('imagePublicId',b.imagePublicId);"});
   add(products,'Contenido de imagen invalido','PUT','/api/products/{{productId}}/image',400,{token:'sellerToken',file:'scripts/fixtures/not-image.txt'});
-  add(products,'Consultar productos activos','GET','/api/products',200,{token:'buyerToken',tests:"pm.test('Both approved sellers visible',()=>pm.expect(b.length).to.eql(2));"});
+  add(products,'BUYER solo lista productos con imagen','GET','/api/products',200,{token:'buyerToken',tests:"pm.test('Only imaged product visible to buyer',()=>{pm.expect(b.length).to.eql(1);pm.expect(b[0].productId).to.eql(Number(pm.variables.get('productId')));pm.expect(Object.prototype.hasOwnProperty.call(b[0],'hasImage')).to.eql(false);});"});
+  add(products,'BUYER no ve borrador sin imagen','GET','/api/products/{{otherProductId}}',404,{token:'buyerToken'});
+  add(products,'ADMIN no ve borrador sin imagen','GET','/api/products/{{otherProductId}}',404,{token:'adminToken'});
+  add(products,'SELLER dueno ve su borrador con hasImage false','GET','/api/products/{{otherProductId}}',200,{token:'sellerOtherToken',tests:"pm.test('Seller sees own draft with hasImage false',()=>pm.expect(b.hasImage).to.eql(false));"});
+  add(products,'Subir PNG secondary a Cloudinary simulado','PUT','/api/products/{{otherProductId}}/image',200,{token:'sellerOtherToken',file:'scripts/fixtures/product.png',tests:"pm.test('Secondary public image reference',()=>pm.expect(typeof b.imagePublicId).to.eql('string'));"});
+  add(products,'Consultar productos activos','GET','/api/products',200,{token:'buyerToken',tests:"pm.test('Both approved sellers visible',()=>{pm.expect(b.length).to.eql(2);pm.expect(b.every(p=>!Object.prototype.hasOwnProperty.call(p,'hasImage'))).to.eql(true);});"});
+  add(products,'SELLER ve producto propio publicado con hasImage true','GET','/api/products/{{productId}}',200,{token:'sellerToken',tests:"pm.test('Seller sees hasImage true after upload',()=>pm.expect(b.hasImage).to.eql(true));"});
   const addresses=folder('06 Direcciones');
   const address={recipientName:'Persona ficticia',street:'Calle de pruebas',exteriorNumber:'1',neighborhood:'Distrito ficticio',city:'Ciudad ficticia',state:'Estado ficticio',postalCode:'01000',country:'MX',isDefault:true};
   add(addresses,'Crear direccion propia','POST','/api/addresses',201,{token:'buyerToken',body:address,tests:"pm.variables.set('addressId',b.id);"});

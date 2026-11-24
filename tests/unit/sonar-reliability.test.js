@@ -19,9 +19,9 @@ it('keeps migration chronology and schema name checks canonical',()=>{
   const root=path.resolve(__dirname,'../..');
   const migrations=fs.readdirSync(path.join(root,'migrations')).filter(isMigrationFile)
     .concat(fs.readdirSync(path.join(root,'migrations/cutover')).filter(isMigrationFile)).sort(compareCodeUnits);
-  expect(migrations).toHaveLength(12);
+  expect(migrations).toHaveLength(13);
   expect(migrations[0]).toBe('20240101000001-create-archivo.js');
-  expect(migrations.at(-1)).toBe('20261119000001-add-categories-normalized-name-unique.js');
+  expect(migrations.at(-1)).toBe('20261123000001-require-products-description-not-null.js');
   expect(require('../../services/database.service').tables).toEqual([
     'admins','audit_logs','buyers','cart_items','carts','categories','order_items',
     'order_status_history','orders','product_categories','products','sellers','user_addresses','users']);

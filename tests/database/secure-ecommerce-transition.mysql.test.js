@@ -10,6 +10,8 @@ const added = ['admins', 'buyers', 'cart_items', 'carts', 'order_items', 'order_
 const baseline = '20261108000001-normalize-english-schema.js';
 const create = '20261110000001-create-secure-ecommerce-tables.js';
 const prepare = '20261110000002-prepare-existing-ecommerce-tables.js';
+const normalizedCategories = '20261119000001-add-categories-normalized-name-unique.js';
+const requireDescription = '20261123000001-require-products-description-not-null.js';
 const legacyDate = '2026-01-01 12:00:00';
 const date = `${legacyDate}.123`;
 const role = '00000000-0000-4000-8000-000000000001';
@@ -62,7 +64,8 @@ stage25('MySQL 8 isolated secure_ecommerce transition', () => {
     await query('INSERT INTO files (id, mime, name, size, storedInDatabase, data, createdAt, updatedAt) VALUES (1, ?, ?, 2, 1, ?, ?, ?)',
       ['image/jpeg', 'synthetic.jpg', Buffer.from([1, 2]), legacyDate, legacyDate]);
     await query('INSERT INTO categories (id, name, protected, createdAt, updatedAt) VALUES (1, ?, 1, ?, ?)', ['Synthetic category', legacyDate, legacyDate]);
-    await query('INSERT INTO products (id, title, price, fileId, createdAt, updatedAt) VALUES (1, ?, 12.50, 1, ?, ?)', ['Synthetic product', legacyDate, legacyDate]);
+    await query('INSERT INTO products (id, title, description, price, fileId, createdAt, updatedAt) VALUES (1, ?, ?, 12.50, 1, ?, ?)',
+      ['Synthetic product', 'Synthetic product description', legacyDate, legacyDate]);
     await query('INSERT INTO product_categories (categoryId, productId, createdAt, updatedAt) VALUES (1, 1, ?, ?)', [legacyDate, legacyDate]);
     for (const [id, label] of [[admin, 'admin'], [buyer, 'buyer'], [seller, 'seller']]) {
       await query('INSERT INTO users (id, email, passwordHash, name, protected, roleId, createdAt, updatedAt) VALUES (?, ?, ?, ?, 0, ?, ?, ?)',
@@ -82,7 +85,7 @@ stage25('MySQL 8 isolated secure_ecommerce transition', () => {
       VERSION() AS version, DATABASE() AS db, CURRENT_USER() AS account,
       @@session.foreign_key_checks AS foreignKeys, @@session.sql_mode AS mode`);
     expect(identity).toMatchObject({ host: 'secure-ecommerce-stage25', uuid: expectedUuid, port: 3306,
-      version: expect.stringMatching(/^8\.0\./), db: 'secure_ecommerce', account: 'ecommerce_migrator@%', foreignKeys: 1,
+      version: expect.stringMatching(/^8\.4\./), db: 'secure_ecommerce', account: 'ecommerce_migrator@%', foreignKeys: 1,
       mode: expect.stringMatching(/STRICT_(TRANS|ALL)_TABLES/) });
     historicalNames = (await query('SELECT name FROM SequelizeMeta ORDER BY name')).map(row => row.name);
     expect(historicalNames).toHaveLength(8);
@@ -94,9 +97,11 @@ stage25('MySQL 8 isolated secure_ecommerce transition', () => {
     for (const table of legacy) expect(await query(`SELECT 1 FROM \`${table}\` LIMIT 1`)).toEqual([]);
     await insertHistoricalFixtures();
     before = { rows: await legacyRows(), ddl: await definitions(legacy) };
-    const output = cli(prepare);
+    const output = cli();
     expect(output).toContain('20261110000001-create-secure-ecommerce-tables: migrated');
     expect(output).toContain('20261110000002-prepare-existing-ecommerce-tables: migrated');
+    expect(output).toContain('20261119000001-add-categories-normalized-name-unique: migrated');
+    expect(output).toContain('20261123000001-require-products-description-not-null: migrated');
     after = { rows: await legacyRows(), ddl: await definitions([...legacy, ...added]) };
     await query('INSERT INTO admins (userId) VALUES (?)', [admin]);
     await query('INSERT INTO buyers (userId) VALUES (?)', [buyer]);
@@ -248,7 +253,7 @@ stage25('MySQL 8 isolated secure_ecommerce transition', () => {
   }));
 
   it('re-running pending migrations is a no-op and leaves the cutover unapplied', async () => {
-    const expected = [...historicalNames, create, prepare];
+    const expected = [...historicalNames, create, prepare, normalizedCategories, requireDescription];
     expect((await query('SELECT name FROM SequelizeMeta ORDER BY name')).map(row => row.name)).toEqual(expected);
     const ddl = await definitions([...legacy, ...added]);
     expect(cli()).toContain('No migrations were executed, database schema was already up to date.');

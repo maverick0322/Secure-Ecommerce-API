@@ -19,7 +19,7 @@ module.exports=async function cancellationChecks({root,models,app,isolatedAuth,e
   const change=(id,actor,status='CANCELED',reason=cancellationReason)=>request(app).put('/api/orders/'+id+'/status').set('Authorization',actor.header).send({status,...(reason===undefined?{}:{reason})});
   async function fixture({status='PENDING',quantities=[2,3],stocks=[7,11]}={}){
     const products=[];
-    for(let i=0;i<quantities.length;i++)products.push(await models.Product.create({sellerId:seller.id,title:'Original product '+i,price:'2.50',stock:stocks[i]}));
+    for(let i=0;i<quantities.length;i++)products.push(await models.Product.create({sellerId:seller.id,title:'Original product '+i,description:'Original product description '+i,price:'2.50',stock:stocks[i]}));
     const order=await models.Order.create({buyerId:buyer.id,sellerId:seller.id,checkoutId:crypto.randomUUID(),status:status==='CANCELED'?'CANCELED':'PENDING',total:'12.50',deliveryAddressSnapshot:snapshot});
     for(let i=0;i<products.length;i++)await models.OrderItem.create({orderId:order.id,productId:products[i].id,productTitle:products[i].title,quantity:quantities[i],unitPrice:'2.50'});
     await models.OrderStatusHistory.create({orderId:order.id,previousStatus:null,newStatus:order.status,changedByUserId:buyer.id,occurredAt:new Date()});
@@ -85,7 +85,7 @@ module.exports=async function cancellationChecks({root,models,app,isolatedAuth,e
   }
   const confirm=(actor,token)=>request(app).post('/api/checkout').set('Authorization',actor.header).send({quote:token});
   {
-    const p=await models.Product.create({sellerId:seller.id,title:'First seller',price:'2.50',stock:10}),q=await models.Product.create({sellerId:secondSeller.id,title:'Second seller',price:'3.00',stock:10});
+    const p=await models.Product.create({sellerId:seller.id,title:'First seller',description:'First seller description',price:'2.50',stock:10}),q=await models.Product.create({sellerId:secondSeller.id,title:'Second seller',description:'Second seller description',price:'3.00',stock:10});
     const token=await quote(buyer,await address(buyer),[[p.id,2],[q.id,3]]),created=await confirm(buyer,token);assert.equal(created.status,201);assert.equal(created.body.orders.length,2);
     const first=created.body.orders.find(o=>o.sellerId===seller.id),otherOrder=created.body.orders.find(o=>o.sellerId===secondSeller.id);
     assert.equal((await change(first.id,buyer)).status,200);assert.equal((await models.Product.findByPk(p.id)).stock,10);assert.equal((await models.Product.findByPk(q.id)).stock,7);

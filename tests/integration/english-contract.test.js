@@ -46,6 +46,10 @@ describe('Contrato HTTP normalizado al inglés', () => {
     const properties = specification.paths['/api/products'].post.parameters[0].schema.properties;
     expect(Object.keys(properties).sort()).toEqual(['categoryId', 'description', 'price', 'stock', 'title']);
     expect(specification.definitions.Product.properties).not.toHaveProperty('fileId');
+    expect(specification.definitions.Product.properties).not.toHaveProperty('hasImage');
+    expect(specification.definitions.Product.properties.description['x-nullable']).toBeUndefined();
+    expect(specification.definitions.SellerProduct.properties.hasImage).toMatchObject({ type: 'boolean', readOnly: true });
+    expect(specification.paths['/api/products'].post.responses[201].schema.$ref).toBe('#/definitions/SellerProduct');
   });
 
   it('consulta los perfiles y excluye el hash por defecto', async () => {

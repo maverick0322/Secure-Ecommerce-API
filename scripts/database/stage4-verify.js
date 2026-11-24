@@ -102,7 +102,7 @@ async function verifyData() {
     await q(`INSERT INTO sellers (userId,storeName,requestedAt,updatedAt) VALUES (?,'Synthetic store',?,?)`, [s,now,now]);
     assert.equal((await q('SELECT status FROM sellers WHERE userId=?',[s]))[0].status,'PENDING');
     await q("UPDATE sellers SET status='APPROVED',reviewedByUserId=?,reviewedAt=? WHERE userId=?",[a,now,s]);
-    const p = (await q(`INSERT INTO products (sellerId,title,price,stock,createdAt,updatedAt) VALUES (?,'Snapshot title',12.50,10,?,?)`,[s,now,now])).insertId;
+    const p = (await q(`INSERT INTO products (sellerId,title,description,price,stock,createdAt,updatedAt) VALUES (?,'Snapshot title','Snapshot description',12.50,10,?,?)`,[s,now,now])).insertId;
     const cat = (await q(`INSERT INTO categories (name,createdAt,updatedAt) VALUES ('Synthetic category',?,?)`,[now,now])).insertId;
     await q('INSERT INTO product_categories (productId,categoryId,createdAt) VALUES (?,?,?)',[p,cat,now]);
     const addressSQL = `INSERT INTO user_addresses (buyerId,recipientName,street,exteriorNumber,neighborhood,city,state,postalCode,isDefault,createdAt,updatedAt)

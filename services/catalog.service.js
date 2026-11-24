@@ -197,8 +197,14 @@ function changeCategory(account, productId, categoryId, removing, context = {}) 
   },context,removing ? 'productocategoria.remover' : 'productocategoria.agregar',`${productId}:${categoryId}`);
 }
 
-function visibleProductQuery() {
-  return { where: { price: { [Op.gte]: 0 }, title: { [Op.ne]: null } }, include: [
+function visibleProductQuery(actor = null) {
+  const where = { price: { [Op.gte]: 0 }, title: { [Op.ne]: null } };
+  if (actor?.profile === 'SELLER' && actor.id) {
+    where[Op.or] = [{ imagePublicId: { [Op.ne]: null } }, { sellerId: actor.id }];
+  } else {
+    where.imagePublicId = { [Op.ne]: null };
+  }
+  return { where, include: [
     { association: 'seller', attributes: [], required: true, where: { status: 'APPROVED' },
       include: [{ association: 'user', attributes: [], required: true, where: { status: 'ACTIVE', emailVerifiedAt: { [Op.ne]: null } } }] },
     { association: 'categories', attributes: ['id', 'name', 'protected'], required: false, through: { attributes: [], paranoid: true } }
@@ -209,8 +215,8 @@ function escapeLike(value) {
   return value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
 }
 
-function listProducts(search) {
-  const query = visibleProductQuery();
+function listProducts(search, actor = null) {
+  const query = visibleProductQuery(actor);
   if (search !== undefined) {
     if (typeof search !== 'string' || search.length > 255) throw new AccountError(400, 'El término de búsqueda no es válido.');
     const trimmed = search.trim();
@@ -221,9 +227,10 @@ function listProducts(search) {
   return Product.findAll({ ...query, order: [['id', 'ASC']] });
 }
 
-async function getProduct(id) {
-  const query = visibleProductQuery();
-  const product = await Product.findOne({ ...query, where: { ...query.where, id } });
+async function getProduct(id, actor = null) {
+  const query = visibleProductQuery(actor);
+  query.where.id = id;
+  const product = await Product.findOne(query);
   if (!product) throw new AccountError(404, 'Producto no encontrado.');
   return product;
 }
