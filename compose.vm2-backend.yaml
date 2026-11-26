@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${SERVER_PORT:-3000}:3000"
+    extra_hosts:
+      - "db.tienda.lan:${IP_VM3:-127.0.0.1}"
     environment:
       - DB_HOST=${DOCKER_DB_HOST:-db.tienda.lan}
       - DB_PORT=${DOCKER_DB_PORT:-3306}
@@ -19,7 +21,7 @@ services:
       - SERVER_PORT=${SERVER_PORT:-3000}
       - SERVER_HOST=0.0.0.0
       - NODE_ENV=${NODE_ENV:-production}
-      - TRUST_PROXY=${TRUST_PROXY:-true}
+      - TRUST_PROXY=${TRUST_PROXY:-false}
       - JWT_SECRET_FILE=/run/secrets/jwt_secret
       - GMAIL_CLIENT_PATH=/run/secrets/gmail_client
       - GMAIL_TOKEN_PATH=/run/secrets/gmail_token

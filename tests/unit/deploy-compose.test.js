@@ -8,7 +8,7 @@ describe('3-VM distributed compose definitions (VM 2 backend and VM 3 database)'
 
     expect(Object.keys(vm3.services)).toEqual(['db']);
     expect(vm3.services.db.image).toBe('mysql:8.4');
-    expect(vm3.services.db.ports).toEqual(['${DB_BIND_ADDRESS:-0.0.0.0}:${DB_PORT:-3306}:3306']);
+    expect(vm3.services.db.ports).toEqual(['${DB_BIND_ADDRESS:-127.0.0.1}:${DB_PORT:-3306}:3306']);
     expect(vm3.services.db.command).toContain('--authentication-policy=caching_sha2_password,,');
     expect(vm3.services.db.command).toContain('--require_secure_transport=ON');
     expect(vm3.services.db.command).toContain('--ssl-ca=/run/secrets/db_ca');
@@ -26,6 +26,7 @@ describe('3-VM distributed compose definitions (VM 2 backend and VM 3 database)'
     expect(Object.keys(vm2.services).sort()).toEqual(['app', 'redis']);
     expect(vm2.services.db).toBeUndefined();
     expect(vm2.services.app.ports).toEqual(['${APP_BIND_ADDRESS:-127.0.0.1}:${SERVER_PORT:-3000}:3000']);
+    expect(vm2.services.app.extra_hosts).toEqual(['db.tienda.lan:${IP_VM3:-127.0.0.1}']);
     expect(vm2.services.app.depends_on).toEqual({
       redis: { condition: 'service_healthy', required: true }
     });
@@ -33,7 +34,7 @@ describe('3-VM distributed compose definitions (VM 2 backend and VM 3 database)'
       'DB_HOST=${DOCKER_DB_HOST:-db.tienda.lan}',
       'DB_SSL=${DB_SSL:-true}',
       'DB_SSL_CA_PATH=/run/secrets/db_ca',
-      'TRUST_PROXY=${TRUST_PROXY:-true}',
+      'TRUST_PROXY=${TRUST_PROXY:-false}',
       'DB_PASSWORD_FILE=/run/secrets/db_password',
       'JWT_SECRET_FILE=/run/secrets/jwt_secret'
     ]));
@@ -45,5 +46,14 @@ describe('3-VM distributed compose definitions (VM 2 backend and VM 3 database)'
     expect(vm2.services.redis.ports).toBeUndefined();
     expect(vm2.services.redis.networks).toEqual(['backend_internal']);
     expect(vm2.networks.backend_internal.internal).toBe(true);
+  });
+
+  it('provides a non-secret VM verification script covering NTP, extra_hosts, DOCKER-USER and TLS', () => {
+    const script = fs.readFileSync('scripts/deploy/verify-vm.sh', 'utf8');
+    expect(script).toContain('timedatectl');
+    expect(script).toContain('DOCKER-USER');
+    expect(script).toContain('ctorigdstport 3306');
+    expect(script).toContain('PASS |');
+    expect(script).toContain('FAIL |');
   });
 });
