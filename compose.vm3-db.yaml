@@ -4,7 +4,7 @@ services:
     container_name: ecommerce_db
     restart: unless-stopped
     ports:
-      - "${DB_BIND_ADDRESS:-0.0.0.0}:${DB_PORT:-3306}:3306"
+      - "${DB_BIND_ADDRESS:-127.0.0.1}:${DB_PORT:-3306}:3306"
     command: >
       --authentication-policy=caching_sha2_password,,
       --character-set-server=utf8mb4

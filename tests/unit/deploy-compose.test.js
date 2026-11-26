@@ -8,7 +8,7 @@ describe('3-VM distributed compose definitions (VM 2 backend and VM 3 database)'
 
     expect(Object.keys(vm3.services)).toEqual(['db']);
     expect(vm3.services.db.image).toBe('mysql:8.4');
-    expect(vm3.services.db.ports).toEqual(['${DB_BIND_ADDRESS:-0.0.0.0}:${DB_PORT:-3306}:3306']);
+    expect(vm3.services.db.ports).toEqual(['${DB_BIND_ADDRESS:-127.0.0.1}:${DB_PORT:-3306}:3306']);
     expect(vm3.services.db.command).toContain('--authentication-policy=caching_sha2_password,,');
     expect(vm3.services.db.command).toContain('--require_secure_transport=ON');
     expect(vm3.services.db.command).toContain('--ssl-ca=/run/secrets/db_ca');
