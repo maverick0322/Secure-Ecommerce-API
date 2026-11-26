@@ -34,7 +34,7 @@ describe('3-VM distributed compose definitions (VM 2 backend and VM 3 database)'
       'DB_HOST=${DOCKER_DB_HOST:-db.tienda.lan}',
       'DB_SSL=${DB_SSL:-true}',
       'DB_SSL_CA_PATH=/run/secrets/db_ca',
-      'TRUST_PROXY=${TRUST_PROXY:-true}',
+      'TRUST_PROXY=${TRUST_PROXY:-false}',
       'DB_PASSWORD_FILE=/run/secrets/db_password',
       'JWT_SECRET_FILE=/run/secrets/jwt_secret'
     ]));
