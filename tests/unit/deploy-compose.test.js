@@ -26,6 +26,7 @@ describe('3-VM distributed compose definitions (VM 2 backend and VM 3 database)'
     expect(Object.keys(vm2.services).sort()).toEqual(['app', 'redis']);
     expect(vm2.services.db).toBeUndefined();
     expect(vm2.services.app.ports).toEqual(['${APP_BIND_ADDRESS:-127.0.0.1}:${SERVER_PORT:-3000}:3000']);
+    expect(vm2.services.app.extra_hosts).toEqual(['db.tienda.lan:${IP_VM3:-127.0.0.1}']);
     expect(vm2.services.app.depends_on).toEqual({
       redis: { condition: 'service_healthy', required: true }
     });

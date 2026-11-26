@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${SERVER_PORT:-3000}:3000"
+    extra_hosts:
+      - "db.tienda.lan:${IP_VM3:-127.0.0.1}"
     environment:
       - DB_HOST=${DOCKER_DB_HOST:-db.tienda.lan}
       - DB_PORT=${DOCKER_DB_PORT:-3306}
