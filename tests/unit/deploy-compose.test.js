@@ -47,4 +47,13 @@ describe('3-VM distributed compose definitions (VM 2 backend and VM 3 database)'
     expect(vm2.services.redis.networks).toEqual(['backend_internal']);
     expect(vm2.networks.backend_internal.internal).toBe(true);
   });
+
+  it('provides a non-secret VM verification script covering NTP, extra_hosts, DOCKER-USER and TLS', () => {
+    const script = fs.readFileSync('scripts/deploy/verify-vm.sh', 'utf8');
+    expect(script).toContain('timedatectl');
+    expect(script).toContain('DOCKER-USER');
+    expect(script).toContain('ctorigdstport 3306');
+    expect(script).toContain('PASS |');
+    expect(script).toContain('FAIL |');
+  });
 });
