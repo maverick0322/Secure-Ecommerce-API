@@ -131,9 +131,14 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     expect(await models.Product.count({paranoid:false})).toBe(before);
     const result=await create({categoryId:id});expect(result.status).toBe(201);
     expect(result.body.categories).toEqual([{categoryId:id,name,protected:false}]);
+    expect(result.body.hasImage).toBe(false);
     expect(await models.ProductCategory.count({where:{productId:result.body.productId,categoryId:id}})).toBe(1);
-    const listed=await request(app).get('/api/products').set('Authorization',auth(buyer));
-    expect(listed.body.find(p=>p.productId===result.body.productId).categories).toEqual(result.body.categories);
+    const listedBuyerDraft=await request(app).get('/api/products').set('Authorization',auth(buyer));
+    expect(listedBuyerDraft.body.find(p=>p.productId===result.body.productId)).toBeUndefined();
+    expect((await request(app).get('/api/products/'+result.body.productId).set('Authorization',auth(buyer))).status).toBe(404);
+    expect((await request(app).get('/api/products/'+result.body.productId).set('Authorization',auth(admin))).status).toBe(404);
+    const listedSellerDraft=await request(app).get('/api/products').set('Authorization',auth(seller));
+    expect(listedSellerDraft.body.find(p=>p.productId===result.body.productId)).toMatchObject({hasImage:false,categories:result.body.categories});
     const qi=models.sequelize.getQueryInterface(),original=qi.bulkInsert.bind(qi);
     const insert=jest.spyOn(qi,'bulkInsert').mockImplementation((table,...args)=>{
       if(table==='product_categories')throw new Error('synthetic association failure');
@@ -201,13 +206,23 @@ isolated.each(['final', 'final-repeat'])('MySQL isolated catalog using %s column
     const restored = await models.ProductCategory.findOne({ where: { productId, categoryId } });
     expect(restored.createdAt).toEqual(before.createdAt);
     expect(await models.ProductCategory.count({ where: { productId, categoryId }, paranoid: false })).toBe(1);
-    const response = await request(app).get(product()).set('Authorization', auth(buyer));
-    expect(response.body.categories).toEqual([{ categoryId, name: 'Fixture category', protected: false }]);
+    const sellerDraftResponse = await request(app).get(product()).set('Authorization', auth(seller));
+    expect(sellerDraftResponse.status).toBe(200);
+    expect(sellerDraftResponse.body.hasImage).toBe(false);
+    expect(sellerDraftResponse.body.categories).toEqual([{ categoryId, name: 'Fixture category', protected: false }]);
+    expect((await request(app).get(product()).set('Authorization', auth(buyer))).status).toBe(404);
   },5000+Math.max(0,rounds-1)*100);
 
   it('uploads, replaces and compensates an image when the SQL update fails', async () => {
     const first = await upload(seller);
     expect(first.status).toBe(200);
+    const publishedBuyer = await request(app).get(product()).set('Authorization', auth(buyer));
+    expect(publishedBuyer.status).toBe(200);
+    expect(publishedBuyer.body).not.toHaveProperty('hasImage');
+    expect(publishedBuyer.body.categories).toEqual([{ categoryId, name: 'Fixture category', protected: false }]);
+    const publishedSeller = await request(app).get(product()).set('Authorization', auth(seller));
+    expect(publishedSeller.status).toBe(200);
+    expect(publishedSeller.body.hasImage).toBe(true);
     const second = await upload(seller);
     expect(second.status).toBe(200);
     expect(second.body.imagePublicId).not.toBe(first.body.imagePublicId);

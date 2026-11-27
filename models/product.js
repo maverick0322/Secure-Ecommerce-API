@@ -5,7 +5,7 @@ module.exports = (sequelize, DataTypes) => {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true, allowNull: false },
     sellerId: { type: DataTypes.UUID, allowNull: false },
     title: { type: DataTypes.STRING(255), allowNull: false },
-    description: { type: DataTypes.TEXT, allowNull: true },
+    description: { type: DataTypes.TEXT, allowNull: false, validate: { notEmpty: true } },
     price: { type: DataTypes.DECIMAL(12, 2), allowNull: false, validate: { min: 0 } },
     stock: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0, validate: { min: 0 } },
     imagePublicId: { type: DataTypes.STRING(255), allowNull: true },

@@ -1,0 +1,62 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: ecommerce_db
+    restart: unless-stopped
+    ports:
+      - "${DB_BIND_ADDRESS:-127.0.0.1}:${DB_PORT:-3306}:3306"
+    command: >
+      --authentication-policy=caching_sha2_password,,
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --require_secure_transport=ON
+      --ssl-ca=/run/secrets/db_ca
+      --ssl-cert=/run/secrets/db_server_cert
+      --ssl-key=/run/secrets/db_server_key
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+      MYSQL_ROOT_HOST: localhost
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./bd.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+      - /var/run/mysqld:rw,noexec,nosuid,size=16m
+    secrets:
+      - db_root_password
+      - db_ca
+      - db_server_cert
+      - db_server_key
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    mem_limit: 1g
+    cpus: 1.5
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "--host=127.0.0.1", "--user=mysql_healthcheck", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  mysql_data:
+
+secrets:
+  db_root_password:
+    file: ./.secrets/db/root-password
+  db_ca:
+    file: ./.secrets/db/ca.crt
+  db_server_cert:
+    file: ./.secrets/db/server.crt
+  db_server_key:
+    file: ./.secrets/db/server.key

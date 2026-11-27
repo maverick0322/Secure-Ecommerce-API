@@ -86,15 +86,31 @@ it('keeps admin-only category mutations, whitespace/case-insensitive uniqueness 
 });
 it('treats hostile search text as a bound Sequelize value, escapes LIKE wildcards and filters seller visibility',async()=>{
   const find=jest.spyOn(db.Product,'findAll').mockResolvedValue([]),search="'; DROP TABLE users; --";
-  await catalog.listProducts(search);
+  await catalog.listProducts(search, { id: 'buyer-1', profile: 'BUYER' });
   expect(find.mock.calls[0][0].where.title[db.Sequelize.Op.like]).toBe('%'+search+'%');
-  await catalog.listProducts('100% cotton_shirt\\XL');
+  expect(find.mock.calls[0][0].where.imagePublicId).toEqual({ [db.Sequelize.Op.ne]: null });
+  expect(find.mock.calls[0][0].where[db.Sequelize.Op.or]).toBeUndefined();
+  await catalog.listProducts('100% cotton_shirt\\XL', { id: 'admin-1', profile: 'ADMIN' });
   expect(find.mock.calls[1][0].where.title[db.Sequelize.Op.like]).toBe('%100\\% cotton\\_shirt\\\\XL%');
-  await catalog.listProducts('   ');
+  expect(find.mock.calls[1][0].where.imagePublicId).toEqual({ [db.Sequelize.Op.ne]: null });
+  await catalog.listProducts('   ', { id: 'seller-1', profile: 'SELLER' });
   expect(find.mock.calls[2][0].where.title).toEqual({[db.Sequelize.Op.ne]:null});
+  expect(find.mock.calls[2][0].where.imagePublicId).toBeUndefined();
+  expect(find.mock.calls[2][0].where[db.Sequelize.Op.or]).toEqual([
+    { imagePublicId: { [db.Sequelize.Op.ne]: null } },
+    { sellerId: 'seller-1' }
+  ]);
   expect(find.mock.calls[0][0].include[0]).toMatchObject({required:true,where:{status:'APPROVED'},include:[expect.objectContaining({where:expect.objectContaining({status:'ACTIVE'})})]});
   for(const value of [[],{},'x'.repeat(256)])expect(()=>catalog.listProducts(value)).toThrow();
-  jest.spyOn(db.Product,'findOne').mockResolvedValue(null);await expect(catalog.getProduct(1)).rejects.toMatchObject({status:404});
+  const findOne = jest.spyOn(db.Product,'findOne').mockResolvedValue(null);
+  await expect(catalog.getProduct(1, { id: 'buyer-1', profile: 'BUYER' })).rejects.toMatchObject({status:404});
+  expect(findOne.mock.calls[0][0].where).toMatchObject({ id: 1, imagePublicId: { [db.Sequelize.Op.ne]: null } });
+  await expect(catalog.getProduct(9, { id: 'seller-1', profile: 'SELLER' })).rejects.toMatchObject({status:404});
+  expect(findOne.mock.calls[1][0].where.id).toBe(9);
+  expect(findOne.mock.calls[1][0].where[db.Sequelize.Op.or]).toEqual([
+    { imagePublicId: { [db.Sequelize.Op.ne]: null } },
+    { sellerId: 'seller-1' }
+  ]);
 });
 it('preserves Unicode/byte limits, requires description on create/edit and rejects mass assignment or malformed numeric values',async()=>{
   expect(catalog.productInput({title:'  Café 🙂  ',price:0,description:'  Café orgánico  ',stock:4294967295},true)).toEqual({title:'Café 🙂',price:'0.00',description:'Café orgánico',stock:4294967295});

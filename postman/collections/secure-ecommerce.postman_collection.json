@@ -2184,7 +2184,7 @@
                 "exec": [
                   "pm.test('HTTP 201',function(){pm.expect(pm.response.code).to.eql(201);});",
                   "const b=pm.response.code===204?{}:pm.response.json();",
-                  "if(pm.response.code===201) { pm.variables.set('productId',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string')); }"
+                  "if(pm.response.code===201) { pm.variables.set('productId',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string'));pm.test('Draft starts with hasImage false',()=>pm.expect(b.hasImage).to.eql(false)); }"
                 ]
               }
             }
@@ -2224,7 +2224,7 @@
                 "exec": [
                   "pm.test('HTTP 201',function(){pm.expect(pm.response.code).to.eql(201);});",
                   "const b=pm.response.code===204?{}:pm.response.json();",
-                  "if(pm.response.code===201) { pm.variables.set('otherProductId',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string')); }"
+                  "if(pm.response.code===201) { pm.variables.set('otherProductId',b.productId);pm.test('Exact decimal string',()=>pm.expect(typeof b.price).to.eql('string'));pm.test('Draft starts with hasImage false',()=>pm.expect(b.hasImage).to.eql(false)); }"
                 ]
               }
             }
@@ -2692,6 +2692,151 @@
           ]
         },
         {
+          "name": "BUYER solo lista productos con imagen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Only imaged product visible to buyer',()=>{pm.expect(b.length).to.eql(1);pm.expect(b[0].productId).to.eql(Number(pm.variables.get('productId')));pm.expect(Object.prototype.hasOwnProperty.call(b[0],'hasImage')).to.eql(false);}); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "BUYER no ve borrador sin imagen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{buyerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{otherProductId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ADMIN no ve borrador sin imagen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{otherProductId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404',function(){pm.expect(pm.response.code).to.eql(404);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===404) {  }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SELLER dueno ve su borrador con hasImage false",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerOtherToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{otherProductId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Seller sees own draft with hasImage false',()=>pm.expect(b.hasImage).to.eql(false)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Subir PNG secondary a Cloudinary simulado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerOtherToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{otherProductId}}/image",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "scripts/fixtures/product.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Secondary public image reference',()=>pm.expect(typeof b.imagePublicId).to.eql('string')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Consultar productos activos",
           "request": {
             "method": "GET",
@@ -2712,7 +2857,34 @@
                 "exec": [
                   "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
                   "const b=pm.response.code===204?{}:pm.response.json();",
-                  "if(pm.response.code===200) { pm.test('Both approved sellers visible',()=>pm.expect(b.length).to.eql(2)); }"
+                  "if(pm.response.code===200) { pm.test('Both approved sellers visible',()=>{pm.expect(b.length).to.eql(2);pm.expect(b.every(p=>!Object.prototype.hasOwnProperty.call(p,'hasImage'))).to.eql(true);}); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SELLER ve producto propio publicado con hasImage true",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sellerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}",
+            "description": "Solo para la instancia aislada creada por postman/scripts/run.js."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',function(){pm.expect(pm.response.code).to.eql(200);});",
+                  "const b=pm.response.code===204?{}:pm.response.json();",
+                  "if(pm.response.code===200) { pm.test('Seller sees hasImage true after upload',()=>pm.expect(b.hasImage).to.eql(true)); }"
                 ]
               }
             }

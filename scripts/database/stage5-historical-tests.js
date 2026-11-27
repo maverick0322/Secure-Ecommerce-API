@@ -13,7 +13,7 @@ async function main(){let id,root;try{
  id=docker(['run','--detach','--name',name,'--hostname',name,'--publish','127.0.0.1:13307:3306','--tmpfs','/var/lib/mysql:rw','--env','MYSQL_ROOT_PASSWORD','--env','MYSQL_ROOT_HOST=%','mysql:8.4']);
  const detail=JSON.parse(docker(['inspect','--format','{{json .}}',name]));assert.equal(detail.Id,id);assert(detail.Mounts.every(m=>m.Type!=='volume'&&m.Type!=='bind'));
  for(let n=0;n<60;n++){try{root=await mysql.createConnection({host:'127.0.0.1',port:13307,user:'root',password});break;}catch{await new Promise(resolve=>setTimeout(resolve,1000));}}
- assert(root);const [[identity]]=await root.query('SELECT @@hostname AS host,@@server_uuid AS uuid,VERSION() AS version');assert.equal(identity.host,name);assert.match(identity.version,/^8\.0\./);
+ assert(root);const [[identity]]=await root.query('SELECT @@hostname AS host,@@server_uuid AS uuid,VERSION() AS version');assert.equal(identity.host,name);assert.match(identity.version,/^8\.4\./);
  node(['node_modules/jest/bin/jest.js','--runInBand','--runTestsByPath','tests/database/schema.mysql.test.js'],{TEST_MYSQL_URL:`mysql://root:${password}@127.0.0.1:13307`,NODE_ENV:'test'});
  await root.query('CREATE DATABASE secure_ecommerce CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
  await root.query("CREATE USER 'ecommerce_migrator'@'%' IDENTIFIED BY ?",[migrationPassword]);

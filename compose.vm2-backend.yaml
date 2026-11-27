@@ -1,0 +1,185 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecommerce_api
+    restart: unless-stopped
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${SERVER_PORT:-3000}:3000"
+    extra_hosts:
+      - "db.tienda.lan:${IP_VM3:-127.0.0.1}"
+    environment:
+      - DB_HOST=${DOCKER_DB_HOST:-db.tienda.lan}
+      - DB_PORT=${DOCKER_DB_PORT:-3306}
+      - DB_DATABASE=${DB_DATABASE:-secure_ecommerce}
+      - DB_USER=${DB_USER:-ecommerce_app}
+      - DB_PASSWORD_FILE=/run/secrets/db_password
+      - DB_EXPECTED_UUID=${DB_EXPECTED_UUID:-}
+      - DB_SSL=${DB_SSL:-true}
+      - DB_SSL_CA_PATH=/run/secrets/db_ca
+      - SERVER_PORT=${SERVER_PORT:-3000}
+      - SERVER_HOST=0.0.0.0
+      - NODE_ENV=${NODE_ENV:-production}
+      - TRUST_PROXY=${TRUST_PROXY:-false}
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - GMAIL_CLIENT_PATH=/run/secrets/gmail_client
+      - GMAIL_TOKEN_PATH=/run/secrets/gmail_token
+      - GMAIL_SENDER_EMAIL=${GMAIL_SENDER_EMAIL:-}
+      - GMAIL_REDIRECT_URI=http://localhost:3001/oauth2/callback
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET_FILE=/run/secrets/cloudinary_api_secret
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+      - FILES_IN_DB=${FILES_IN_DB:-false}
+      - JWT_RS256_ISSUER=${JWT_RS256_ISSUER:-secure-ecommerce-api/access-v2}
+      - JWT_RS256_AUDIENCE=${JWT_RS256_AUDIENCE:-secure-ecommerce-clients/access-v2}
+      - JWT_RS256_ACTIVE_KID=${JWT_RS256_ACTIVE_KID:-access-v1}
+      - JWT_RS256_PRIVATE_KEY_PATH=/run/secrets/access_private_key
+      - JWT_RS256_PUBLIC_KEYS_PATH=/run/secrets/access_public_manifest
+      - AUTH_CREDENTIAL_VERSION_KEY_PATH=/run/secrets/auth_credential_key
+      - AUTH_REDIS_HOST=redis
+      - AUTH_REDIS_PORT=6379
+      - AUTH_REDIS_TLS=true
+      - AUTH_REDIS_USER=auth_session_app
+      - AUTH_REDIS_NAMESPACE=secure-ecommerce-auth
+      - AUTH_REDIS_PASSWORD_PATH=/run/secrets/redis_app_password
+      - AUTH_REDIS_CA_PATH=/run/secrets/redis_ca
+      - AUTH_REDIS_STATE_PATH=/run/redis-state/state.json
+      - NODE_EXTRA_CA_CERTS=/run/secrets/redis_ca
+    command: ["node", "index.js"]
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: true
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+      - ./log:/usr/src/app/log
+      - type: bind
+        source: ./.secrets/auth/public-keys
+        target: /run/auth/public-keys
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.secrets/redis/state
+        target: /run/redis-state
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    secrets:
+      - db_password
+      - db_ca
+      - jwt_secret
+      - cloudinary_api_secret
+      - redis_app_password
+      - redis_ca
+      - access_private_key
+      - access_public_manifest
+      - auth_credential_key
+      - gmail_client
+      - gmail_token
+    networks:
+      - app_edge
+      - backend_internal
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  redis:
+    image: redis:8.2
+    restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    networks:
+      - backend_internal
+    volumes:
+      - redis_data:/data
+      - type: bind
+        source: ./config/redis/redis.conf
+        target: /usr/local/etc/redis/redis.conf
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    secrets:
+      - redis_acl
+      - redis_health_password
+      - redis_ca
+      - redis_server_cert
+      - redis_server_key
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$(cat /run/secrets/redis_health_password)" redis-cli --tls --cacert /run/secrets/redis_ca -h 127.0.0.1 -p 6379 --user redis_health ping | grep -qx PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  redis_data:
+
+networks:
+  app_edge:
+    driver: bridge
+  backend_internal:
+    driver: bridge
+    internal: true
+
+secrets:
+  db_password:
+    file: ./.secrets/db/app-password
+  db_ca:
+    file: ./.secrets/db/ca.crt
+  jwt_secret:
+    file: ./.secrets/auth/jwt-secret
+  cloudinary_api_secret:
+    file: ./.secrets/cloudinary/api-secret
+  gmail_client:
+    file: ./.secrets/gmail/client.json
+  gmail_token:
+    file: ./.secrets/gmail/token.json
+  access_private_key:
+    file: ./.secrets/auth/access-private.pem
+  access_public_manifest:
+    file: ./.secrets/auth/public-keys.docker.json
+  auth_credential_key:
+    file: ./.secrets/auth/credential-version.key
+  redis_acl:
+    file: ./.secrets/redis/users.acl
+  redis_app_password:
+    file: ./.secrets/redis/app-password
+  redis_health_password:
+    file: ./.secrets/redis/health-password
+  redis_ca:
+    file: ./.secrets/redis/ca.crt
+  redis_server_cert:
+    file: ./.secrets/redis/server.crt
+  redis_server_key:
+    file: ./.secrets/redis/server.key
