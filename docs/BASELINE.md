@@ -406,6 +406,13 @@
     - `checkout_flow_duration` (`cart/items` + `checkout/quote` + `checkout`, `5` iteraciones): `avg 56.6 ms`, `p50 54 ms`, `p95 70 ms`, `max 73 ms` (umbral `< 1500 ms` OK).
     - `login_duration` (`POST /api/auth`, `3` sesiones en `setup()`): `avg 191.76 ms`, `p50 187.56 ms`, `p95 202.93 ms`, `max 204.63 ms` (umbral `< 1500 ms` OK).
     - `login_bruteforce_containment` (`12` intentos inválidos sobre una misma cuenta): `5` respuestas `401` seguidas de `7` respuestas `429` todas con cabecera `Retry-After` presente (`bruteforce_429 = 7`, `bruteforce_retry_after = 7`).
+- **Verificación de controles de seguridad aplicativa (`PEN-01`..`PEN-04`) y auditoría OWASP ZAP (`SCN-02`) en Docker local (`2026-11-27`):**
+  - Pila efímera aislada: `mysql:8.4` + `redis:8.2` TLS (_fail-closed_) + `backendnode` endurecido (`NODE_ENV=production`, `--read-only`, `--cap-drop ALL`) + `frontendnet` (`Production`, `ASP.NET Core 9.0`, `--read-only`).
+  - **`PEN-01` (SQL parametrizado y escape `LIKE`):** `0` errores HTTP `500`; `GET /api/products?s=` con `' OR 1=1 --` (`200`, `0` ítems), `' UNION SELECT 1,2,3--` (`200`, `0` ítems), `%` (`200`, `1` coincidencia literal), `_HD` (`200`, `1`), `\Pro` (`200`, `1`); IDs malformados (`/api/products/1%20OR%201=1`, `/api/orders/invalid-id`) rechazados con `400`.
+  - **`PEN-02` (Escape XSS en Razor y CSP en `frontendnet`):** `/Shopping` (`200`) y `/Shopping/Details/3` (`200`) codifican HTML (`&lt;img src=x onerror=alert(1)&gt;`, `&lt;script&gt;probe()&lt;/script&gt;`), sin contenido sin escapar y con `Content-Security-Policy` (`object-src 'none'`, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` y ausencia de `X-Powered-By`.
+  - **`PEN-03` (CSRF antiforgery y replay de refresh token):** `POST /ShoppingCart/Add` con sesión válida `.frontendnet` sin token o con token alterado responde `400`; tras rotación en `/api/auth/refresh` (`200`), reutilizar el refresh anterior retorna `401` e invalida de inmediato tanto el segundo refresh (`401`) como el JWT activo (`401` en `/api/products`).
+  - **`PEN-04` (Validación de imágenes en 6 capas y cuotas Redis):** `PUT /api/products/1/image` rechaza SVG renombrado a PNG (`400`), texto disfrazado de JPEG (`400`) y carga `> 2 MiB` (`413`); en ráfaga sobre la cuota de vendedor (`6/min`), los envíos 7.º y 8.º retornaron `429` con cabecera `Retry-After`.
+  - **`SCN-02` (`ghcr.io/zaproxy/zaproxy:stable`, `zap-baseline.py`):** `backendnode` (`0` High, `0` Medium, `0` Low, `2` Informational); `frontendnet` (`0` High, `1` Medium por `CSP: style-src unsafe-inline`, `3` Low por cabeceras `Cross-Origin-*` opcionales, `5` Informational).
 - **Pipeline UML fijado:** PlantUML `1.2024.8` (SHA-256 `2e1f42a9879cd25236b5725ca7db25cb9996e8e37a0a1440b2eb559f259c54aa` en `backendnode/docs/generate-diagrams.js:30-32`).
 
 ---
@@ -455,7 +462,7 @@
 | **Cobertura de líneas/ramas en `frontendnet`** | **`NO_VERIFICABLE`** | `frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj` no incluye paquete recolector de cobertura (coverlet). |
 | **Estado remoto del Quality Gate en SonarCloud** | **`NO_VERIFICABLE`** | Requiere acceso autenticado al panel remoto del servicio (los workflows de PR #10 y PR #11 reportaron estado aprobatorio en GitHub). |
 | **Despliegue distribuido en 3 VMs vs. secretos privados (`.env` / `.secrets/`)** | **`PARCIALMENTE VERIFICADO`** | Los manifiestos y scripts de 3 VMs (`frontendnet/compose.vm1-frontend.yaml`, `backendnode/compose.vm2-backend.yaml`, `backendnode/compose.vm3-db.yaml`, `backendnode/scripts/deploy/generate-lan-certs.sh`, `backendnode/scripts/deploy/verify-vm.sh`, `frontendnet/scripts/deploy/verify-vm.sh`) están implementados y probados en red local del equipo; los valores secretos de `.env`/`.secrets/` quedan excluidos y sin exposición documental. |
-| **Pruebas ofensivas restantes (`PEN-01..04`) y escaneos externos (`SCN-01..02` con `Nmap` / OWASP ZAP)** | **`PLANIFICADO` (`NO_VERIFICABLE`)** | Planificadas en el Capítulo 7; aún sin corrida de payloads ofensivos ni escaneo completo externo (`PEN-05` con `k6` ya fue verificado en Docker local). |
+| **Escaneo externo de puertos en 3 VMs (`SCN-01` con `Nmap`)** | **Programado (entorno 3 VMs)** | Requiere ejecutarse desde anfitrión externo sobre las IPs LAN activas de VM 1, VM 2 y VM 3 para documentar bloqueo `ufw` + `DOCKER-USER`; `PEN-01..05` y `SCN-02` (OWASP ZAP) ya se verificaron en Docker local. |
 
 ---
 

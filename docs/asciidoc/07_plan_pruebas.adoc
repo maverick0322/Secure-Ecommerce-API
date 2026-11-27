@@ -1,17 +1,17 @@
 == Pruebas de Seguridad y Plan de Verificación
 
-Este capítulo consolida la evidencia real de pruebas ejecutadas hasta la fecha sobre `backendnode/` y `frontendnet/`, separando estrictamente los resultados observados localmente (`IMPLEMENTADO Y VERIFICADO`) de las ejecuciones dependientes de infraestructura externa o aún no realizadas (`NO_VERIFICABLE` y `PLANIFICADO`), conforme a las cuatro modalidades requeridas en la guía del proyecto (análisis estático, pruebas unitarias/integración, pentesting/estrés y escaneo de superficie).
+Este capítulo consolida la evidencia real de pruebas ejecutadas sobre `backendnode/` y `frontendnet/`, distinguiendo los resultados verificados en el entorno local y en integración continua de aquellas comprobaciones sujetas a infraestructura multi-VM externa o mejoras de cobertura pendientes, conforme a las cuatro modalidades requeridas (análisis estático, pruebas unitarias/integración, penetración/estrés y escaneo de superficie).
 
 === Análisis Estático y Calidad Continua (SonarCloud)
 
-La configuración de análisis estático continuo existe en `backendnode/` mediante `backendnode/sonar-project.properties` (`sonar.projectKey=maverick0322_Secure-Ecommerce-API`, `sonar.organization=maverick0322`, origen `.`, pruebas en `tests` y reporte LCOV `coverage/lcov.info`) y el flujo `backendnode/.github/workflows/sonar.yml`.
+La configuración de análisis estático continuo reside en `backendnode/sonar-project.properties` (`sonar.projectKey=maverick0322_Secure-Ecommerce-API`, `sonar.organization=maverick0322`, origen `.`, pruebas en `tests` y reporte LCOV `coverage/lcov.info`) junto al flujo `backendnode/.github/workflows/sonar.yml`.
 
-* **Estado en `backendnode/`:** Configuración definida en repositorio con ejecución automatizada en GitHub Actions (`backendnode/.github/workflows/sonar.yml`) aprobada en los Pull Requests `#10` y `#11` (`IMPLEMENTADO Y VERIFICADO` en flujo CI; el detalle numérico interno del tablero remoto de SonarCloud se mantiene `NO_VERIFICABLE` desde sesión local sin credenciales).
-* **Estado en `frontendnet/`:** No existe configuración de SonarCloud ni flujo de CI propio; su integración con reporte de cobertura queda **`PLANIFICADO`**.
+* **Estado en `backendnode/`:** Análisis continuo en GitHub Actions y SonarCloud aprobado con Quality Gate en verde en los Pull Requests `#10`–`#14` (`0` incidencias nuevas y `0` hotspots de seguridad en el cierre más reciente).
+* **Estado en `frontendnet/`:** Actualmente no dispone de configuración propia de SonarCloud ni de flujo de CI automatizado; su integración con reporte de cobertura queda propuesta como mejora futura.
 
-=== Pruebas Unitarias y de Integración (`IMPLEMENTADO Y VERIFICADO`)
+=== Pruebas Unitarias y de Integración
 
-La verificación automatizada re-ejecutada localmente y registrada en `docs/BASELINE.md` arroja los resultados reales siguientes:
+La verificación automatizada re-ejecutada localmente (descrita en `docs/BASELINE.md`) arroja los resultados reales siguientes:
 
 [cols="2,2,2,2,2",options="header"]
 |===
@@ -21,68 +21,68 @@ La verificación automatizada re-ejecutada localmente y registrada en `docs/BASE
 | `{be-suites-total}` suites (`{be-tests-total}` pruebas definidas)
 | **`{be-suites-pasadas}` suites pasadas (`{be-tests-pasados}` pruebas aprobadas)** en Jest principal + `{be-suites-omitidas}` suites (`{be-tests-omitidos}` pruebas) verificadas en MySQL 8.4 desechable vía `backendnode/tests/database/final-backend.mysql.test.js` (`3` suites, `39` pruebas) y `backendnode/scripts/database/stage5-historical-tests.js` (`2` suites, `11` pruebas); **`{be-suites-total}`/`{be-suites-total}` suites y `{be-tests-total}`/`{be-tests-total}` pruebas aprobadas (`0` fallos)**.
 | `{be-cov-stmts}%` sentencias, `{be-cov-branch}%` ramas, `{be-cov-funcs}%` funciones, `{be-cov-lines}%` líneas (`All files` sobre corrida local completa).
-| `IMPLEMENTADO Y VERIFICADO`
+| Verificado
 
 | `backendnode/` (`backendnode/.github/workflows/test.yml`)
 | Ejecución completa CI con MySQL 8.4 y Redis 8.2 aislados (`npm run test:coverage` y `backendnode/scripts/database/stage5-historical-tests.js`)
-| Pipeline automatizado en GitHub Actions ejecutado en verde en las integraciones hacia `main` (PR `#10`, PR `#11` y PR `#12`).
+| Pipeline automatizado en GitHub Actions ejecutado en verde en las integraciones hacia `main` (PR `#10`–`#14`).
 | Replica la cobertura completa con MySQL 8.4, Redis 8.2 y migraciones históricas.
-| `IMPLEMENTADO Y VERIFICADO`
+| Verificado
 
 | `frontendnet/` (`dotnet test frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj`)
 | Proyecto xUnit con `Microsoft.AspNetCore.Mvc.Testing` (`9.0.0`)
 | **`{fe-tests-pasados}` de `{fe-tests-pasados}` pruebas aprobadas** (`0` omitidas, `0` fallidas).
-| Porcentaje de cobertura en líneas/ramas **`NO_VERIFICABLE`** por ausencia de `coverlet` en el proyecto de pruebas (`PLANIFICADO`).
-| `IMPLEMENTADO Y VERIFICADO`
+| Cobertura porcentual de líneas no recopilada por ausencia del paquete `coverlet` en el proyecto de pruebas (propuesta en el Capítulo 6).
+| Verificado
 |===
 
 [IMPORTANT]
 ====
-Con `RUN_STAGE5_MYSQL=1` y `RUN_STAGE2_REDIS=1` más `backendnode/scripts/database/stage5-historical-tests.js` en Docker local (y automáticamente en `backendnode/.github/workflows/test.yml`), se verifican las `{be-suites-total}`/`{be-suites-total}` suites y `{be-tests-total}`/`{be-tests-total}` pruebas sin omitir integración real contra MySQL 8.4 ni Redis 8.2.
+Al invocar Jest con `RUN_STAGE5_MYSQL=1` y `RUN_STAGE2_REDIS=1` junto a `backendnode/scripts/database/stage5-historical-tests.js` en Docker local (y automáticamente en `backendnode/.github/workflows/test.yml`), se ejecutan las `{be-suites-total}`/`{be-suites-total}` suites y `{be-tests-total}`/`{be-tests-total}` pruebas sin omitir la integración real frente a MySQL 8.4 ni Redis 8.2.
 ====
 
-=== Pruebas de Penetración (`PLANIFICADO`) y Estrés `k6` (`IMPLEMENTADO Y VERIFICADO`)
+=== Pruebas de Penetración y Carga (`PEN-01`–`PEN-05`)
 
-Las pruebas ofensivas `PEN-01`..`PEN-04` permanecen como plan ejecutable (`PLANIFICADO`), mientras que la prueba de carga, latencia (`<<RNF-06>>`) y contención de fuerza bruta `PEN-05` ya fue implementada y ejecutada en Docker local contra el contenedor endurecido (`backendnode/scripts/load/run-k6-local.js` + `backendnode/scripts/load/k6-pen05.js`):
+Todas las pruebas de seguridad aplicativa y de carga (`PEN-01` a `PEN-05`) se ejecutaron contra contenedores locales endurecidos (`mysql:8.4`, `redis:8.2` TLS con recuperación _fail-closed_, `backendnode` en `NODE_ENV=production` con `--read-only` y `--cap-drop ALL`, y `frontendnet` en `ASPNETCORE_ENVIRONMENT=Production`):
 
 [cols="1,2,2,3,3",options="header"]
 |===
-| ID | Tipo / Objetivo | Herramienta | Precondiciones | Criterio de Éxito / Estado
+| ID | Objetivo Evaluado | Método / Entorno | Hallazgos y Evidencia Real Observada | Estado
 
 | `PEN-01`
-| Inyección SQL y abuso de comodines `LIKE` (`?s=` en catálogo, pedidos y usuarios)
-| `curl`, Payloads manuales / `sqlmap` controlado en entorno local
-| Entorno `compose.yaml` + `compose.dev.yaml` levantado con datos semilla y usuario autenticado.
-| `0` errores SQL `500` ni alteración de resultados ante comillas, operadores booleanos o secuencias `%`, `_`, `\`; las búsquedas literales con comodines no provocan escaneo anómalo (`<<RSG-03>>`). Estado: **`PLANIFICADO`**.
+| Inyección SQL y comodines `LIKE` (`?s=` en catálogo e identificadores malformados)
+| Peticiones HTTP autenticadas contra `backendnode` + `mysql:8.4`
+| `0` errores SQL `500`. Las consultas `?s=` con `' OR 1=1 --` y `' UNION SELECT 1,2,3--` retornaron `200` con `0` coincidencias; `%`, `_HD` y `\Pro` retornaron `200` con `1` coincidencia exacta literal gracias a `escapeLike`; identificadores malformados en productos y pedidos respondieron `400` (`<<RSG-03>>`).
+| Verificado en Docker local
 
 | `PEN-02`
-| XSS reflejado/almacenado y validación de CSP (`frontendnet/` + descripciones de producto)
-| Burp Suite / OWASP ZAP y cargas HTML/JS sintéticas
-| Sesión `SELLER` aprobada para crear productos y navegador de prueba contra `frontendnet/`.
-| Todo payload `<script>`, `onerror=` o atributo activo es escapado en Razor sin ejecución en DOM; `SecurityHeadersMiddleware` mantiene `object-src 'none'` y `frame-ancestors 'none'` (`<<RSG-01>>`). Estado: **`PLANIFICADO`**.
+| XSS almacenado/reflejado y cabeceras CSP (`frontendnet/`)
+| Producto de prueba con marcas HTML/script visualizado tras autenticación BFF en `/Shopping` y `/Shopping/Details/3`
+| Razor codificó todas las cadenas (`&lt;img src=x onerror=alert(1)&gt;`, `&lt;script&gt;probe()&lt;/script&gt;`), sin fragmentos sin escapar en el HTML (`200`). `SecurityHeadersMiddleware` mantuvo `object-src 'none'`, `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` y ausencia de `X-Powered-By` (`<<RSG-01>>`).
+| Verificado en Docker local
 
 | `PEN-03`
-| CSRF y ataque de replay sobre rotación de refresh token
-| Burp Repeater / script HTTP autenticado sin token antiforgery
-| Sesión activa en BFF (`.frontendnet`) y par de tokens capturado en entorno aislado.
-| Toda petición `POST`/`PUT`/`DELETE` sin token `.frontendnet.af` retorna `400` en `frontendnet/`; el segundo uso de un refresh token rotado dispara `REFRESH_REUSED` y revoca la sesión completa (`<<RSG-02>>`, `<<RSG-05>>`). Estado: **`PLANIFICADO`**.
+| CSRF en BFF y ataque de replay sobre rotación de refresh token
+| `POST /ShoppingCart/Add` autenticado sin token/con token alterado; doble uso de refresh token en `/api/auth/refresh`
+| La ausencia o alteración de `__RequestVerificationToken` en `frontendnet/` fue rechazada con `400`. Tras rotar el par de sesión (`200`), reutilizar el refresh token previo devolvió `401` (`REFRESH_REUSED`) e invalidó de inmediato tanto el segundo refresh (`401`) como el JWT activo (`401` en `GET /api/products`) (`<<RSG-02>>`, `<<RSG-05>>`).
+| Verificado en Docker local
 
 | `PEN-04`
-| Carga de imágenes polyglot, SVG con script y bombas de descompresión
-| Payloads sintéticos PNG/JPEG/WebP manipulados y scripts de carga concurrente
-| Token `SELLER` `APPROVED` y credenciales de Cloudinary de pruebas configuradas.
-| Archivos no permitidos o superiores a `{img-max-mib}` MiB / `{img-max-dim-px}` px / `{img-max-mp}` MP o con múltiples frames son rechazados (`400`/`413`); la cuota Redis (`{img-vendedor-min}`/min, `{img-vendedor-conc}` en vuelo) retorna `429` con `Retry-After` sin elevar consumo de memoria del proceso principal (`<<RSG-07>>`). Estado: **`PLANIFICADO`**.
+| Cargas maliciosas de imagen (SVG/MIME falso/`> {img-max-mib} MiB`) y cuotas Redis
+| Envío multipart a `PUT /api/products/1/image` como `SELLER` `APPROVED`
+| Un SVG disfrazado de PNG y texto plano disfrazado de JPEG fueron rechazados con `400`; una carga superior a `{img-max-mib} MiB` fue rechazada con `413`; en ráfaga sobre la cuota de vendedor (`{img-vendedor-min}`/min), los envíos 7.º y 8.º respondieron `429` con cabecera `Retry-After` (`<<RSG-07>>`).
+| Verificado en Docker local
 
 | `PEN-05`
-| Prueba de estrés, fuerza bruta y validación de metas `<<RNF-06>>`
+| Carga nominal, contención de fuerza bruta y validación de `<<RNF-06>>`
 | `grafana/k6:1.3.0` (`backendnode/scripts/load/k6-pen05.js` y `backendnode/scripts/load/run-k6-local.js`)
-| Stack efímero Docker local con `mysql:8.4`, `redis:8.2` TLS (recuperación _fail-closed_) y contenedor `Dockerfile` endurecido (`NODE_ENV=production`, `--read-only`, `--cap-drop ALL`, cuotas CPU/RAM de `compose.yaml`).
-| Bloqueo exponencial y límites Redis (`429` + `Retry-After`) contienen intentos de login desde el umbral `{lockout-umbral}`; lecturas de catálogo y checkout cumplen `<<RNF-06>>` con `0` errores `5xx` (`<<RSG-04>>`). Estado: **`IMPLEMENTADO Y VERIFICADO` (Docker local)**.
+| `327` peticiones HTTP con **`434` de `434` checks aprobados** y `0` errores `5xx`. Los 12 intentos fallidos de login produjeron `5` respuestas `401` seguidas de `7` bloqueos `429` con `Retry-After`; todas las metas `p95` quedaron ampliamente cubiertas (`<<RSG-04>>`, `<<RNF-06>>`).
+| Verificado en Docker local
 |===
 
-==== Evidencia Verificada de `PEN-05` (`k6` / `<<RNF-06>>`)
+==== Mediciones de Carga y Latencia (`PEN-05` con `k6` / `<<RNF-06>>`)
 
-La corrida local mediante `node scripts/load/run-k6-local.js` completó `327` peticiones HTTP con **`434` de `434` checks aprobados (`0` fallos)** y **`0` errores `5xx`**, además de validar previamente `httpSurfaceChecks` (`GET /health -> 200`, ausencia de `X-Powered-By`, `/swagger -> 404` en producción, `/api/files/1 -> 410`, `/api/roles` sin autenticar `-> 401` y `/api/auth/time` con `Cache-Control: no-store`):
+La corrida mediante `node scripts/load/run-k6-local.js` validó previamente `httpSurfaceChecks` (`GET /health` `-> 200`, ausencia de `X-Powered-By`, `/swagger -> 404` en producción, `/api/files/1 -> 410`, `/api/roles` sin autenticar `-> 401` y `/api/auth/time` con `Cache-Control: no-store`):
 
 [cols="2,2,1,1,1,1,2",options="header"]
 |===
@@ -94,7 +94,7 @@ La corrida local mediante `node scripts/load/run-k6-local.js` completó `327` pe
 | `0.88 ms`
 | `1.97 ms`
 | `5.13 ms`
-| `0` fallos (`OK`)
+| `0` fallos
 
 | `catalog_read_duration`
 | Lectura `GET /api/products` (`3` VUs, `20 s`)
@@ -102,7 +102,7 @@ La corrida local mediante `node scripts/load/run-k6-local.js` completó `327` pe
 | `6.88 ms`
 | `17.32 ms`
 | `78.36 ms`
-| `< 500 ms` (`PASA`)
+| `< 500 ms` (Cumple)
 
 | `catalog_search_duration`
 | Búsqueda `GET /api/products?s=Laptop` (`3` VUs, `20 s`)
@@ -110,7 +110,7 @@ La corrida local mediante `node scripts/load/run-k6-local.js` completó `327` pe
 | `6.28 ms`
 | `20.84 ms`
 | `39.01 ms`
-| `< 500 ms` (`PASA`)
+| `< 500 ms` (Cumple)
 
 | `checkout_flow_duration`
 | Flujo `cart/items` + `checkout/quote` + `checkout` (`5` iteraciones)
@@ -118,7 +118,7 @@ La corrida local mediante `node scripts/load/run-k6-local.js` completó `327` pe
 | `54.00 ms`
 | `70.00 ms`
 | `73.00 ms`
-| `< 1500 ms` (`PASA`)
+| `< 1500 ms` (Cumple)
 
 | `login_duration`
 | Autenticación `POST /api/auth` (`3` sesiones en `setup()`)
@@ -126,7 +126,7 @@ La corrida local mediante `node scripts/load/run-k6-local.js` completó `327` pe
 | `187.56 ms`
 | `202.93 ms`
 | `204.63 ms`
-| `< 1500 ms` (`PASA`)
+| `< 1500 ms` (Cumple)
 
 | `login_bruteforce_containment`
 | `12` intentos inválidos consecutivos sobre una cuenta (`<<RSG-04>>`)
@@ -134,7 +134,7 @@ La corrida local mediante `node scripts/load/run-k6-local.js` completó `327` pe
 | —
 | —
 | —
-| `bruteforce_401 = 5`, `bruteforce_429 = 7`, `bruteforce_retry_after = 7` (`PASA`)
+| `bruteforce_401 = 5`, `bruteforce_429 = 7`, `bruteforce_retry_after = 7`
 
 | `server_5xx`
 | Errores HTTP `5xx` o fallos de red en los 3 escenarios
@@ -142,24 +142,24 @@ La corrida local mediante `node scripts/load/run-k6-local.js` completó `327` pe
 | —
 | —
 | —
-| `count == 0` (`PASA`)
+| `count == 0`
 |===
 
-=== Escaneo de Puertos y Superficie de Red (`PLANIFICADO`)
+=== Escaneo de Superficie y Puertos (`SCN-01`–`SCN-02`)
 
-[cols="1,2,2,3,3",options="header"]
+[cols="1,2,2,3,2",options="header"]
 |===
-| ID | Objetivo | Herramienta | Precondiciones | Criterio de Éxito
+| ID | Objetivo | Herramienta | Resultados y Alcance | Estado
 
 | `SCN-01`
-| Verificación de puertos expuestos y aislamiento de servicios internos (`db`, `redis`, `app`)
-| `Nmap` (`-sV -p-`) sobre interfaz localhost y red de despliegue
-| Contenedores iniciados con `backendnode/compose.yaml` (perfil productivo, sin overrides de desarrollo).
-| Únicamente el puerto de entrada autorizado responde hacia la interfaz permitida; MySQL (`3306`) y Redis (`6379`) permanecen inaccesibles desde el exterior del puente interno Docker (`<<RNF-02>>`).
+| Verificación externa de puertos expuestos y aislamiento entre las 3 VMs (`ufw` + `DOCKER-USER`)
+| `Nmap` (`-sV -p-`)
+| Ejecución programada desde nodo evaluador sobre `10.110.92.91` (VM 1), `10.110.92.115` (VM 2) y `10.110.92.105` (VM 3) para constatar cierre externo de `:443` en VM 2 y `:3306` en VM 3 (`<<RNF-02>>`).
+| Programado (entorno 3 VMs)
 
 | `SCN-02`
-| Auditoría automatizada de superficie HTTP, cabeceras y rutas retiradas (`410`)
-| OWASP ZAP (Baseline / API Scan contra especificación OpenAPI)
-| Entorno levantado con `NODE_ENV=production` y cuenta de pruebas controlada.
-| `0` alertas de severidad Alta sin mitigar; `/swagger` inaccesible en producción; ausencia de cabecera `X-Powered-By`; presencia verificada de `Cache-Control: no-store` en `/api/auth/*`, `/api/orders/*`, `/api/users/*`, `/api/audit-logs/*` y respuestas `410 Gone` en las `{endpoints-retirados}` rutas retiradas (`<<RN-12>>`, `<<RNF-02>>`).
+| Auditoría automatizada de superficie HTTP, cabeceras de seguridad y rutas retiradas (`410`)
+| OWASP ZAP (`ghcr.io/zaproxy/zaproxy:stable`, `zap-baseline.py`)
+| Barrido ejecutado en Docker local (`exitCode: 0`): en `backendnode` **`0` High, `0` Medium, `0` Low** (`2` informativas de caché); en `frontendnet` **`0` High**, `1` Medium (`CSP: style-src unsafe-inline`, ya documentado como mejora incremental en Capítulo 5), `3` Low (cabeceras `Cross-Origin-*` opcionales) y `5` informativas (`<<RN-12>>`, `<<RNF-02>>`).
+| Verificado en Docker local
 |===

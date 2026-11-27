@@ -186,13 +186,13 @@ Las `15` amenazas abiertas restantes no representan fallas sin control en los fl
 |===
 | Riesgo | Amenazas Threat Dragon (`TH`) | Mecanismo Verificado | Estado `RSG`
 
-| `<<RSG-01>>` | `TH-035` | Codificación automática Razor, validadores de entrada y `CSP` estricta | Mitigado (verificación `PEN-02` planificada)
-| `<<RSG-02>>` | `TH-002`, `TH-017` | Antiforgery global en BFF, cookies `HttpOnly`/`SameSite=Lax`/`Secure` y `Bearer` en API | Mitigado (verificación `PEN-03` planificada)
-| `<<RSG-03>>` | `TH-003`, `TH-042` | Consultas parametrizadas Sequelize, `escapeLike` y cuenta `ecommerce_app` sin DDL | Mitigado (verificación `PEN-01` planificada)
+| `<<RSG-01>>` | `TH-035` | Codificación automática Razor, validadores de entrada y `CSP` estricta | Mitigado (`PEN-02` verificado)
+| `<<RSG-02>>` | `TH-002`, `TH-017` | Antiforgery global en BFF, cookies `HttpOnly`/`SameSite=Lax`/`Secure` y `Bearer` en API | Mitigado (`PEN-03` verificado)
+| `<<RSG-03>>` | `TH-003`, `TH-042` | Consultas parametrizadas Sequelize, `escapeLike` y cuenta `ecommerce_app` sin DDL | Mitigado (`PEN-01` verificado)
 | `<<RSG-04>>` | `TH-011`, `TH-013`, `TH-018` | Lockout exponencial, `rate-limit` Redis, `createDummyHash()` y OTP HMAC | Mitigado (`PEN-05` verificado con `k6`)
-| `<<RSG-05>>` | `TH-005`, `TH-014`, `TH-016`, `TH-017`, `TH-043` | JWT RS256 (`{jwt-ttl-seg}` s), Redis TLS, rotación single-use + `REFRESH_REUSED` | Mitigado (`RUN_STAGE2_REDIS=1` y `69/69` BFF)
+| `<<RSG-05>>` | `TH-005`, `TH-014`, `TH-016`, `TH-017`, `TH-043` | JWT RS256 (`{jwt-ttl-seg}` s), Redis TLS, rotación single-use + `REFRESH_REUSED` | Mitigado (`RUN_STAGE2_REDIS=1`, `PEN-03` y `69/69` BFF)
 | `<<RSG-06>>` | `TH-020`, `TH-021`, `TH-022`, `TH-025`, `TH-032` | `Authorize` en vivo contra MySQL/Redis y verificación de propiedad en servicios | Mitigado (`91/91` suites locales)
-| `<<RSG-07>>` | `TH-006`, `TH-026`, `TH-027`, `TH-028`, `TH-029`, `TH-045` | Validación en 6 capas, worker Sharp aislado y cuotas distribuidas en Redis | Mitigado (verificación `PEN-04` planificada)
+| `<<RSG-07>>` | `TH-006`, `TH-026`, `TH-027`, `TH-028`, `TH-029`, `TH-045` | Validación en 6 capas, worker Sharp aislado y cuotas distribuidas en Redis | Mitigado (`PEN-04` verificado)
 | `<<RSG-08>>` | `TH-023`, `TH-024`, `TH-030`, `TH-033` | Cotización HMAC (`{quote-ttl-seg}` s), `LOCK.UPDATE` e idempotencia por vendedor | Mitigado (`91/91` suites en `MySQL 8.4`)
 | `<<RSG-09>>` | `TH-034`, `TH-036` | URLs Cloudinary acotadas, borrado de metadatos EXIF con Sharp y `no-store` | Mitigado / `Low` residual público
 | `<<RSG-10>>` | `TH-037` | Credencial de ejemplo deprecada para alta local inicial, retirada en `c8a22f3`/`11c58cc` y sin uso en `ecommerce_app` | Riesgo residual `Low` documentado
