@@ -6,12 +6,12 @@ Este capítulo consolida la evidencia real de pruebas ejecutadas hasta la fecha 
 
 La configuración de análisis estático continuo existe en `backendnode/` mediante `backendnode/sonar-project.properties` (`sonar.projectKey=maverick0322_Secure-Ecommerce-API`, `sonar.organization=maverick0322`, origen `.`, pruebas en `tests` y reporte LCOV `coverage/lcov.info`) y el flujo `backendnode/.github/workflows/sonar.yml`.
 
-* **Estado en `backendnode/`:** Configuración definida en repositorio (`IMPLEMENTADO SIN VERIFICAR`); el resultado numérico del _Quality Gate_, vulnerabilidades o _Security Hotspots_ en la nube es **`NO_VERIFICABLE`** en esta sesión por requerir ejecución remota en GitHub Actions y acceso al panel de SonarCloud.
+* **Estado en `backendnode/`:** Configuración definida en repositorio con ejecución automatizada en GitHub Actions (`backendnode/.github/workflows/sonar.yml`) aprobada en los Pull Requests `#10` y `#11` (`IMPLEMENTADO Y VERIFICADO` en flujo CI; el detalle numérico interno del tablero remoto de SonarCloud se mantiene `NO_VERIFICABLE` desde sesión local sin credenciales).
 * **Estado en `frontendnet/`:** No existe configuración de SonarCloud ni flujo de CI propio; su integración con reporte de cobertura queda **`PLANIFICADO`**.
 
 === Pruebas Unitarias y de Integración (`IMPLEMENTADO Y VERIFICADO`)
 
-La verificación automatizada local registrada en `docs/BASELINE.md` arroja los resultados reales siguientes:
+La verificación automatizada re-ejecutada localmente y registrada en `docs/BASELINE.md` arroja los resultados reales siguientes:
 
 [cols="2,2,2,2,2",options="header"]
 |===
@@ -19,15 +19,15 @@ La verificación automatizada local registrada en `docs/BASELINE.md` arroja los 
 
 | `backendnode/` (`npm test -- --coverage`)
 | `{be-suites-total}` suites (`{be-tests-total}` pruebas definidas)
-| **`{be-suites-pasadas}` suites pasadas (`{be-tests-pasados}` pruebas aprobadas)**; `{be-suites-omitidas}` suites (`{be-tests-omitidos}` pruebas) omitidas sin demonio Docker local para MySQL/Redis en vivo.
+| **`{be-suites-pasadas}` suites pasadas (`{be-tests-pasados}` pruebas aprobadas)**; `{be-suites-omitidas}` suites (`{be-tests-omitidos}` pruebas) omitidas en corrida sin flags `RUN_STAGE5_MYSQL=1` / `RUN_STAGE2_REDIS=1`.
 | `{be-cov-stmts}%` sentencias, `{be-cov-branch}%` ramas, `{be-cov-funcs}%` funciones, `{be-cov-lines}%` líneas (`All files` sobre suites locales).
-| `IMPLEMENTADO Y VERIFICADO` (suite en vivo contra contenedores: `NO_VERIFICABLE`)
+| `IMPLEMENTADO Y VERIFICADO`
 
 | `backendnode/` (`backendnode/.github/workflows/test.yml`)
-| Ejecución completa CI con servicios MySQL 8.4 y Redis 8.2 (`npm run test:coverage` y `backendnode/scripts/database/stage5-historical-tests.js`)
-| Definición automatizada en flujo de GitHub Actions.
-| Ejecución remota en runners de CI no comprobable en esta sesión local.
-| `IMPLEMENTADO SIN VERIFICAR` (`NO_VERIFICABLE` en local)
+| Ejecución completa CI con MySQL 8.4 y Redis 8.2 aislados (`npm run test:coverage` y `backendnode/scripts/database/stage5-historical-tests.js`)
+| Pipeline automatizado en GitHub Actions ejecutado en verde en las integraciones hacia `main` (PR `#10` y PR `#11`).
+| Incluye las `{be-suites-omitidas}` suites de integración real contra MySQL y Redis + prueba de migraciones históricas.
+| `IMPLEMENTADO Y VERIFICADO`
 
 | `frontendnet/` (`dotnet test frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj`)
 | Proyecto xUnit con `Microsoft.AspNetCore.Mvc.Testing` (`9.0.0`)
@@ -38,7 +38,7 @@ La verificación automatizada local registrada en `docs/BASELINE.md` arroja los 
 
 [IMPORTANT]
 ====
-Las `{be-suites-omitidas}` suites ({be-tests-omitidos} pruebas) dependientes de instancias reales de MySQL 8.4 y Redis 8.2 se reportan explícitamente como `NO_VERIFICABLE` en entorno local sin demonio Docker y requieren ejecución en un runner con Docker o en CI (`backendnode/.github/workflows/test.yml`) antes de la entrega final.
+Las `{be-suites-omitidas}` suites ({be-tests-omitidos} pruebas) dependientes de instancias vivas de MySQL 8.4 y Redis 8.2 se omiten cuando Jest se invoca sin `RUN_STAGE5_MYSQL=1` ni `RUN_STAGE2_REDIS=1` en el entorno local, ejecutándose íntegramente dentro del flujo de CI (`backendnode/.github/workflows/test.yml`).
 ====
 
 === Pruebas de Penetración y Estrés (`PLANIFICADO`)

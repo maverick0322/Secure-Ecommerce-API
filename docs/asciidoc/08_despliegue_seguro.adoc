@@ -4,7 +4,7 @@ Este capítulo define la arquitectura física de despliegue en tres máquinas vi
 
 [NOTE]
 ====
-**Estado de trazabilidad:** Los contenedores Docker, la configuración de `mysql:8.4` (`ecommerce_app`, `caching_sha2_password`), Redis 8.2 con TLS y ACL (`backendnode/config/redis/redis.conf`), la validación estricta de arranque (`verifyConnection` en `backendnode/services/database.service.js`), el endpoint `/health` y la cabecera configurable `ForwardedForHeaderName` en `frontendnet/Program.cs` están **IMPLEMENTADOS Y VERIFICADOS** en código fuente. La provisión de las tres máquinas virtuales Ubuntu 24.04.5 LTS, los VirtualHosts de Apache 2 con CA interna, las reglas `ufw` y la automatización externa de respaldos se documentan como configuración **PLANIFICADA** para la demostración en red local del equipo.
+**Estado de trazabilidad:** El despliegue distribuido en tres máquinas virtuales Ubuntu 24.04.5 LTS sobre adaptador puente LAN (`tienda.lan`, `api.tienda.lan`, `db.tienda.lan`) está **IMPLEMENTADO Y VERIFICADO** mediante `frontendnet/compose.vm1-frontend.yaml`, `backendnode/compose.vm2-backend.yaml`, `backendnode/compose.vm3-db.yaml`, `backendnode/scripts/deploy/generate-lan-certs.sh`, `backendnode/scripts/deploy/verify-vm.sh` y `frontendnet/scripts/deploy/verify-vm.sh`, junto con `mysql:8.4` (`ecommerce_app`, `caching_sha2_password`, `DB_SSL=true`), `redis:8.2` TLS/ACL (`backendnode/config/redis/redis.conf`), VirtualHosts Apache 2 TLS 1.3, reglas `ufw` + `DOCKER-USER` y verificación viva extremo a extremo. La rotación periódica automatizada y la ejecución en producción externa con dominio público permanecen como operación continua planificada.
 ====
 
 === Topología Distribuida en Tres Capas y Diagrama `DEP-01`
@@ -20,21 +20,21 @@ image::despliegue.png[Diagrama de despliegue UML 2.5.1,align="center"]
 
 | *VM 1*
 | *tienda.lan* — Capa de Presentación
-| Apache 2 Proxy Inverso + Contenedor `frontendnet` (`net9.0`, Kestrel en `127.0.0.1:5000`)
-| `:80` (redirige a `:443`), `:443` (HTTPS hacia evaluador)
-| Kestrel escucha solo en loopback; único punto de entrada HTTP/HTTPS para el evaluador.
+| Apache 2 Proxy Inverso + Contenedor `frontendnet` (`net9.0`, Kestrel en `127.0.0.1:5000`, `frontendnet/compose.vm1-frontend.yaml`)
+| `:80` (redirige `301` a `:443`), `:443` (TLS 1.3 hacia evaluador)
+| Kestrel escucha solo en loopback; volumen persistente `frontend_dataprotection` bajo `read_only: true`; único punto de entrada HTTP/HTTPS.
 
 | *VM 2*
 | *api.tienda.lan* — Lógica de Negocio y Caché
-| Apache 2 Proxy Inverso + Contenedor `ecommerce_api` (`node:24-alpine`, `:3000`) + Contenedor `redis:8.2` TLS/ACL
+| Apache 2 Proxy Inverso + Contenedor `ecommerce_api` (`node:24-alpine`, `:3000`) + Contenedor `redis:8.2` TLS/ACL (`backendnode/compose.vm2-backend.yaml`)
 | `:443` (HTTPS solo desde IP de VM 1); `:6379` solo en red Docker `backend_internal`
-| Redis no se expone a la LAN; la red `backend_internal` (`internal: true` en `backendnode/compose.yaml`) aísla caché y sesiones.
+| `TRUST_PROXY` explícito (`172.16.0.0/12,<IP_VM1>`); `extra_hosts` hacia *db.tienda.lan*; red `backend_internal` (`internal: true`) aísla caché y sesiones.
 
 | *VM 3*
 | *db.tienda.lan* — Capa de Datos
-| Contenedor `mysql:8.4` (`utf8mb4`, `caching_sha2_password`) + Volumen `mysql_data`
-| `:3306` (TCP con TLS obligatorio solo desde IP de VM 2)
-| `ecommerce_app` restringido por host a la IP fija de VM 2; puerto bloqueado para VM 1 y terceros.
+| Contenedor `mysql:8.4` (`utf8mb4`, `caching_sha2_password`, `DB_SSL=true`, `backendnode/compose.vm3-db.yaml`) + Volumen `mysql_data`
+| `:3306` (`DB_BIND_ADDRESS=<IP_VM3>`, TLS obligatorio solo desde IP de VM 2)
+| `ecommerce_app` restringido por host a la IP de VM 2 con 15 `GRANT`s mínimos; protegido por `ufw` + cadena `DOCKER-USER` (`ESTABLISHED,RELATED`).
 |===
 
 ==== Decisiones Arquitectónicas Justificadas
@@ -49,7 +49,8 @@ Las redes inalámbricas institucionales suelen activar aislamiento entre cliente
 
 1. **Topología de red física:** Cada máquina virtual configura su adaptador de red en modo *Adaptador Puente* (*Bridged Adapter*) conectado a un punto de acceso móvil (*Hotspot*) dedicado del equipo, obteniendo direcciones IP en la misma subred `/24` sin bloqueo entre pares.
 2. **Asignación de direcciones fijas y resolución local:** Las tres VMs fijan IP estática (o reserva DHCP del hotspot) y comparten entradas coherentes en `/etc/hosts` para resolver *tienda.lan* (VM 1), *api.tienda.lan* (VM 2) y *db.tienda.lan* (VM 3).
-3. **Confianza TLS interna del equipo:** Se genera una Autoridad Certificadora (CA) raíz propia del equipo (`team-ca.crt`), firmando certificados de servidor con atributos SAN para *tienda.lan*, *api.tienda.lan* y *db.tienda.lan*. El certificado de la CA se instala en el almacén confiable de Linux (`/usr/local/share/ca-certificates/` mediante `update-ca-certificates`) en VM 1, VM 2 y VM 3, y en el equipo evaluador, de modo que *HttpClient* en `frontendnet` (`ApiBaseUrl: https://api.tienda.lan`) y el cliente MySQL en `backendnode` validen cadenas TLS reales sin deshabilitar la verificación de certificados.
+3. **Confianza TLS interna del equipo:** Mediante `backendnode/scripts/deploy/generate-lan-certs.sh` se genera una Autoridad Certificadora (CA) raíz propia (`team-ca.crt` RSA 3072 bits), firmando certificados de servidor con atributos SAN para *tienda.lan*, *api.tienda.lan* y *db.tienda.lan* y destruyendo posteriormente `team-ca.key`. El certificado de la CA se instala en el almacén confiable de Linux (`/usr/local/share/ca-certificates/` mediante `update-ca-certificates`) en VM 1, VM 2 y VM 3, y en el equipo evaluador, además de montarse `ca-bundle.crt` en `frontendnet/compose.vm1-frontend.yaml` y `team-ca.crt` en `backendnode/config/config.js` (`DB_SSL=true`, `DB_SSL_CA_PATH`). Así se valida TLS 1.3 extremo a extremo sin deshabilitar `rejectUnauthorized`.
+4. **Aislamiento de red, `DOCKER-USER` y mínimo privilegio en MySQL:** En VM 3, además de `ufw`, una unidad `systemd` inserta reglas en `DOCKER-USER` permitiendo primero conexiones ya establecidas (`-m conntrack --ctstate ESTABLISHED,RELATED -j RETURN`) para no descartar respuestas `SYN-ACK` de MySQL, luego conexiones nuevas hacia `:3306` únicamente desde la IP de VM 2 y finalmente `DROP` al resto. Las 13 migraciones se ejecutan en tres etapas desde VM 2 sobre TLS (`20261110000002` -> `migrations/cutover` con `SECURE_ECOMMERCE_CUTOVER_APPROVED=1` -> `20261119000001` y `20261123000001`), tras lo cual `ecommerce_migrator` es eliminado y `ecommerce_app` recibe exactamente los 15 privilegios mínimos verificados por `SHOW GRANTS` (sin `DELETE`, `DROP` ni `ALTER`, `audit_logs` estrictamente *append-only* y `orders` limitado a `UPDATE (status, updatedAt)`).
 
 === Los Cuatro Pilares de Seguridad y Endurecimiento por Capas
 
@@ -94,7 +95,9 @@ En `frontendnet/Program.cs` y `frontendnet/appsettings.json`, `ForwardedForHeade
     ProxyPreserveHost On
     ProxyRequests Off
     RequestHeader set X-Forwarded-Proto "https"
-    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    # En demostración LAN se usa max-age=300 para evitar bloqueos de navegador fuera de demo;
+    # en producción pública ampliar a max-age=31536000; includeSubDomains
+    Header always set Strict-Transport-Security "max-age=300"
 
     ProxyPass / http://127.0.0.1:5000/
     ProxyPassReverse / http://127.0.0.1:5000/
@@ -104,19 +107,12 @@ En `frontendnet/Program.cs` y `frontendnet/appsettings.json`, `ForwardedForHeade
 </VirtualHost>
 ----
 
-Para aplicar la configuración sin errores sintácticos antes de recargar el servicio se valida con:
+Los módulos requeridos y la validación de sintaxis antes de recargar Apache se aplican con `a2enmod ssl proxy proxy_http headers` (más `security-hardening.conf` con `ServerTokens Prod`, `ServerSignature Off` y `TraceEnable Off`), comprobando posteriormente escucha estricta con `ss -tulpn`, redirección `http://tienda.lan/` -> `301` y rechazo `405` frente a `TRACE`, así como los scripts de comprobación automatizada `backendnode/scripts/deploy/verify-vm.sh` y `frontendnet/scripts/deploy/verify-vm.sh`.
 
-[source,bash]
-----
-sudo a2enmod proxy proxy_http ssl headers rewrite
-sudo apache2ctl configtest
-sudo systemctl reload apache2
-sudo ss -tulpn | grep -E ':(443|5000|3000|3306)'
-----
+==== Manejo de Secretos, Recuperación Redis y Proveedores en Demostración
 
-==== Manejo de Secretos y Cloudflare Turnstile en Demostración Local
-
-* **Secretos de ejecución (`/run/secrets/*`):** En VM 2 todos los secretos (`jwt_secret`, `db_password`, `gmail_client`, `gmail_token`, `cloudinary_api_secret`, `redis_password`) residen fuera del código fuente en archivos con permisos restringidos `0400`/`0440` montados en `/run/secrets/` mediante `backendnode/compose.yaml`. Nunca se versionan en Git ni se inyectan como texto claro en imágenes Docker.
+* **Secretos de ejecución (`/run/secrets/*`):** En VM 2 y VM 3 todos los secretos (`jwt_secret`, `db_password`, `db_root_password`, `db_ca`, `db_server_cert`, `db_server_key`, `gmail_client`, `gmail_token`, `cloudinary_api_secret`, `redis_app_password`, `redis_ca`) residen fuera del código fuente con permisos `0600`/`0644` montados en `/run/secrets/` mediante `backendnode/compose.vm2-backend.yaml` y `backendnode/compose.vm3-db.yaml`. Tras cualquier reinicio de VM 2 o de `redis`, la política _fail-closed_ del backend requiere ejecutar `backendnode/scripts/redis/control.js` (`recover --invalidate-sessions`) antes de reiniciar `ecommerce_api`, evitando reutilizar sesiones previas.
+* **Gmail OAuth2 y Cloudinary reales:** El envío OTP con `googleapis` y el almacenamiento de imágenes en Cloudinary se validaron en vivo en VM 2 sobre salida WAN compartida; en aplicaciones Google Cloud en modo _Testing_, el _refresh token_ caduca cada 7 días y se renueva explícitamente fuera de los contenedores con la herramienta de autorización (`gmail:authorize`).
 * **Cloudflare Turnstile en entorno LAN:** `frontendnet/Services/CloudflareTurnstileService.cs` verifica el token contra Cloudflare únicamente cuando `Cloudflare:TurnstileSecretKey` no está vacío. Para la demostración en red local sin dominio público registrado en Cloudflare existen dos modos verificados:
   1. **Modo prueba con validación simulada (requiere salida a internet en VM 1 y navegador):** Configurar las claves dummy oficiales documentadas por Cloudflare (`TurnstileSiteKey = 1x00000000000000000000AA`, que siempre aprueba en widget visible, y `TurnstileSecretKey = 1x0000000000000000000000000000000AA`, que siempre aprueba en `/siteverify`). Funcionan en dominios locales sin autorización previa de hostname en el panel de Cloudflare.
   2. **Modo sin dependencia externa (hotspot aislado sin salida WAN):** Dejar `Cloudflare:TurnstileSiteKey` y `Cloudflare:TurnstileSecretKey` vacíos en `frontendnet/appsettings.json` (o variables de entorno del contenedor), haciendo que `CloudflareTurnstileService` omita la llamada externa sin bloquear el inicio de sesión ni el registro.

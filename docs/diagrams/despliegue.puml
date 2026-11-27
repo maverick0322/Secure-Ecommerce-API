@@ -1,4 +1,4 @@
-' TRACE: backendnode/Dockerfile; backendnode/compose.yaml; backendnode/compose.dev.yaml; backendnode/config/redis/redis.conf; backendnode/index.js; backendnode/services/database.service.js; backendnode/services/redis-tls-config.service.js; frontendnet/Program.cs; frontendnet/appsettings.json; frontendnet/Services/CloudflareTurnstileService.cs
+' TRACE: backendnode/Dockerfile; backendnode/compose.yaml; backendnode/compose.dev.yaml; backendnode/compose.vm2-backend.yaml; backendnode/compose.vm3-db.yaml; backendnode/config/redis/redis.conf; backendnode/index.js; backendnode/services/database.service.js; backendnode/services/redis-tls-config.service.js; backendnode/scripts/deploy/generate-lan-certs.sh; backendnode/scripts/deploy/verify-vm.sh; frontendnet/Dockerfile; frontendnet/compose.vm1-frontend.yaml; frontendnet/Program.cs; frontendnet/appsettings.json; frontendnet/Services/CloudflareTurnstileService.cs; frontendnet/scripts/deploy/verify-vm.sh
 @startuml despliegue
 !include _skin.puml
 top to bottom direction
@@ -9,25 +9,25 @@ title Diagrama de Despliegue UML 2.5.1 — Topología Distribuida en 3 VMs (DEP-
 caption 5 nodos y 12 artefactos (límite: máx. 8 nodos y 12 artefactos · Red Adaptador Puente + Hotspot)
 
 node "Evaluador / Cliente" as N_Client {
-  artifact "Navegador HTTPS\n(HTTP/2, Cookies HttpOnly)" as A_Browser <<frontend>>
+  artifact "Navegador HTTPS\n(HTTP/2, TLS 1.3, Cookies HttpOnly)" as A_Browser <<frontend>>
 }
 
 node "VM 1: Presentación\n(Ubuntu 24.04.5 · tienda.lan)" <<frontend>> as N_VM1 {
-  artifact "Apache 2 Proxy Inverso\nTLS :443 -> 127.0.0.1:5000\nRedir. :80->:443, CA Equipo" as A_Apache1 <<security>>
-  artifact "Contenedor frontendnet\n.NET 9.0 Kestrel :5000\nForwardedForHeaderName" as A_Fe <<frontend>>
+  artifact "Apache 2 Proxy Inverso\nTLS 1.3 :443 -> 127.0.0.1:5000\nRedir. :80->:443, UFW HTTP/S" as A_Apache1 <<security>>
+  artifact "Contenedor frontendnet\n.NET 9.0 Kestrel :5000\nDataProtection-Keys + XFF" as A_Fe <<frontend>>
 }
 
 node "VM 2: Lógica de Negocio\n(Ubuntu 24.04.5 · api.tienda.lan)" <<backend>> as N_VM2 {
-  artifact "Apache 2 Proxy Inverso\nTLS :443 -> 127.0.0.1:3000\nUFW solo desde IP VM 1" as A_Apache2 <<security>>
-  artifact "Contenedor ecommerce_api\nnode:24-alpine :3000\nExpress 4, RS256, Sharp" as A_Be <<backend>>
+  artifact "Apache 2 Proxy Inverso\nTLS 1.3 :443 -> 127.0.0.1:3000\nUFW :443 solo desde IP VM 1" as A_Apache2 <<security>>
+  artifact "Contenedor ecommerce_api\nnode:24-alpine :3000\nTRUST_PROXY + DB_SSL=true" as A_Be <<backend>>
   artifact "Contenedor redis:8.2 (TLS)\nRed privada backend_internal\n:6379 RESP TLS + ACL + AOF" as A_Redis <<cache>>
   artifact "Secretos /run/secrets/*\nJWT RS256, DB, Gmail, Cloud." as A_Secrets <<secret>>
 }
 
 together {
   node "VM 3: Capa de Datos\n(Ubuntu 24.04.5 · db.tienda.lan)" <<database>> as N_VM3 {
-    artifact "Contenedor mysql:8.4\n:3306 require_secure_transport=ON\necommerce_app@IP_VM2" as A_MySql <<database>>
-    artifact "Volumen mysql_data +\nRespaldos cifrados mysqldump" as A_Backup <<database>>
+    artifact "Contenedor mysql:8.4\n:3306 TLS + DOCKER-USER + UFW\necommerce_app@IP_VM2" as A_MySql <<database>>
+    artifact "Volumen mysql_data +\nRespaldos gzip cron" as A_Backup <<database>>
   }
 
   node "Proveedores Externos" <<external>> as N_Ext {

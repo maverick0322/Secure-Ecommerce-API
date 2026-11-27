@@ -4,7 +4,7 @@ Este capítulo presenta la arquitectura visual UML 2.5.1 del sistema siguiendo l
 
 [NOTE]
 ====
-La vista de **Modelado de Amenazas** corresponde al Capítulo 4 (`PENDIENTE`), y el diagrama de **Vista de Despliegue (`DEP-01` / `despliegue.puml`)** permanece marcado como **`PENDIENTE`** junto con el Capítulo 8 hasta definir la infraestructura productiva externa (`NO_VERIFICABLE`).
+La vista de **Modelado de Amenazas** corresponde al Capítulo 4 (`PENDIENTE`), mientras la **Vista de Despliegue (`DEP-01` / `despliegue.puml`)** refleja la arquitectura distribuida en 3 VMs implementada y verificada en el Capítulo 8 (`08_despliegue_seguro.adoc`).
 ====
 
 === Vista de Casos de Uso
@@ -43,11 +43,11 @@ image::estado_pedido.png[Máquina de estados de Order,align="center"]
 .Máquina de estados del vendedor `Seller` (`estado_vendedor.puml`)
 image::estado_vendedor.png[Máquina de estados de Seller,align="center"]
 
-* **Decisiones de seguridad y limitación conocida:** Un vendedor inicia siempre en `PENDING` tras verificar su correo; solo un `ADMIN` puede aprobarlo o rechazarlo (`reviewSeller`) y suspender vendedores activos (`suspendSeller`). En el código vigente, `REJECTED` y `SUSPENDED` son terminales (`[DECISIÓN PENDIENTE: reactivación de vendedor]`).
+* **Decisiones de seguridad y alcance:** Un vendedor inicia siempre en `PENDING` tras verificar su correo; solo un `ADMIN` puede aprobarlo o rechazarlo (`reviewSeller`) y suspender vendedores activos (`suspendSeller`). Como decisión de alcance cerrada, `REJECTED` y `SUSPENDED` se mantienen como estados terminales en la versión actual.
 
 === Modelo de Datos (Conceptual y Lógico MySQL 8.4)
 
-El modelo de datos se divide en dos contextos acotados tanto en vista conceptual (`«entity»`) como en vista lógica/física (`«table»`), conservando los nombres reales exactos de las 14 tablas e identificadores de columna en `camelCase` del esquema MySQL 8.4 (`backendnode/migrations/20261110000001-create-secure-ecommerce-tables.js`).
+El modelo de datos se divide en dos contextos acotados tanto en vista conceptual (`«entity»`) como en vista lógica/física (`«table»`), conservando los nombres reales exactos de las 14 tablas e identificadores de columna en `camelCase` del esquema MySQL 8.4 consolidado en 13 migraciones (`backendnode/migrations/20261110000001-create-secure-ecommerce-tables.js`, `20261119000001-add-categories-normalized-name-unique.js`, `cutover/20261110000003-finalize-secure-ecommerce-schema.js` y `20261123000001-require-products-description-not-null.js`).
 
 .Modelo conceptual — Identidad, Direcciones y Catálogo (`der_conceptual_identidad_catalogo.puml`)
 image::der_conceptual_identidad_catalogo.png[DER conceptual identidad y catálogo,align="center"]

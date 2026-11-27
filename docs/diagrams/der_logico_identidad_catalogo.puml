@@ -1,4 +1,4 @@
-' TRACE: backendnode/migrations/20261110000001-create-secure-ecommerce-tables.js; backendnode/migrations/20261119000001-add-categories-normalized-name-unique.js; backendnode/migrations/cutover/20261110000003-finalize-secure-ecommerce-schema.js; backendnode/models/user.js; backendnode/models/seller.js; backendnode/models/product.js; backendnode/models/category.js; backendnode/models/user-address.js
+' TRACE: backendnode/migrations/20261110000001-create-secure-ecommerce-tables.js; backendnode/migrations/20261119000001-add-categories-normalized-name-unique.js; backendnode/migrations/20261123000001-require-products-description-not-null.js; backendnode/migrations/cutover/20261110000003-finalize-secure-ecommerce-schema.js; backendnode/models/user.js; backendnode/models/seller.js; backendnode/models/product.js; backendnode/models/category.js; backendnode/models/user-address.js
 @startuml der_logico_identidad_catalogo
 !include _skin.puml
 title DER Lógico / Físico MySQL 8.4 — Identidad, Direcciones y Catálogo
@@ -70,7 +70,7 @@ class "products" as TProducts <<table>> {
   --
   + *sellerId : CHAR(36) <<FK>>
   + *title : VARCHAR(255)
-  + description : TEXT
+  + *description : TEXT
   + *price : DECIMAL(12,2)
   + *stock : INT UNSIGNED = 0
   + imagePublicId : VARCHAR(255)

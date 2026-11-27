@@ -12,13 +12,13 @@ PENDING --> REJECTED : reviewSeller()\n[ADMIN; rejectionReason <= 255]\n/ audita
 APPROVED --> SUSPENDED : suspendSeller()\n[ADMIN; reason 1..255]\n/ audita seller.suspended
 
 note right of REJECTED
-  Estado terminal en código actual
-  (DECISIÓN PENDIENTE: reactivación)
+  Estado terminal en el alcance actual
+  (sin flujo de reactivación)
 end note
 
 note right of SUSPENDED
-  Estado terminal en código actual
-  (DECISIÓN PENDIENTE: reactivación)
+  Estado terminal en el alcance actual
+  (sin flujo de reactivación)
 end note
 
 REJECTED --> [*]

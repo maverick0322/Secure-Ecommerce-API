@@ -1,7 +1,7 @@
 # Línea Base Única del Sistema (`BASELINE.md`)
 
-- **Fecha de verificación y ejecución en vivo:** `2026-11-22`
-- **Propósito:** Fuente única de verdad (*Single Source of Truth*) sobre el estado técnico verificable de `backendnode` y `frontendnet` en `main` (con `fix/backend-hardening` integrado mediante el PR #8), para documentación arquitectónica, contrato de API y regeneración de diagramas UML 2.5.1.
+- **Fecha de verificación y ejecución en vivo:** `2026-11-26`
+- **Propósito:** Fuente única de verdad (*Single Source of Truth*) sobre el estado técnico verificable de `backendnode` y `frontendnet` en `main` (`eaf6616` tras PR #10/#11 y `90635a6` tras PR #2/#3), para documentación arquitectónica, contrato de API y diagramas UML 2.5.1.
 - **Generación determinista:** Las secciones 1 a 6 provienen íntegramente de `node docs/generate-inventory.js --update-baseline` sin edición manual. Todo elemento que no pueda comprobarse localmente sin tocar `.env` o `.secrets/` se marca como **`NO_VERIFICABLE`**. **Sin secretos.**
 
 ---
@@ -11,11 +11,11 @@
 
 | Atributo | `backendnode` | `frontendnet` |
 |---|---|---|
-| **Rama activa actual** | `docs/lote-0` (rebasada sobre `main`) | `main` |
-| **Hash completo de `main`** | `f9d459695c9ec52f25a09ba09e09f9dd18d6d732` | `24f0f70e9f720893293ddb0c861712d9eeb00c8c` |
-| **Fecha de `main`** | `2026-11-22 12:53:55 -0600` | `2026-11-19 20:40:03 -0600` |
-| **Autor de `main`** | Erickmel Vázquez | Eugenio |
-| **Mensaje de `main`** | Merge pull request #8 from maverick0322/fix/backend-hardening | chore: merge conflict |
+| **Rama activa actual** | `docs/incremento-1` (rebasada sobre `main`) | `main` |
+| **Hash completo de `main`** | `eaf6616ee52e799035b2802a16185bd76f37af8e` | `90635a6d5725bd35cf66b9499021f2ea00af753f` |
+| **Fecha de `main`** | `2026-11-26 00:57:41 -0600` | `2026-11-26 00:55:30 -0600` |
+| **Autor de `main`** | Erickmel Vázquez | Erickmel Vázquez |
+| **Mensaje de `main`** | Merge pull request #11 from maverick0322/fix/deploy-guide | Merge pull request #3 from Eugene1805/fix/deploy-compose |
 | **Hash completo de `db6e039` (integrado en `main`)** | `db6e039e91e356642ae467e58613d9869cfd8b61` (Merge branch 'main' of https://github.com/maverick0322/Secure-Ecommerce-API into fix/backend-hardening) | N/A |
 
 ## 2. Imágenes de Contenedores y Puertos (`compose.yaml`, `compose.dev.yaml`, `Dockerfile`)
@@ -24,6 +24,9 @@
 |---|---|---|---|
 | `backendnode/compose.dev.yaml` | `db` | *(override en `backendnode/compose.dev.yaml:4`)* | `127.0.0.1:3307:3306` (`backendnode/compose.dev.yaml:6`) |
 | `backendnode/compose.dev.yaml` | `redis` | *(override en `backendnode/compose.dev.yaml:11`)* | `127.0.0.1:6380:6379` (`backendnode/compose.dev.yaml:13`) |
+| `backendnode/compose.vm2-backend.yaml` | `app` | Build local `Dockerfile` (`backendnode/compose.vm2-backend.yaml:2`) | `${APP_BIND_ADDRESS:-127.0.0.1}:${SERVER_PORT:-3000}:3000` (`backendnode/compose.vm2-backend.yaml:9`) |
+| `backendnode/compose.vm2-backend.yaml` | `redis` | `redis:8.2` (`backendnode/compose.vm2-backend.yaml:103`) | Sin puertos publicados al host |
+| `backendnode/compose.vm3-db.yaml` | `db` | `mysql:8.4` (`backendnode/compose.vm3-db.yaml:3`) | `${DB_BIND_ADDRESS:-127.0.0.1}:${DB_PORT:-3306}:3306` (`backendnode/compose.vm3-db.yaml:7`) |
 | `backendnode/compose.yaml` | `db` | `mysql:8.4` (`backendnode/compose.yaml:3`) | Sin puertos publicados al host |
 | `backendnode/compose.yaml` | `app` | Build local `Dockerfile` (`backendnode/compose.yaml:44`) | `${APP_BIND_ADDRESS:-127.0.0.1}:${SERVER_PORT:-3000}:3000` (`backendnode/compose.yaml:51`) |
 | `backendnode/compose.yaml` | `redis` | `redis:8.2` (`backendnode/compose.yaml:144`) | Sin puertos publicados al host |
@@ -68,7 +71,7 @@
 
 ## 4. Migraciones y Seeders de `backendnode`
 
-- **Migraciones ejecutables (`backendnode/migrations/` + `backendnode/migrations/cutover/`):** **12**
+- **Migraciones ejecutables (`backendnode/migrations/` + `backendnode/migrations/cutover/`):** **13**
   - `backendnode/migrations/20240101000001-create-archivo.js`
   - `backendnode/migrations/20240101000002-create-rol.js`
   - `backendnode/migrations/20240101000003-create-categoria.js`
@@ -80,6 +83,7 @@
   - `backendnode/migrations/20261110000001-create-secure-ecommerce-tables.js`
   - `backendnode/migrations/20261110000002-prepare-existing-ecommerce-tables.js`
   - `backendnode/migrations/20261119000001-add-categories-normalized-name-unique.js`
+  - `backendnode/migrations/20261123000001-require-products-description-not-null.js`
   - `backendnode/migrations/cutover/20261110000003-finalize-secure-ecommerce-schema.js`
 - **Módulos auxiliares bajo `backendnode/migrations/support/` (no son migraciones):** **1**
   - `backendnode/migrations/support/secure-ecommerce.js`
@@ -340,7 +344,7 @@
 |---|---|
 | `frontendnet/FrontendNet.Tests/Integration/AuthAndAccountFlowTests.cs` | `AuthAndAccountFlowTests` |
 | `frontendnet/FrontendNet.Tests/Integration/BuyerFlowsTests.cs` | `BuyerFlowsTests` |
-| `frontendnet/FrontendNet.Tests/Integration/SecurityAndHeadersTests.cs` | `SecurityAndHeadersTests` |
+| `frontendnet/FrontendNet.Tests/Integration/SecurityAndHeadersTests.cs` | `SecurityAndHeadersTests`, `CaptureHeaderHandler` |
 | `frontendnet/FrontendNet.Tests/Integration/SellerAndAdminFlowsTests.cs` | `SellerAndAdminFlowsTests` |
 | `frontendnet/FrontendNet.Tests/Support/FakeBackendHandler.cs` | `FakeBackendHandler` |
 | `frontendnet/FrontendNet.Tests/Support/FakeBackendState.cs` | `RecordedRequest`, `FakeUserRecord`, `FakeSessionRecord`, `FakePendingOtp`, `FakeQuoteRecord`, `FakeBackendState` |
@@ -382,14 +386,14 @@
 
 ---
 
-## 9. Resultados de Pruebas y Cobertura Re-ejecutados (`2026-11-22`)
+## 9. Resultados de Pruebas y Cobertura Re-ejecutados (`2026-11-26`)
 
 | Repositorio | Comando Ejecutado | Suites | Tests | Fallos | Tiempo | Cobertura Global |
 |---|---|---:|---:|---:|---:|---|
-| **`backendnode`** (`f9d4596`) | `npm test -- --coverage` | 90 (`82 passed`, `8 skipped`) | 1,145 (`1,092 passed`, `53 skipped`) | 0 | `79.732 s` | `94.82 % Stmts`, `90.47 % Branch`, `96.22 % Funcs`, `97.98 % Lines` |
-| **`frontendnet`** (`24f0f70`) | `dotnet test frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj` | 9 clases (`9 passed`) | 65 (`65 passed`, `0 skipped`) | 0 | `1.5003 s` | **`NO_VERIFICABLE`** (sin recolector de cobertura NuGet) |
+| **`backendnode`** (`eaf6616`) | `npm test -- --coverage` | 91 (`83 passed`, `8 skipped`) | 1,151 (`1,098 passed`, `53 skipped`) | 0 | `246.385 s` | `94.89 % Stmts`, `90.43 % Branch`, `96.24 % Funcs`, `98 % Lines` |
+| **`frontendnet`** (`90635a6`) | `dotnet test frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj` | 9 clases (`9 passed`) | 69 (`69 passed`, `0 skipped`) | 0 | `3 s` | **`NO_VERIFICABLE`** (sin recolector de cobertura NuGet) |
 
-- **Desglose de cobertura `backendnode` (`2026-11-22`):** `backendnode/index.js` (`88.65 % Stmts`, `90.21 % Lines`), `backendnode/config` (`100 %`), `backendnode/controllers` (`94.48 % Stmts`, `96.81 % Lines`), `backendnode/middlewares` (`93.89 % Stmts`, `98.18 % Lines`), `backendnode/models` (`97.16 % Stmts`, `98.03 % Lines`), `backendnode/routes` (`100 %`), `backendnode/services` (`94.70 % Stmts`, `98.27 % Lines`), `backendnode/validators` (`100 %`).
+- **Desglose de cobertura `backendnode` (`2026-11-26`):** `backendnode/index.js` (`88.65 % Stmts`, `90.21 % Lines`), `backendnode/config` (`96.42 % Stmts`, `100 % Lines`), `backendnode/controllers` (`94.58 % Stmts`, `96.49 % Lines`), `backendnode/middlewares` (`93.89 % Stmts`, `98.18 % Lines`), `backendnode/models` (`97.16 % Stmts`, `98.03 % Lines`), `backendnode/routes` (`100 %`), `backendnode/services` (`94.79 % Stmts`, `98.33 % Lines`), `backendnode/validators` (`100 %`).
 - **Pipeline UML fijado:** PlantUML `1.2024.8` (SHA-256 `2e1f42a9879cd25236b5725ca7db25cb9996e8e37a0a1440b2eb559f259c54aa` en `backendnode/docs/generate-diagrams.js:30-32`).
 
 ---
@@ -426,6 +430,9 @@
 | **Vendedores (`Seller`) y Cuentas (`User`) — Estados y transiciones** | `Seller.status`: `PENDING`, `APPROVED`, `REJECTED`, `SUSPENDED` (`PENDING -> APPROVED \| REJECTED` vía `reviewSeller`; `APPROVED -> SUSPENDED` vía `suspendSeller`). `User.status`: `ACTIVE`, `SUSPENDED`, `DISABLED` | `backendnode/models/seller.js:7`, `backendnode/models/user.js:20`, `backendnode/services/accounts.service.js:123-143`, `backendnode/services/accounts.service.js:156-173`, `backendnode/services/accounts.service.js:189` | Sin variable de entorno |
 | **Valores por defecto de `CORS` y `TRUST_PROXY`** | `CORS`: deny-all (`allowedOrigins = []`, rechaza `*`); `TRUST_PROXY`: `false` (rechaza `true` o `*`, solo IPs/CIDRs explícitos) | `backendnode/index.js:14-37`, `backendnode/index.js:54`, `backendnode/index.js:87-107` | `CORS_ORIGIN`, `TRUST_PROXY` |
 | **Frontend (`frontendnet`) — Cookies y límites de sesión** | Cookie `.frontendnet` (`HttpOnly`, `SameSite=Lax`, `SecurePolicy=Always` fuera de Development, `SlidingExpiration=true`, inactividad `30 min`, tope absoluto `8 h` vía `AbsoluteExpirationClaimType = "session_abs_exp"`, `ProactiveRefreshWindow = 30 s`, `DefaultAbsoluteSessionDuration = 8 h`); cookies `.frontendnet.af` y `.frontendnet.tempdata` | `frontendnet/Program.cs:20-36`, `frontendnet/Program.cs:78-105`, `frontendnet/Services/SessionTokenManager.cs:16-20` | `Security:RequireHttps` (`frontendnet/appsettings.json`) |
+| **Descripción obligatoria y visibilidad de borradores** | `products.description` `NOT NULL` (`validate: { notEmpty: true }`); borradores sin `imagePublicId` visibles solo al `SELLER` propietario (`hasImage: false`) y ocultos a `BUYER`/`ADMIN` | `backendnode/models/product.js:8`, `backendnode/migrations/20261123000001-require-products-description-not-null.js:15-48`, `backendnode/services/catalog.service.js:200-212`, `backendnode/controllers/products.controller.js:6-13` | Sin variable de entorno |
+| **MySQL TLS y verificación de CA** | `buildDialectOptions` exige `rejectUnauthorized: true` con `DB_SSL=true` y valida bloques PEM vía `validateCaBundle` (`DB_SSL_CA_PATH`) | `backendnode/config/config.js:10-35` | `DB_SSL`, `DB_SSL_CA_PATH`, `TEST_DB_SSL`, `TEST_DB_SSL_CA_PATH` |
+| **Proxy frontend y llaves DataProtection** | `Security:ForwardedForHeaderName` configurable (`X-Forwarded-For` por defecto) y volumen `frontend_dataprotection` en `/home/app/.aspnet/DataProtection-Keys` bajo `read_only: true` | `frontendnet/Program.cs:49-67`, `frontendnet/Dockerfile:22-23`, `frontendnet/compose.vm1-frontend.yaml:30` | `SECURITY_FORWARDED_FOR_HEADER_NAME`, `TRUSTED_PROXY_CIDR_0`, `TRUSTED_PROXY_CIDR_1` |
 
 ---
 
@@ -434,9 +441,10 @@
 | Ítem | Clasificación | Motivo Técnico |
 |---|---|---|
 | **Cobertura de líneas/ramas en `frontendnet`** | **`NO_VERIFICABLE`** | `frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj` no incluye paquete recolector de cobertura (coverlet). |
-| **Ejecución en vivo de las 8 suites (`53 tests`) omitidas en `backendnode`** | **`NO_VERIFICABLE`** | El motor Linux de Docker Desktop no está iniciado en el host local durante la corrida. |
-| **Estado remoto del Quality Gate en SonarCloud** | **`NO_VERIFICABLE`** | Requiere acceso autenticado al servicio remoto. |
-| **Infraestructura productiva externa y valores de `.env` / `.secrets/`** | **`NO_VERIFICABLE`** | Prohibido leer/tocar `.env` y `.secrets/`; el repo solo define `compose.yaml` y `compose.dev.yaml`. |
+| **Ejecución local en vivo de las 8 suites (`53 tests`) omitidas en `backendnode`** | **`NO_VERIFICABLE`** | Requieren instancias dedicadas de MySQL/Redis de prueba (`RUN_STAGE5_MYSQL=1`, `RUN_STAGE2_REDIS=1`); en CI (`backendnode/.github/workflows/test.yml`) corren automáticamente en GitHub Actions. |
+| **Estado remoto del Quality Gate en SonarCloud** | **`NO_VERIFICABLE`** | Requiere acceso autenticado al panel remoto del servicio (los workflows de PR #10 y PR #11 reportaron estado aprobatorio en GitHub). |
+| **Despliegue distribuido en 3 VMs vs. secretos privados (`.env` / `.secrets/`)** | **`PARCIALMENTE VERIFICADO`** | Los manifiestos y scripts de 3 VMs (`frontendnet/compose.vm1-frontend.yaml`, `backendnode/compose.vm2-backend.yaml`, `backendnode/compose.vm3-db.yaml`, `backendnode/scripts/deploy/generate-lan-certs.sh`, `backendnode/scripts/deploy/verify-vm.sh`, `frontendnet/scripts/deploy/verify-vm.sh`) están implementados y probados en red local del equipo; los valores secretos de `.env`/`.secrets/` quedan excluidos y sin exposición documental. |
+| **Pruebas formales de pentesting (`OWASP ZAP`, `Nmap`) y estrés (`k6`)** | **`PLANIFICADO` (`NO_VERIFICABLE`)** | Planificadas en el Capítulo 7; aún sin corrida formal de carga ni escaneo completo. |
 
 ---
 
