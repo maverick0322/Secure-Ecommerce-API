@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
 
-const BASE_URL = __ENV.BASE_URL || 'http://k6-pen05-api:3000';
+const BASE_URL = __ENV.BASE_URL;
 const BUYER_EMAIL = __ENV.BUYER_EMAIL;
 const BUYER_PASSWORD = __ENV.BUYER_PASSWORD;
 const PRODUCT_ID = Number(__ENV.PRODUCT_ID || 1);
@@ -66,7 +66,7 @@ function recordServerError(res) {
 }
 
 export function setup() {
-  if (!BUYER_EMAIL || !BUYER_PASSWORD || !LOCKOUT_EMAIL || !LOCKOUT_PASSWORD) {
+  if (!BASE_URL || !BUYER_EMAIL || !BUYER_PASSWORD || !LOCKOUT_EMAIL || !LOCKOUT_PASSWORD) {
     throw new Error('Missing required k6 __ENV test account parameters.');
   }
 
