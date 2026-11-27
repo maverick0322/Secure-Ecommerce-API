@@ -19,6 +19,8 @@ include::_hechos.adoc[]
 
 * **Experiencia Educativa:** Programación Segura
 * **Institución:** Facultad de Estadística e Informática — Universidad Veracruzana
+* **Docente:** Mtro. Guillermo Humberto Vera Amaro
+* **Equipo:** Equipo 3 — Erickmel Vázquez López, Eugenio Salvador González Sánchez, Irene Paz González
 * **Proyecto:** Plataforma de Comercio Electrónico Segura (`backendnode` + `frontendnet`)
 * **Tecnologías Base:** Node.js 24 LTS, Express 4, Sequelize 6, MySQL 8.4, Redis 8.2, ASP.NET Core 9.0 MVC (`net9.0`), Docker
 

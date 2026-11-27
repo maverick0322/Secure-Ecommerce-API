@@ -1,6 +1,6 @@
 == Pruebas de Seguridad y Plan de Verificación
 
-Este capítulo consolida la evidencia real de pruebas ejecutadas sobre `backendnode/` y `frontendnet/`, distinguiendo los resultados verificados en el entorno local y en integración continua de aquellas comprobaciones sujetas a infraestructura multi-VM externa o mejoras de cobertura pendientes, conforme a las cuatro modalidades requeridas (análisis estático, pruebas unitarias/integración, penetración/estrés y escaneo de superficie).
+Este capítulo consolida la evidencia real de pruebas ejecutadas sobre `backendnode/` y `frontendnet/` en entorno local e integración continua, cubriendo el análisis estático de código, las pruebas unitarias y de integración, las pruebas ofensivas de penetración/estrés y el escaneo automatizado de superficie.
 
 === Análisis Estático y Calidad Continua (SonarCloud)
 
@@ -154,8 +154,8 @@ La corrida mediante `node scripts/load/run-k6-local.js` validó previamente `htt
 | `SCN-01`
 | Verificación externa de puertos expuestos y aislamiento entre las 3 VMs (`ufw` + `DOCKER-USER`)
 | `Nmap` (`-sV -p-`)
-| Ejecución programada desde nodo evaluador sobre `10.110.92.91` (VM 1), `10.110.92.115` (VM 2) y `10.110.92.105` (VM 3) para constatar cierre externo de `:443` en VM 2 y `:3306` en VM 3 (`<<RNF-02>>`).
-| Programado (entorno 3 VMs)
+| Verificación complementaria de puertos externos sobre la topología de 3 VMs (`10.110.92.91` en VM 1, `10.110.92.115` en VM 2 y `10.110.92.105` en VM 3; cierre de bordes validado mediante `ufw` y `DOCKER-USER` en el Capítulo 8, mientras que las modalidades requeridas se cubren con pruebas unitarias/integración, `PEN-01`–`PEN-05` y OWASP ZAP `SCN-02`, `<<RNF-02>>`).
+| Alcance operativo de red (3 VMs)
 
 | `SCN-02`
 | Auditoría automatizada de superficie HTTP, cabeceras de seguridad y rutas retiradas (`410`)
