@@ -1,0 +1,118 @@
+' TRACE: backendnode/controllers/addresses.controller.js; backendnode/controllers/cart.controller.js; backendnode/controllers/orders.controller.js; backendnode/controllers/audit-logs.controller.js; backendnode/services/addresses.service.js; backendnode/services/cart.service.js; backendnode/services/orders.service.js; backendnode/services/checkout-quote.service.js; backendnode/services/audit.service.js; backendnode/validators/orders.js; backendnode/models/user-address.js; backendnode/models/cart.js; backendnode/models/cart-item.js; backendnode/models/order.js; backendnode/models/order-item.js; backendnode/models/order-status-history.js; backendnode/models/audit-log.js
+@startuml clases_backend_carrito_pedidos_auditoria
+!include _skin.puml
+title Clases Backend — Contexto Direcciones, Carrito, Checkout, Pedidos y Auditoría
+caption 15 clases reales <= 15 (máx. 6 atrib. y 6 oper. por clase)
+
+class AddressesController <<boundary>> {
+  + list(req, res) : Promise<void>
+  + create(req, res) : Promise<void>
+  + update(req, res) : Promise<void>
+  + remove(req, res) : Promise<void>
+}
+
+class CartController <<boundary>> {
+  + get(req, res) : Promise<void>
+  + add(req, res) : Promise<void>
+  + update(req, res) : Promise<void>
+  + remove(req, res) : Promise<void>
+}
+
+class OrdersController <<boundary>> {
+  + quote(req, res) : Promise<void>
+  + confirm(req, res) : Promise<void>
+  + list(req, res) : Promise<void>
+  + get(req, res) : Promise<void>
+  + transition(req, res) : Promise<void>
+}
+
+class AuditLogsController <<boundary>> {
+  + getAll(req, res) : Promise<void>
+}
+
+class AddressesService <<control>> {
+  + list(buyerId) : Promise<UserAddress[]>
+  + create(buyerId, input, ctx) : Promise<UserAddress>
+  + update(buyerId, id, input, ctx) : Promise<void>
+  + remove(buyerId, id, ctx) : Promise<void>
+}
+
+class CartService <<control>> {
+  + get(buyerId, ctx) : Promise<object>
+  + put(buyerId, pid, qty, add, ctx) : Promise<object>
+  + remove(buyerId, pid, ctx) : Promise<void>
+}
+
+class OrdersService <<control>> {
+  + quote(account, input) : Promise<object>
+  + confirm(account, input, ip) : Promise<object>
+  + list(account) : Promise<Order[]>
+  + get(account, id) : Promise<Order>
+  + transition(account, id, input, ip) : Promise<Order>
+}
+
+class CheckoutQuoteService <<control>> {
+  + sign(payload) : string
+  + verify(token) : object
+}
+
+class AuditService <<control>> {
+  + write(entry, options) : Promise<AuditLog>
+  + business(actorId, action, type, id, tx, ctx) : Promise<void>
+  + list(query) : Promise<AuditLog[]>
+}
+
+class UserAddress <<entity>> {
+  + id : bigint
+  + recipientName : string
+  + street : string
+  + postalCode : string
+  + isDefault : boolean
+}
+
+class Cart <<entity>> {
+  + id : bigint
+  + buyerId : UUID
+}
+
+class CartItem <<entity>> {
+  + id : bigint
+  + productId : int
+  + quantity : uint
+}
+
+class Order <<entity>> {
+  + id : bigint
+  + checkoutId : UUID
+  + status : OrderStatus
+  + total : decimal
+}
+
+class OrderItem <<entity>> {
+  + id : bigint
+  + productTitle : string
+  + quantity : uint
+  + unitPrice : decimal
+}
+
+class AuditLog <<entity>> {
+  + id : int
+  + actorUserId : UUID
+  + action : string
+  + outcome : string
+  + occurredAt : Date
+}
+
+AddressesController ..> AddressesService
+AddressesService ..> UserAddress
+CartController ..> CartService
+CartService ..> Cart
+Cart "1" *-- "0..100" CartItem
+OrdersController ..> OrdersService
+OrdersService ..> CheckoutQuoteService
+OrdersService ..> Order
+OrdersService ..> AuditService
+Order "1" *-- "1..*" OrderItem
+AuditLogsController ..> AuditService
+AuditService ..> AuditLog
+@enduml

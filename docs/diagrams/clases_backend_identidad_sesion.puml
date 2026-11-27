@@ -1,0 +1,118 @@
+' TRACE: backendnode/controllers/auth.controller.js; backendnode/controllers/personal-account.controller.js; backendnode/controllers/users.controller.js; backendnode/middlewares/auth.middleware.js; backendnode/middlewares/auth-rate-limit.middleware.js; backendnode/services/authentication.service.js; backendnode/services/auth-session.service.js; backendnode/services/rs256-access-token.service.js; backendnode/services/password-hash.service.js; backendnode/services/password-policy.service.js; backendnode/services/accounts.service.js; backendnode/models/user.js; backendnode/models/admin.js; backendnode/models/buyer.js; backendnode/models/seller.js
+@startuml clases_backend_identidad_sesion
+!include _skin.puml
+title Clases Backend — Contexto Identidad, Autenticación y Sesiones
+caption 15 clases reales <= 15 (máx. 6 atrib. y 6 oper. por clase)
+
+class AuthController <<boundary>> {
+  + login(req, res) : Promise<void>
+  + refresh(req, res) : Promise<void>
+  + logout(req, res) : Promise<void>
+  + time(req, res) : void
+  + requestRegistrationCode(req, res) : Promise<void>
+  + register(req, res) : Promise<void>
+}
+
+class PersonalAccountController <<boundary>> {
+  + forgot(req, res) : Promise<void>
+  + reset(req, res) : Promise<void>
+  + profile(req, res) : Promise<void>
+  + updateProfile(req, res) : Promise<void>
+  + changePassword(req, res) : Promise<void>
+}
+
+class UsersController <<boundary>> {
+  + getAll(req, res) : Promise<void>
+  + get(req, res) : Promise<void>
+  + update(req, res) : Promise<void>
+  + remove(req, res) : Promise<void>
+  + reviewSeller(req, res) : Promise<void>
+  + suspendSeller(req, res) : Promise<void>
+}
+
+class AuthMiddleware <<control>> {
+  + authorize(profiles, options) : Middleware
+}
+
+class AuthRateLimitMiddleware <<control>> {
+  + createAuthLimiters() : object
+  + normalizeEmailKey(req) : string
+}
+
+class AuthenticationService <<control>> {
+  + login(body, context) : Promise<object>
+  + refresh(body, context) : Promise<object>
+  + logout(account, token, context) : Promise<void>
+}
+
+class AuthSessionService <<control>> {
+  - {static} IDLE_MS : int = 1800000
+  - {static} ABSOLUTE_MS : int = 28800000
+  + create(input) : Promise<object>
+  + rotate(input) : Promise<object>
+  + check(input) : Promise<object>
+  + revoke(input) : Promise<object>
+  + revokeAll(input) : Promise<void>
+}
+
+class Rs256AccessTokenService <<control>> {
+  + {static} LIFETIME_SECONDS : int = 300
+  + sign(input) : string
+  + verify(token) : object
+}
+
+class PasswordHashService <<control>> {
+  + hash(password) : Promise<string>
+  + verify(password, encoded) : Promise<boolean>
+  + createDummyHash() : string
+}
+
+class PasswordPolicyService <<control>> {
+  + {static} MIN_CHARACTERS : int = 8
+  + {static} MAX_CHARACTERS : int = 128
+  + {static} MAX_BYTES : int = 512
+  + acceptable(password) : boolean
+}
+
+class AccountsService <<control>> {
+  + createVerifiedRegistration(data, ctx) : Promise<object>
+  + reviewSeller(actorId, userId, status, reason, ip) : Promise<object>
+  + suspendSeller(actorId, userId, reason, ctx) : Promise<object>
+}
+
+class User <<entity>> {
+  + id : UUID
+  + name : string
+  + email : string
+  + status : UserStatus
+}
+
+class Admin <<entity>> {
+  + userId : UUID
+}
+
+class Buyer <<entity>> {
+  + userId : UUID
+}
+
+class Seller <<entity>> {
+  + userId : UUID
+  + storeName : string
+  + status : SellerStatus
+}
+
+AuthController ..> AuthenticationService
+AuthController ..> AuthRateLimitMiddleware
+PersonalAccountController ..> AccountsService
+UsersController ..> AccountsService
+AuthMiddleware ..> AuthSessionService
+AuthMiddleware ..> Rs256AccessTokenService
+AuthenticationService ..> AuthSessionService
+AuthenticationService ..> Rs256AccessTokenService
+AuthenticationService ..> PasswordHashService
+AccountsService ..> PasswordPolicyService
+AccountsService ..> User
+User "1" -- "0..1" Admin
+User "1" -- "0..1" Buyer
+User "1" -- "0..1" Seller
+@enduml

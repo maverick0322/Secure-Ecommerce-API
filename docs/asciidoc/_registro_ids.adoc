@@ -1,0 +1,109 @@
+// =============================================================================
+// _registro_ids.adoc — Registro único de identificadores y matriz RF <-> CU
+// Cada identificador CU-*, RF-*, RN-*, RNF-* y RSG-* se define UNA sola vez
+// en este archivo mediante su ancla AsciiDoc [[ID]].
+// =============================================================================
+
+[appendix]
+== Registro Único de Identificadores y Trazabilidad
+
+=== Catálogo de Casos de Uso (`CU`)
+
+[cols="1,3,2,2,2",options="header"]
+|===
+| ID | Caso de Uso | Actor Principal | Requisitos Enlazados (`RF`) | Estado
+| [[CU-01]]`CU-01` | Registrar cuenta de comprador o vendedor con verificación OTP | Visitante | <<RF-01>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-02]]`CU-02` | Iniciar sesión con credenciales y protección anti-fuerza bruta | Visitante | <<RF-02>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-03]]`CU-03` | Renovar sesión mediante rotación de refresh token | Usuario Autenticado | <<RF-03>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-04]]`CU-04` | Cerrar sesión e invalidar sesión distribuida | Usuario Autenticado | <<RF-04>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-05]]`CU-05` | Recuperar y restablecer contraseña olvidada vía OTP | Visitante | <<RF-05>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-06]]`CU-06` | Consultar y actualizar perfil propio y contraseña actual | Usuario Autenticado | <<RF-06>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-07]]`CU-07` | Explorar catálogo autenticado y buscar productos por título | Comprador | <<RF-07>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-08]]`CU-08` | Administrar libreta de direcciones de envío | Comprador | <<RF-08>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-09]]`CU-09` | Gestionar carrito de compras multi-vendedor | Comprador | <<RF-09>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-10]]`CU-10` | Cotizar checkout con firma HMAC y confirmar pedidos | Comprador | <<RF-10>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-11]]`CU-11` | Consultar pedidos propios y cancelar pedido pendiente | Comprador | <<RF-11>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-12]]`CU-12` | Publicar, editar y eliminar productos propios | Vendedor | <<RF-12>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-13]]`CU-13` | Subir y eliminar imagen de producto en Cloudinary | Vendedor | <<RF-13>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-14]]`CU-14` | Gestionar pedidos asignados y transiciones de entrega | Vendedor | <<RF-14>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-15]]`CU-15` | Administrar categorías del catálogo | Administrador | <<RF-15>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-16]]`CU-16` | Revisar solicitudes de vendedor y suspender vendedores aprobados | Administrador | <<RF-16>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-17]]`CU-17` | Administrar cuentas de usuario y supervisar pedidos globales | Administrador | <<RF-17>> | `IMPLEMENTADO Y VERIFICADO`
+| [[CU-18]]`CU-18` | Consultar bitácora inmutable de auditoría | Administrador | <<RF-18>> | `IMPLEMENTADO Y VERIFICADO`
+|===
+
+=== Catálogo de Requisitos Funcionales (`RF`)
+
+[cols="1,4,2,2",options="header"]
+|===
+| ID | Requisito Funcional | Casos de Uso Enlazados (`CU`) | Estado
+| [[RF-01]]`RF-01` | Registro de cuentas `BUYER` y `SELLER` en dos fases con código OTP de `{otp-digitos}` dígitos y notificación por Gmail OAuth2 | <<CU-01>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-02]]`RF-02` | Autenticación con verificación `scrypt`, hash dummy anti-enumeración, emisión de JWT RS256 (`{jwt-ttl-seg}` s) y refresh token opaco | <<CU-02>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-03]]`RF-03` | Renovación automática single-flight de access tokens con rotación de refresh token y revocación inmediata por detección de reúso | <<CU-03>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-04]]`RF-04` | Cierre de sesión explícito con revocación de sesión activa en Redis y limpieza de cookie `.frontendnet` | <<CU-04>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-05]]`RF-05` | Recuperación de contraseña con respuesta uniforme anti-enumeración (`202`), OTP temporal y revocación global de sesiones | <<CU-05>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-06]]`RF-06` | Consulta y actualización del perfil autenticado y cambio de contraseña propia con verificación de contraseña vigente | <<CU-06>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-07]]`RF-07` | Consulta de catálogo de productos tras iniciar sesión con búsqueda segura por título (`?s=`) y escape de comodines `LIKE` | <<CU-07>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-08]]`RF-08` | Alta, actualización, borrado lógico y selección única de dirección predeterminada por comprador | <<CU-08>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-09]]`RF-09` | Gestión de ítems del carrito validando disponibilidad de stock y vendedor `APPROVED`, excluyendo autopurchase | <<CU-09>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-10]]`RF-10` | Generación de cotización firmada HMAC (`{quote-ttl-seg}` s) y confirmación idempotente por `checkoutId` particionada por vendedor | <<CU-10>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-11]]`RF-11` | Consulta de historial de pedidos propios y cancelación de pedidos `PENDING` por el comprador con restitución atómica de inventario | <<CU-11>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-12]]`RF-12` | Gestión CRUD de productos restringida a vendedores `APPROVED` propietarios con límite de escritura, cuotas `409` y asociación de categorías | <<CU-12>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-13]]`RF-13` | Validación multicapa en subproceso aislado y almacenamiento remoto en Cloudinary de imágenes de producto con cuotas Redis | <<CU-13>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-14]]`RF-14` | Consulta de pedidos del vendedor y ejecución de transiciones válidas de envío/cancelación (`PREPARING`, `SHIPPED`, `DELIVERED`, `CANCELED`) | <<CU-14>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-15]]`RF-15` | Administración exclusiva por `ADMIN` de categorías del catálogo con unicidad normalizada y protección de categorías protegidas | <<CU-15>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-16]]`RF-16` | Moderación administrativa de vendedores: aprobación o rechazo de solicitudes `PENDING` y suspensión de vendedores `APPROVED` | <<CU-16>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-17]]`RF-17` | Administración de usuarios no administradores (cambio de estado con revocación de sesiones y borrado lógico) y supervisión global de pedidos | <<CU-17>> | `IMPLEMENTADO Y VERIFICADO`
+| [[RF-18]]`RF-18` | Consulta paginada por cursor de eventos de seguridad y negocio en `audit_logs` sin mutabilidad ni exposición de `details` | <<CU-18>> | `IMPLEMENTADO Y VERIFICADO`
+|===
+
+=== Catálogo de Reglas de Negocio (`RN`)
+
+[cols="1,4,2",options="header"]
+|===
+| ID | Regla de Negocio | Estado
+| [[RN-01]]`RN-01` | **Caducidad e inactividad de sesión:** Todo JWT RS256 expira en `{jwt-ttl-seg}` s; la sesión Redis expira a los `{sesion-inactividad-min}` min de inactividad o al tope absoluto de `{sesion-absoluto-h}` h, sincronizados con la cookie `.frontendnet`. | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-02]]`RN-02` | **Política de contraseñas fuertes:** Entre `{pwd-min-chars}` y `{pwd-max-chars}` puntos de código Unicode, máximo `{pwd-max-utf16}` UTF-16 y `{pwd-max-bytes}` bytes UTF-8, con letra, dígito y símbolo Unicode en cliente y servidor. | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-03]]`RN-03` | **Limitación de tasa y bloqueo exponencial:** Ventanas deslizantes en Redis por IP, cuenta y sesión más lockout desde `{lockout-umbral}` fallos en `{lockout-ventana-min}` min (`{lockout-base-seg}` s hasta `{lockout-max-min}` min). | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-04]]`RN-04` | **Separación de funciones en catálogo y categorías:** Solo el `SELLER` aprobado y propietario publica/edita productos; solo `ADMIN` administra categorías y nunca se crean categorías implícitas al asociarlas a un producto. | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-05]]`RN-05` | **Cuotas de vendedor (`409 Conflict`):** Máximo `{cuota-productos-activos}` productos activos por vendedor y `{cuota-categorias-producto}` categorías activas por producto, con tasa máxima de `{catalogo-escrituras-max}` escrituras/minuto. | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-06]]`RN-06` | **Unicidad normalizada y protección de categorías:** La columna generada `normalizedName` impide duplicados insensibles a mayúsculas/espacios y bloquea el borrado de categorías con `protected = true`. | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-07]]`RN-07` | **Cotización firmada e idempotencia en checkout:** Toda compra exige `quote` firmado HMAC válido (`{quote-ttl-seg}` s) verificando invariantes de precio, stock, dirección y vendedor `APPROVED`, particionada por vendedor y deduplicada por `checkoutId`. | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-08]]`RN-08` | **Integridad de inventario y máquina de estados del pedido:** El descuento y la restitución por cancelación (`PENDING -> CANCELED` por comprador; `PENDING`/`PREPARING -> CANCELED` por vendedor/admin con motivo obligatorio) ocurren dentro de transacciones con bloqueo `LOCK.UPDATE`. | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-09]]`RN-09` | **Aislamiento por propietario y prohibición de autocompra:** Ningún usuario puede operar sobre productos, direcciones, carritos o pedidos de otro usuario ni añadir productos propios a su carrito. | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-10]]`RN-10` | **Ciclo de vida de vendedores:** Un `SELLER` inicia en `PENDING`, requiere `APPROVED` para gestionar catálogo/pedidos y las transiciones `REJECTED` y `SUSPENDED` son terminales en el alcance actual (decisión de alcance cerrada; sin flujo de reactivación). | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-11]]`RN-11` | **Validación multicapa y cuotas de imágenes:** Tamaño `{img-max-mib}` MiB (`{img-max-bytes}` bytes), JPEG/PNG/WebP estático (`{img-max-frames}` frame), hasta `{img-max-dim-px}` px/lado y `{img-max-mp}` MP (`{img-max-pixels}` px²), decodificado en worker aislado y cuotas Redis (`{img-vendedor-min}`/min vendedor, `{img-vendedor-conc}` concurrente; `{img-global-min}`/min global, `{img-global-conc}` concurrentes). | `IMPLEMENTADO Y VERIFICADO`
+| [[RN-12]]`RN-12` | **Acceso autenticado al catálogo y retiros `410 Gone`:** La consulta del catálogo exige sesión autenticada y los `{endpoints-retirados}` endpoints heredados (`/api/files`, `/api/roles`, `POST /api/users`) responden `410 Gone`. | `IMPLEMENTADO Y VERIFICADO`
+|===
+
+=== Catálogo de Requisitos No Funcionales (`RNF`)
+
+[cols="1,1,4,2",options="header"]
+|===
+| ID | Categoría | Descripción | Estado
+| [[RNF-01]]`RNF-01` | Seguridad | Confidencialidad de contraseñas y protección anti-enumeración mediante `scrypt` (`N={scrypt-n}`, `r={scrypt-r}`, `p={scrypt-p}`, `{scrypt-clave-bytes}` B) y `createDummyHash()`. | `IMPLEMENTADO Y VERIFICADO`
+| [[RNF-02]]`RNF-02` | Seguridad | Autenticación y autorización con verificación real en cada petición: JWT RS256 (`{jwt-rsa-bits}` bits, `typ: at+jwt`) + validación en Redis y MySQL + cabeceras `helmet` / `SecurityHeadersMiddleware` y `no-store`. | `IMPLEMENTADO Y VERIFICADO`
+| [[RNF-03]]`RNF-03` | Seguridad | Protección integral de entradas y almacenamiento seguro contra SQLi, XSS, CSRF (`AutoValidateAntiforgeryTokenAttribute`), SSRF (lista blanca Cloudinary) y cargas maliciosas de imagen (`--max-old-space-size={img-worker-mem-mb}`). | `IMPLEMENTADO Y VERIFICADO`
+| [[RNF-04]]`RNF-04` | Seguridad | Trazabilidad inmutable append-only en `audit_logs` y correlación por `X-Request-Id` sin registrar contraseñas ni tokens. | `IMPLEMENTADO Y VERIFICADO`
+| [[RNF-05]]`RNF-05` | Desempeño | Contención de latencia y abuso mediante cola acotada de `scrypt`, workers aislados de imagen con timeout de `{img-timeout-ms}` ms, recepción máx. `{img-receive-seg}` s y cuotas distribuidas en Redis (`Retry-After`). | `IMPLEMENTADO Y VERIFICADO`
+| [[RNF-06]]`RNF-06` | Desempeño | Meta propuesta de percentil 95 (`p95 <= 500 ms` en lecturas de catálogo y `<= 1500 ms` en autenticación/checkout bajo carga nominal); medición en vivo pendiente de pruebas k6. | `PLANIFICADO` (`NO_VERIFICABLE` en ejecución actual)
+| [[RNF-07]]`RNF-07` | Disponibilidad | Sonda HTTP mínima `GET /health` (`200 { status: 'ok' }` con `Cache-Control: no-store` en `backendnode/index.js:127-130`), healthchecks de contenedor en `compose.yaml` (`mysqladmin ping`, `/health` y `redis-cli --tls ... ping`), `restart: unless-stopped`, cuotas CPU/RAM/PIDs y rechazo controlado `503` ante caída del almacén de sesiones. | `IMPLEMENTADO Y VERIFICADO`
+| [[RNF-08]]`RNF-08` | Disponibilidad | Meta propuesta de disponibilidad operativa del `99.5%` mensual (`RPO <= 24 h`, `RTO <= 2 h`) con estrategia de respaldos y despliegue redundante en producción. | `PLANIFICADO`
+|===
+
+=== Catálogo de Riesgos de Seguridad (`RSG`)
+
+[cols="1,3,1,3,2",options="header"]
+|===
+| ID | Riesgo | Nivel | Controles y Mitigación Asociada | Estado
+| [[RSG-01]]`RSG-01` | **Cross-Site Scripting (XSS) almacenado o reflejado** | Alto | Codificación automática contextual de Razor en `.cshtml`, validación estricta de entradas en backend (`user-input.service.js`, `catalog.service.js`), `Content-Security-Policy` restrictiva en backend (`default-src 'none'`) y BFF (`SecurityHeadersMiddleware` con `object-src 'none'`, `frame-ancestors 'none'`, `script-src` acotado; observación residual: `'unsafe-inline'` en `style-src`). | `IMPLEMENTADO Y VERIFICADO`
+| [[RSG-02]]`RSG-02` | **Cross-Site Request Forgery (CSRF)** | Alto | Filtro global `AutoValidateAntiforgeryTokenAttribute` en todos los métodos HTTP inseguros del BFF (`frontendnet`), cookie `.frontendnet.af` (`SameSite=Lax`, `SecurePolicy=Always` fuera de Dev) y cookie de autenticación `.frontendnet` con `HttpOnly` y `SameSite=Lax`; el backend REST exige cabecera `Authorization: Bearer` explícita (inmune a envío automático de cookies). | `IMPLEMENTADO Y VERIFICADO`
+| [[RSG-03]]`RSG-03` | **Inyección SQL (SQLi) e inyección de comodines LIKE** | Alto | Consultas parametrizadas vía Sequelize ORM (`?` y parámetros nombrados), validación estricta de IDs y tipos (`validators/*.js`) y escape explícito de `%`, `_` y `\` mediante `escapeLike` en `backendnode/services/catalog.service.js:208-219` para búsqueda por `?s=`. | `IMPLEMENTADO Y VERIFICADO`
+| [[RSG-04]]`RSG-04` | **Fuerza bruta, relleno de credenciales y enumeración de cuentas** | Alto | Rate limiting distribuido en Redis por IP, cuenta y sesión, lockout exponencial en login, `createDummyHash()` en `scrypt` para cuentas inexistentes y respuesta uniforme `202` en recuperación de contraseña. | `IMPLEMENTADO Y VERIFICADO`
+| [[RSG-05]]`RSG-05` | **Secuestro o reúso de sesión y tokens JWT/Refresh** | Alto | Access tokens RS256 de vida corta (`{jwt-ttl-seg}` s), validación en vivo contra Redis (`IDLE_MS` / `ABSOLUTE_MS`), rotación de un solo uso con detección de reúso (`REFRESH_REUSED`) que revoca toda la sesión, y candado `SemaphoreSlim` single-flight en BFF. | `IMPLEMENTADO Y VERIFICADO`
+| [[RSG-06]]`RSG-06` | **Control de acceso roto (IDOR / escalamiento horizontal o vertical)** | Alto | Middleware `Authorize` con recarga en vivo de `User.status`, perfil y `Seller.status === 'APPROVED'` en cada petición; verificación de propiedad `sellerId` / `buyerId` en todos los controladores y servicios; separación estricta `ADMIN` vs `SELLER`. | `IMPLEMENTADO Y VERIFICADO`
+| [[RSG-07]]`RSG-07` | **Carga de archivos maliciosos, polyglots o bombas de descompresión de imagen** | Alto | Verificación en 6 capas (Multer límite `{img-max-mib}` MiB y timeout `{img-receive-seg}` s, MIME/extensión/magic bytes, parser de contenedor, decodificación/recodificación Sharp en subproceso aislado `--max-old-space-size={img-worker-mem-mb}` máx. `{img-max-dim-px}` px y `{img-max-mp}` MP estáticos, cuotas Redis y limpieza de huérfanos en Cloudinary). | `IMPLEMENTADO Y VERIFICADO`
+| [[RSG-08]]`RSG-08` | **Manipulación de precios, carrera de inventario o fraude en checkout** | Alto | Cotización firmada HMAC (`checkout-quote.service.js`, `{quote-ttl-seg}` s), verificación transaccional con `LOCK.UPDATE` de precios actuales, stock y vendedor `APPROVED`, e idempotencia única `(checkoutId, sellerId)`. | `IMPLEMENTADO Y VERIFICADO`
+| [[RSG-09]]`RSG-09` | **Server-Side Request Forgery (SSRF) o seguimiento externo vía URLs de imagen** | Medio | Generación de `imageUrl` controlada en backend y validación estricta de origen `https://res.cloudinary.com` y ruta permitida en `ProductClientService` / `UrlHelper` y CSP `img-src`. | `IMPLEMENTADO Y VERIFICADO`
+| [[RSG-10]]`RSG-10` | **Exposición residual de credencial de desarrollo eliminada en historial Git** | Alto (Residual) | Secreto antiguo de desarrollo borrado de `config/config.json` en `c8a22f3`, aunque recuperable en el commit histórico `7b2e983`. Estado: **riesgo residual revocado** en el código vigente (sin exponer valores) con recomendación de rotación y purga de historial antes de despliegue público (`PLANIFICADO`). | `IMPLEMENTADO SIN VERIFICAR` (rotación externa `NO_VERIFICABLE`)
+|===

@@ -1,0 +1,98 @@
+' TRACE: backendnode/migrations/20261110000001-create-secure-ecommerce-tables.js; backendnode/migrations/20261119000001-add-categories-normalized-name-unique.js; backendnode/migrations/20261123000001-require-products-description-not-null.js; backendnode/migrations/cutover/20261110000003-finalize-secure-ecommerce-schema.js; backendnode/models/user.js; backendnode/models/seller.js; backendnode/models/product.js; backendnode/models/category.js; backendnode/models/user-address.js
+@startuml der_logico_identidad_catalogo
+!include _skin.puml
+title DER Lógico / Físico MySQL 8.4 — Identidad, Direcciones y Catálogo
+caption 8 tablas físicas con nombres reales en camelCase (límite: máx. 15 tablas)
+
+class "users" as TUsers <<table>> {
+  + *id : CHAR(36) <<PK>>
+  --
+  + *name : VARCHAR(120)
+  + *email : VARCHAR(254) <<UK>>
+  + phoneNumber : VARCHAR(20)
+  + *passwordHash : VARCHAR(255)
+  + *status : ENUM('ACTIVE','SUSPENDED','DISABLED')
+  + *emailVerifiedAt : DATETIME(3)
+  + *createdAt : DATETIME(3)
+  + *updatedAt : DATETIME(3)
+  + deletedAt : DATETIME(3)
+}
+
+class "admins" as TAdmins <<table>> {
+  + *userId : CHAR(36) <<PK, FK>>
+}
+
+class "buyers" as TBuyers <<table>> {
+  + *userId : CHAR(36) <<PK, FK>>
+}
+
+class "sellers" as TSellers <<table>> {
+  + *userId : CHAR(36) <<PK, FK>>
+  --
+  + *storeName : VARCHAR(120)
+  + *status : ENUM('PENDING','APPROVED','REJECTED','SUSPENDED')
+  + *requestedAt : DATETIME(3)
+  + reviewedAt : DATETIME(3)
+  + reviewedByUserId : CHAR(36) <<FK>>
+  + rejectionReason : VARCHAR(255)
+  + *updatedAt : DATETIME(3)
+}
+
+class "user_addresses" as TAddresses <<table>> {
+  + *id : BIGINT UNSIGNED <<PK>>
+  --
+  + *buyerId : CHAR(36) <<FK>>
+  + label : VARCHAR(40)
+  + *recipientName : VARCHAR(120)
+  + *street : VARCHAR(255)
+  + *exteriorNumber : VARCHAR(20)
+  + interiorNumber : VARCHAR(20)
+  + *neighborhood : VARCHAR(120)
+  + *city : VARCHAR(120)
+  + *state : VARCHAR(120)
+  + *postalCode : VARCHAR(12)
+  + *country : CHAR(2) = 'MX'
+  + *isDefault : TINYINT(1) = 0 <<UK>>
+  + deletedAt : DATETIME(3)
+}
+
+class "categories" as TCategories <<table>> {
+  + *id : INT <<PK>>
+  --
+  + *name : VARCHAR(120) <<UK>>
+  + *normalizedName : VARCHAR(120) <<UK>>
+  + *protected : TINYINT(1) = 0
+  + deletedAt : DATETIME(3)
+}
+
+class "products" as TProducts <<table>> {
+  + *id : INT <<PK>>
+  --
+  + *sellerId : CHAR(36) <<FK>>
+  + *title : VARCHAR(255)
+  + *description : TEXT
+  + *price : DECIMAL(12,2)
+  + *stock : INT UNSIGNED = 0
+  + imagePublicId : VARCHAR(255)
+  + *createdAt : DATETIME(3)
+  + *updatedAt : DATETIME(3)
+  + deletedAt : DATETIME(3)
+}
+
+class "product_categories" as TProdCat <<table>> {
+  + *productId : INT <<PK, FK>>
+  + *categoryId : INT <<PK, FK>>
+  --
+  + *createdAt : DATETIME(3)
+  + deletedAt : DATETIME(3)
+}
+
+TUsers "1" ||--o| "0..1" TAdmins : "userId"
+TUsers "1" ||--o| "0..1" TBuyers : "userId"
+TUsers "1" ||--o| "0..1" TSellers : "userId"
+TAdmins "0..1" ||--o{ "0..*" TSellers : "reviewedByUserId"
+TBuyers "1" ||--o{ "0..*" TAddresses : "buyerId"
+TSellers "1" ||--o{ "0..200" TProducts : "sellerId"
+TProducts "1" ||--o{ "0..10" TProdCat : "productId"
+TCategories "1" ||--o{ "0..*" TProdCat : "categoryId"
+@enduml

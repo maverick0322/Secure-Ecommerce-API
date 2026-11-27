@@ -1,0 +1,30 @@
+' TRACE: backendnode/routes/categories.routes.js; backendnode/routes/products.routes.js; backendnode/routes/addresses.routes.js; backendnode/routes/cart.routes.js; backendnode/routes/checkout.routes.js; backendnode/routes/orders.routes.js; frontendnet/Controllers/ShoppingController.cs; frontendnet/Controllers/AddressesController.cs; frontendnet/Controllers/ShoppingCartController.cs; frontendnet/Controllers/OrdersController.cs
+@startuml uc_comprador
+!include _skin.puml
+left to right direction
+title Casos de Uso — Comprador (hereda de Usuario Autenticado)
+caption 5 casos de uso y 2 actores (límite: máx. 14 CU y 5 actores)
+
+actor "Comprador" as Buyer
+actor "Cloudinary CDN" as CDN <<external>>
+
+rectangle "Tienda en Línea Segura — Flujo del Comprador" {
+  usecase "CU-07: Explorar catálogo\ny buscar por título" as UC07
+  usecase "CU-08: Administrar libreta\nde direcciones de envío" as UC08
+  usecase "CU-09: Gestionar carrito\nde compras" as UC09
+  usecase "CU-10: Cotizar y confirmar\ncheckout" as UC10
+  usecase "CU-11: Consultar pedidos\ny cancelar pendiente" as UC11
+}
+
+note right of UC11
+  Precondición para cancelar:
+  pedido propio en estado PENDING
+end note
+
+Buyer -- UC07
+Buyer -- UC08
+Buyer -- UC09
+Buyer -- UC10
+Buyer -- UC11
+UC07 -- CDN
+@enduml

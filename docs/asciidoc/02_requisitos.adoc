@@ -1,556 +1,295 @@
-== Documento de Especificación de Requisitos
+== Análisis de Requisitos con Enfoque en Seguridad (ERS)
 
-=== Contexto y Alcance del Dominio
+=== Contexto e Impacto
 
-El sistema constituye una plataforma de comercio electrónico orientada a la venta minorista de bienes de consumo organizados por departamentos y categorías. Su arquitectura sigue un modelo de **tres capas desacopladas** en comunicación síncrona:
+La plataforma opera bajo un modelo cliente-servidor desacoplado donde `frontendnet` (`ASP.NET Core 9.0 MVC`) renderiza las vistas HTML protegidas con token antiforgery en el servidor y mantiene el almacén en memoria de sesión `SessionTokenManager`, mientras `backendnode` (`Express` sobre `Node.js 24`) actúa como frontera autoritativa de reglas de negocio, criptografía y persistencia transaccional en **MySQL 8.4** y **Redis 8.2**.
 
-[source,text]
-----
-[Navegador del Usuario]
-         │ HTTP/HTTPS (Puerto 8080)
-         ▼
-[Capa de Presentación: ASP.NET Core 8.0 MVC — C# / Razor / Bootstrap 5.3.3]
-         │ HTTP REST / JSON (Puerto 3000)
-         ▼
-[Capa de Negocio y API: Node.js 20 LTS / Express — Sequelize ORM]
-         │ TCP / Consultas Parametrizadas (Puerto 3306)
-         ▼
-[Capa de Persistencia: MySQL 8.0 — InnoDB / utf8mb4]
-----
+El impacto directo de los fallos en este dominio recae sobre tres ejes críticos:
 
-La **API RESTful en Node.js** provee servicios desacoplados a clientes web y móviles, gestionando identidades de usuarios, catálogo de productos, almacenamiento de medios digitales y auditoría inmutable de eventos. El **frontend en ASP.NET Core 8.0 MVC** actúa como la interfaz web de usuario, consumiendo la API mediante un puente de autenticación Cookie-JWT implementado con `DelegatingHandlers` de `HttpClient`.
+* **Integridad comercial y financiera:** Un fallo en la validación de cotizaciones, inventario o transiciones de pedido permitiría compras por debajo del precio real, agotamiento inconsistente de existencias o envíos de vendedores no aprobados.
+* **Confidencialidad de cuentas y sesiones:** La exposición de credenciales, tokens de acceso o tokens de renovación habilitaría suplantación de identidad y escalamiento horizontal o vertical.
+* **Disponibilidad del catálogo y carga de archivos:** Cargas abusivas de imágenes o ráfagas de autenticación/escritura podrían degradar el servicio sin límites distribuidos por IP, cuenta, sesión y subprocesos aislados.
 
-=== Impacto de Seguridad y Justificación
+=== Actores y Jerarquía de Mínimo Privilegio
 
-La correcta operación del sistema previene los siguientes riesgos:
+El sistema define cinco roles/actores conceptuales trazados al modelo UML de casos de uso (`uc_visitante_usuario_autenticado.puml`, `uc_comprador.puml`, `uc_vendedor.puml`, `uc_administrador.puml`):
 
-* **Compromiso de Cuentas:** La autenticación mediante contraseñas hasheadas con bcrypt (salt rounds = 10) y tokens JWT efímeros (20 minutos) limita la ventana de exposición ante robo de credenciales.
-* **Interceptación de Sesión (Session Hijacking):** La arquitectura de sesión híbrida — cookie cifrada en el navegador + JWT en cabeceras HTTP — protege contra el robo de tokens vía XSS en el DOM del cliente.
-* **Confidencialidad de Datos Financieros:** El acceso al catálogo administrativo (precios, usuarios, bitácora) se encuentra protegido por Control de Acceso Basado en Roles (RBAC) con principio de mínimo privilegio (`Deny by Default`).
-* **Continuidad Operativa:** Las validaciones de cuota, nombre de archivo criptográfico y tipo MIME en la carga de archivos impiden el agotamiento de almacenamiento por cargas maliciosas.
-
-=== Partes Interesadas y Actores del Sistema
-
-[cols="1,2,3", options="header"]
+[cols="2,2,4",options="header"]
 |===
-| Actor | Tipo | Responsabilidades y Capacidades
-| **Usuario** | Actor Principal (Humano) | Navega el catálogo de productos, filtra por categorías, agrega al carrito, solicita sesión activa, visualiza imágenes de productos. Opera en modo de solo lectura sobre el catálogo.
-| **Administrador** | Actor Principal (Humano) | Gestiona el ciclo de vida completo de categorías, productos, archivos y usuarios. Consulta la bitácora de auditoría. Tiene acceso a operaciones de mutación de datos restringidas a este rol.
-| **Cliente Frontend .NET** | Actor de Sistema | Aplicación ASP.NET Core 8.0 MVC ejecutándose en el puerto 8080. Actúa como intermediario entre el navegador y la API, implementando el puente Cookie—JWT, la propagación automática del token Bearer y la renovación continua vía `DelegatingHandlers`.
+| Actor | Rol Técnico / Estado | Responsabilidades Permitidas y Restricciones
+| **Visitante** | Usuario anónimo no autenticado | Registro de cuenta (`BUYER` o `SELLER`), verificación OTP, inicio de sesión y flujo de recuperación de contraseña. **No puede consultar el catálogo de productos.**
+| **Usuario Autenticado** *(actor general)* | Cualquier cuenta con JWT RS256 válido y `User.status = ACTIVE` | Generaliza a `Comprador`, `Vendedor` y `Administrador` para los casos transversales: renovar sesión, cerrar sesión, consultar perfil propio, editar perfil propio y cambiar contraseña (incluye vendedores en estado `PENDING`).
+| **Comprador (`BUYER`)** | Registro en tabla `buyers` (`User.status = ACTIVE`) | Tras iniciar sesión: explorar y buscar productos en el catálogo, administrar direcciones de envío, gestionar carrito de compras, generar cotización HMAC, confirmar checkout, consultar pedidos propios y cancelar únicamente pedidos propios en estado `PENDING`.
+| **Vendedor (`SELLER`)** | Registro en tabla `sellers` (`Seller.status = APPROVED`) | Publicar, editar y eliminar lógicamente sus propios productos; asociar/desasociar categorías existentes; cargar/eliminar la imagen de sus productos; consultar pedidos asignados y transicionar sus estados (`PREPARING`, `SHIPPED`, `DELIVERED`, `CANCELED`). Mientras su solicitud esté en `PENDING`, solo accede a casos de `Usuario Autenticado` (`allowUnapprovedSeller: true`).
+| **Administrador (`ADMIN`)** | Registro en tabla `admins` (`User.status = ACTIVE`) | Gobernanza y operación del sistema: administrar categorías del catálogo, revisar solicitudes de vendedor (`APPROVED`/`REJECTED`), suspender vendedores aprobados, administrar usuarios no administradores, supervisar todos los pedidos y consultar la bitácora inmutable de auditoría (`audit_logs`).
 |===
 
-==== Diagrama Textual de Actores e Interacciones
+==== Decisión de Diseño: Separación de Funciones, Mínimo Privilegio y Acceso Autenticado al Catálogo
 
-[source,text]
-----
-                    ┌─────────────────────────────────────────────┐
-                    │          SISTEMA E-COMMERCE API             │
-                    │                                             │
-                    │  ┌─────────────────────────────────────┐   │
-(Usuario) ────────► │  │ [Consultar Catálogo de Productos]   │   │
-     │              │  │ [Buscar por Término (?s=)]          │   │
-     │              │  │ [Visualizar Imagen de Producto]     │   │
-     │              │  │ [Agregar al Carrito de Compras]     │   │
-     │              │  └─────────────────────────────────────┘   │
-     │              │                                             │
-(Administrador) ──► │  ┌─────────────────────────────────────┐   │
-     │              │  │ [Iniciar Sesión — Emite JWT (HS256)] │   │
-     │              │  │ [Gestionar Categorías — CRUD]        │   │
-     │              │  │ [Gestionar Productos — CRUD]         │   │
-     │              │  │ [Asociar/Desasociar Categorías N:M]  │   │
-     │              │  │ [Subir Archivos Multimedia (2MB)]    │   │
-     │              │  │ [Gestionar Usuarios del Sistema]     │   │
-     │              │  │ [Consultar Catálogo de Roles]        │   │
-     │              │  │ [Consultar Bitácora de Auditoría]    │   │
-     │              │  └─────────────────────────────────────┘   │
-     │              └─────────────────────────────────────────────┘
-     │
-(Cliente Frontend .NET)
-     ├── Puente Cookie ↔ JWT (DelegatingHandlers)
-     ├── Validaciones DataAnnotations en C#
-     ├── Vistas Razor con Bootstrap 5.3.3 y tema Mercado Libre
-     └── Vista Usuarios/Index + Crear + Editar + Eliminar (CRUD Admin)
-----
+Como decisión arquitectónica deliberada (**separación de funciones y principio de mínimo privilegio**):
 
-=== Requisitos Funcionales
+. **SOLO el `Vendedor` (`SELLER` aprobado y propietario del recurso) publica, edita o elimina productos y gestiona sus imágenes** (`backendnode/routes/products.routes.js`). El `Administrador` **no** publica productos ni altera inventarios de tiendas, evitando concentrar poderes comerciales y de moderación en una sola cuenta privilegiada.
+. **El `Administrador` (`ADMIN`) gobierna exclusivamente el catálogo estructural y la plataforma** (categorías protegidas y personalizadas, listado/gestión de usuarios no administradores, aprobación/rechazo/suspensión de vendedores, supervisión de pedidos y auditoría).
+. **El catálogo de productos se muestra únicamente después de iniciar sesión** (`frontendnet/Controllers/ShoppingController.cs:9` requiere `[Authorize(Roles = Roles.Buyer)]` y `backendnode/routes/products.routes.js` exige `authorize('ADMIN, BUYER, SELLER')`), reduciendo la superficie de enumeración anónima, raspado automático y abuso de búsqueda `LIKE` sobre el inventario.
 
-Los siguientes requisitos funcionales definen las **capacidades observables** que el sistema debe proveer (IEEE 830 §3.2). Cada requisito es: correcto, no ambiguo, verificable mediante su contrato HTTP, trazable al código fuente implementado, y clasificado por prioridad y estabilidad.
+=== Especificación de Casos de Uso (`CU`)
 
-[cols="1,2,3,2,1,1", options="header"]
+Todos los casos de uso siguientes mantienen identidad única en el anexo de trazabilidad (`_registro_ids.adoc`), siguiendo las reglas de granularidad de `GUIA_ESTILO_UML.md` (sin pasos internos de OTP o validaciones sueltas como casos de uso separados).
+
+==== <<CU-01>>: Registrar cuenta de comprador o vendedor con verificación OTP
+* **Actor principal:** Visitante (actor secundario: Gmail OAuth2 API, Cloudflare Turnstile).
+* **Precondiciones:** Correo electrónico no registrado activamente en `users`; token Turnstile válido en `AuthController` (`frontendnet/Controllers/AuthController.cs:96-105`).
+* **Postcondiciones:** Se crea el registro `User` (`ACTIVE`, `emailVerifiedAt` asignado) y su perfil `Buyer` o `Seller` (`status = PENDING` si es `SELLER`).
+* **Flujo básico:**
+  . El Visitante ingresa perfil (`BUYER` o `SELLER`), nombre, correo, teléfono opcional, contraseña conforme a `<<RN-02>>` y, si eligió `SELLER`, el `storeName` (`POST /api/auth/register`).
+  . `personal-account.service.js` valida entradas, verifica unicidad, deriva el hash con `scrypt`, genera un código OTP de `{otp-digitos}` dígitos con vigencia de `{otp-ttl-min}` min y lo envía vía `gmail.service.js`, respondiendo `202`.
+  . El Visitante captura el OTP recibido dentro de la ventana de vigencia (`POST /api/auth/register/verify`).
+  . `email-verification.service.js` verifica el OTP y `accounts.service.js` persiste en transacción el `User` y su perfil `Buyer` o `Seller`, retornando `201`.
+* **Flujos alternos:** `400` si falla política de contraseñas, falta `storeName` en `SELLER`, se envía `storeName` en `BUYER`, o el OTP es incorrecto/expirado (máx. `{otp-max-intentos}` intentos); `409` si el correo ya existe; `429` si excede el cooldown (`{otp-cooldown-seg}` s) o el límite por IP/cuenta (`{rl-registro-ip-max}`/`{rl-ip-ventana-seg}` s y `{rl-registro-cuenta-max}`/`{rl-cuenta-ventana-min}` min).
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Auth/Register.cshtml y VerifyRegistration.cshtml — Vista implementada, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-02>>: Iniciar sesión con credenciales y protección anti-fuerza bruta
+* **Actor principal:** Visitante (actor secundario: Cloudflare Turnstile).
+* **Precondiciones:** Cuenta existente en estado `ACTIVE` (o rechazo uniforme `401` si no existe / no coincide).
+* **Postcondiciones:** Sesión registrada en Redis (`IDLE_MS`, `ABSOLUTE_MS`), emisión de JWT RS256 (`{jwt-ttl-seg}` s) y refresh token (`{refresh-chars}` chars), y cookie `.frontendnet` cifrada en el navegador.
+* **Flujo básico:**
+  . El Visitante envía correo y contraseña (`POST /Auth/Index` -> `POST /api/auth`).
+  . `auth-rate-limit.middleware.js` comprueba límites en Redis por IP (`{rl-login-ip-max}`/`{rl-ip-ventana-seg}` s), cuenta (`{rl-login-cuenta-max}`/`{rl-ip-ventana-seg}` s) y bloqueo de cuenta (`<<RN-03>>`).
+  . `authentication.service.js` consulta `User` con sus asociaciones `Admin`/`Buyer`/`Seller` y verifica contraseña con `scrypt` (o `createDummyHash()` si el usuario no existe); si detecta hash `bcrypt` legado, lo migra de forma transparente a `scrypt`.
+  . `auth-session.service.js` crea la sesión en Redis y emite el JWT RS256 + refresh token; `AuthController` invoca `SessionTokenManager` y redirige según el perfil del usuario.
+* **Flujos alternos:** `401` ante credenciales incorrectas o cuenta inactiva (incrementando contador de fallos hasta bloqueo desde `{lockout-umbral}` fallos); `429` con `Retry-After` durante rate limit o lockout.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Auth/Index.cshtml — Vista implementada, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-03>>: Renovar sesión mediante rotación de refresh token
+* **Actor principal:** Usuario Autenticado (iniciado automáticamente por `RefreshTokenDelegatingHandler` y `SessionTokenManager` en `frontendnet`).
+* **Precondiciones:** Sesión activa en `SessionTokenManager` y Redis sin superar `ABSOLUTE_MS` (`{sesion-absoluto-h}` h) ni `IDLE_MS` (`{sesion-inactividad-min}` min).
+* **Postcondiciones:** Se consumió el refresh token anterior y se emitió un nuevo par JWT RS256 + refresh token rotado.
+* **Flujo básico:**
+  . Ante vencimiento próximo (`{refresh-proactivo-seg}` s) o respuesta `401` de API, `SessionTokenManager` adquiere el `SemaphoreSlim` por `sid`.
+  . `AuthClientService` envía `POST /api/auth/refresh` con el `refreshToken` vigente.
+  . `auth-session.service.js` verifica límites (`{rl-refresh-ip-max}`/`{rl-ip-ventana-seg}` s IP, `{rl-refresh-sesion-max}`/`{rl-ip-ventana-seg}` s sesión), consume atómicamente el hash SHA-256 en Redis y genera nuevo par de tokens.
+* **Flujos alternos:** Si el refresh token ya fue usado (`REFRESH_REUSED`), expiró o la cuenta fue suspendida, `backendnode` revoca la sesión completa (`401`) y `AppController.HandleUnauthorizedAsync()` cierra la cookie local.
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-04>>: Cerrar sesión e invalidar sesión distribuida
+* **Actor principal:** Usuario Autenticado.
+* **Precondiciones:** Sesión activa en BFF y API.
+* **Postcondiciones:** Sesión eliminada en Redis y cookie `.frontendnet` expirada en el navegador.
+* **Flujo básico:** El usuario envía el formulario antiforgery de cierre de sesión (`POST /Auth/Logout`), el BFF llama a `POST /api/auth/logout` con el JWT vigente para destruir la sesión en Redis y ejecuta `SignOutLocalAsync()`.
+* **Flujos alternos:** Si el backend devuelve error o expira el token, el BFF limpia igualmente la cookie y el diccionario `_sessions` local (`AuthController.cs:65-77`).
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-05>>: Recuperar y restablecer contraseña olvidada vía OTP
+* **Actor principal:** Visitante (actor secundario: Gmail OAuth2 API).
+* **Precondiciones:** Acceso al buzón de correo registrado.
+* **Postcondiciones:** Contraseña actualizada en `scrypt` y todas las sesiones activas de la cuenta revocadas.
+* **Flujo básico:**
+  . El Visitante solicita restablecimiento ingresando su correo (`POST /api/auth/password/forgot`).
+  . El sistema envía código OTP si el correo corresponde a una cuenta elegible y responde siempre `202` con mensaje uniforme anti-enumeración.
+  . El Visitante envía correo, código OTP y `newPassword` (`POST /api/auth/password/reset`); `personal-account.service.js` actualiza `passwordHash`, revoca sesiones activas y responde `204`.
+* **Flujos alternos:** `400` si el código es inválido/expirado o la nueva contraseña viola `<<RN-02>>`; `429` al superar cuotas de recuperación (`{rl-recovery-cuenta-max}`/`{rl-cuenta-ventana-min}` min en solicitud y `{rl-reset-cuenta-max}`/`{rl-cuenta-ventana-min}` min en reinicio).
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Auth/ForgotPassword.cshtml y ResetPassword.cshtml — Vistas implementadas, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-06>>: Consultar y actualizar perfil propio y contraseña actual
+* **Actor principal:** Usuario Autenticado.
+* **Precondiciones:** Sesión activa (`allowUnapprovedSeller: true`).
+* **Postcondiciones:** Datos propios actualizados o contraseña renovada con revocación de sesiones.
+* **Flujo básico:** El usuario consulta `GET /api/users/me` (`ProfileController.Index`), actualiza nombre/teléfono/`storeName` vía `PUT /api/users/me` o cambia su contraseña verificando `currentPassword` vía `PUT /api/users/me/password` (límite `{rl-pwd-change-ip-max}`/`{rl-ip-ventana-seg}` s).
+* **Flujos alternos:** `400` por contraseña débil o nombre tienda en perfil no vendedor; `401` si `currentPassword` no coincide; cierre automático de sesión al cambiar contraseña.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Profile/Index.cshtml, Edit.cshtml y ChangePassword.cshtml — Vistas implementadas, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-07>>: Explorar catálogo autenticado y buscar productos por título
+* **Actor principal:** Comprador (también consultable por `SELLER` aprobado y `ADMIN` en sus módulos; actor secundario: Cloudinary CDN).
+* **Precondiciones:** Sesión autenticada válida.
+* **Postcondiciones:** Listado de productos visibles (`Seller.status = APPROVED`, `User.status = ACTIVE`) o detalle completo presentado al usuario.
+* **Flujo básico:** El Comprador accede a `ShoppingController.Index` (`GET /api/products` y opcionalmente `?s=<término>`), filtrando en BFF por categoría/orden y abriendo `ShoppingController.Details` (`GET /api/products/:id`). `catalog.service.js` escapa `%`, `_` y `\` mediante `escapeLike()`.
+* **Flujos alternos:** Redirección a `/Auth` si no hay sesión; `400` si `?s=` supera 255 caracteres; `404` si el producto no existe o pertenece a un vendedor suspendido.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Shopping/Index.cshtml y Details.cshtml — Vistas implementadas, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-08>>: Administrar libreta de direcciones de envío
+* **Actor principal:** Comprador.
+* **Precondiciones:** Sesión activa con perfil `BUYER`.
+* **Postcondiciones:** Direcciones del comprador persistidas en `user_addresses`, manteniendo al menos una única dirección predeterminada activa cuando se marca.
+* **Flujo básico:** El Comprador lista (`GET /api/addresses`), crea (`POST /api/addresses`), edita (`PUT /api/addresses/:id`), elimina lógicamente (`DELETE /api/addresses/:id`) o designa predeterminada (`PUT /api/addresses/:id/default`) desde `AddressesController`.
+* **Flujos alternos:** `400` si faltan campos obligatorios; `403`/`404` si intenta modificar la dirección de otro comprador.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Addresses/Index.cshtml y Create.cshtml — Vistas implementadas, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-09>>: Gestionar carrito de compras multi-vendedor
+* **Actor principal:** Comprador.
+* **Precondiciones:** Sesión activa con perfil `BUYER`.
+* **Postcondiciones:** Estado del carrito (`Cart` + `CartItem`) actualizado y recalculado en servidor.
+* **Flujo básico:** Desde `ShoppingCartController`, el Comprador agrega producto (`POST /api/cart/items`), actualiza cantidad (`PUT /api/cart/items/:productId`), quita un producto (`DELETE /api/cart/items/:productId`) o vacía el carrito (`DELETE /api/cart`), recibiendo el snapshot recalculado con precios vigentes de servidor.
+* **Flujos alternos:** `409` si el stock es insuficiente o el vendedor dejó de estar `APPROVED`; `400`/`404` si el producto no existe o es inválido.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/ShoppingCart/Index.cshtml — Vista implementada, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-10>>: Cotizar checkout con firma HMAC y confirmar pedidos
+* **Actor principal:** Comprador.
+* **Precondiciones:** Carrito con al menos 1 ítem válido (máx. `{cart-max-items}` ítems) y al menos una dirección activa en `user_addresses`.
+* **Postcondiciones:** Se generan uno o varios `Order` (uno por cada `sellerId` distinto presente en el carrito), sus `OrderItem` y primer registro en `OrderStatusHistory` (`PENDING`), descontando stock atómicamente y vaciando el carrito.
+* **Flujo básico:**
+  . El Comprador selecciona una dirección en `OrdersController.Checkout` (`POST /api/checkout/quote`), recibiendo un `quote` firmado con clave HMAC derivada (`expiresIn: {quote-ttl-seg}` s) que congela precios, totales agrupados por vendedor, snapshot de dirección y `checkoutId`.
+  . El Comprador confirma el pedido (`POST /api/checkout` con `{ quote }`).
+  . `orders.service.confirm()` verifica la firma y vigencia del `quote`, bloquea filas de productos y vendedores en MySQL (`LOCK.UPDATE`), valida que stock, precio y estado `APPROVED` no hayan cambiado, crea las órdenes con idempotencia por `(checkoutId, sellerId)`, descuenta inventario y vacía el carrito (`201`, o `200` si `replayed: true`).
+* **Flujos alternos:** `409` si la cotización expiró, excede `{quote-max-sign-chars}` chars al firmar, cambió el precio o stock, o el vendedor fue suspendido; `400` si la estructura del `quote` supera `{quote-max-verify-chars}` chars o es inválida.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Orders/Checkout.cshtml — Vista implementada, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-11>>: Consultar pedidos propios y cancelar pedido pendiente
+* **Actor principal:** Comprador.
+* **Precondiciones:** Sesión `BUYER` y existencia de un pedido propiedad del comprador (para cancelar: `Order.status === PENDING`).
+* **Postcondiciones:** Visualización de detalle/historial o transición `PENDING -> CANCELED` con restitución atómica de inventario.
+* **Flujo básico:** El Comprador consulta sus pedidos (`GET /api/orders`, `GET /api/orders/:id`) y, mientras el estado sea `PENDING`, puede cancelarlo enviando motivo obligatorio `reason` (`PUT /api/orders/:id/status`), lo cual ejecuta `restockCanceledOrder()` y registra `OrderStatusHistory`.
+* **Flujos alternos:** `403` si el Comprador intenta cancelar un pedido en estado distinto de `PENDING` o acceder a pedidos de otro usuario; `400` si omite el motivo.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Orders/Index.cshtml y Details.cshtml — Vistas implementadas, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-12>>: Publicar, editar y eliminar productos propios
+* **Actor principal:** Vendedor (`SELLER` aprobado).
+* **Precondiciones:** Cuenta `SELLER` en estado `APPROVED`; existencia de categoría opcional previa si se asigna `categoryId`.
+* **Postcondiciones:** Producto creado (`201`), actualizado (`204`) o eliminado lógicamente (`deletedAt`, `204`), y categorías asociadas/desasociadas.
+* **Flujo básico:** En `ProductsController`, el Vendedor lista sus productos, crea uno con `title`, `description` obligatoria (`<= {desc-max-bytes}` bytes UTF-8), `price` (`DECIMAL(12,2)`), `stock` y `categoryId` opcional (`POST /api/products`), edita sus atributos (`PUT /api/products/:id`), asocia o retira categorías existentes (`POST/DELETE /api/products/:id/categories`) o lo elimina (`DELETE /api/products/:id`).
+* **Flujos alternos:** Vendedor `PENDING` ve la vista `SellerPending.cshtml`; `409 Conflict` si supera `{cuota-productos-activos}` productos activos o `{cuota-categorias-producto}` categorías activas por producto; `429` si excede `{catalogo-escrituras-max}` escrituras/min (`sellerWriteLimit`); `403` si intenta editar productos de otro vendedor.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Products/Index.cshtml, Create.cshtml, Edit.cshtml y Categories.cshtml — Vistas implementadas, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-13>>: Subir y eliminar imagen de producto en Cloudinary
+* **Actor principal:** Vendedor (`SELLER` aprobado propietario; actor secundario: Cloudinary API).
+* **Precondiciones:** Producto activo perteneciente al vendedor autenticado; archivo JPEG, PNG o WebP estático `<= {img-max-mib} MiB` (`{img-max-bytes}` bytes), `<= {img-max-dim-px} px` por lado y `<= {img-max-mp} MP`.
+* **Postcondiciones:** Imagen saneada y recodificada en Cloudinary (`imagePublicId` guardado en `products`) y eliminación previa de imagen reemplazada o huérfana.
+* **Flujo básico:** Al enviar `multipart/form-data` campo `image` a `PUT /api/products/:id/image`, el sistema adquiere cuota y concurrencia en Redis (`{img-vendedor-min}`/min y `{img-vendedor-conc}` concurrente por vendedor; `{img-global-min}`/min y `{img-global-conc}` global), `upload.middleware.js` recibe con timeout de `{img-receive-seg}` s, `image-validation.service.js` decodifica/re-codifica con `sharp` en subproceso aislado (`--max-old-space-size={img-worker-mem-mb}` MB, `{img-timeout-ms}` ms), sube a Cloudinary y actualiza `imagePublicId` (`200`). También permite retirar imagen (`DELETE /api/products/:id/image`).
+* **Flujos alternos:** `400` por formato/magic-bytes/contenedor inválido o multipágina; `408` por timeout de recepción; `413` si supera `{img-max-mib} MiB`; `429` por cuotas de tasa o concurrencia; `502` ante fallo de Cloudinary. Mientras no se cargue imagen (`hasImage: false`), el producto permanece como borrador visible únicamente para el `SELLER` propietario (`catalog.service.js`).
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-14>>: Gestionar pedidos asignados y transiciones de entrega
+* **Actor principal:** Vendedor (`SELLER` aprobado).
+* **Precondiciones:** Cuenta `SELLER` en estado `APPROVED` y existencia de pedidos con `sellerId` igual al usuario autenticado.
+* **Postcondiciones:** Estado del pedido actualizado conforme a la máquina de estados (`<<RN-08>>`) y registrado en `order_status_history`.
+* **Flujo básico:** El Vendedor consulta sus ventas (`GET /api/orders/seller`), inspecciona el detalle (`GET /api/orders/:id`) y avanza el estado (`PUT /api/orders/:id/status`) siguiendo `PENDING -> PREPARING -> SHIPPED -> DELIVERED` o cancelando con motivo desde `PENDING`/`PREPARING`.
+* **Flujos alternos:** `409` por transición prohibida o estado terminal; `403` si intenta acceder a pedidos de otro vendedor.
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-15>>: Administrar categorías del catálogo
+* **Actor principal:** Administrador (`ADMIN`).
+* **Precondiciones:** Sesión activa con rol `ADMIN`.
+* **Postcondiciones:** Categoría creada, renombrada o eliminada lógicamente respetando unicidad de `normalizedName` y protección `protected`.
+* **Flujo básico:** Desde `CategoriesController`, el Administrador lista, consulta, crea (`POST /api/categories`), actualiza (`PUT /api/categories/:id`) o elimina (`DELETE /api/categories/:id`) categorías del catálogo (`catalog.service.js`).
+* **Flujos alternos:** `409` si existe otra categoría (incluso soft-deleted) con mismo nombre normalizado; `400` al intentar borrar una categoría `protected = true`; `403` si un `BUYER` o `SELLER` intenta mutar categorías.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Categories/Index.cshtml y Create.cshtml — Vistas implementadas, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-16>>: Revisar solicitudes de vendedor y suspender vendedores aprobados
+* **Actor principal:** Administrador (`ADMIN`).
+* **Precondiciones:** Sesión activa con rol `ADMIN`; vendedor en `PENDING` (para revisión) o en `APPROVED` (para suspensión).
+* **Postcondiciones:** Vendedor transicionado a `APPROVED`/`REJECTED` (con `rejectionReason` si se rechaza) o `SUSPENDED` (con `reason` obligatorio), y evento registrado en `audit_logs`.
+* **Flujo básico:** En `UsersController`, el Administrador revisa una solicitud pendiente (`PUT /api/users/sellers/:userId/review`) o suspende a un vendedor aprobado (`PUT /api/users/sellers/:userId/suspend`) mediante `accounts.service.js`.
+* **Flujos alternos:** `400` si falta `rejectionReason`/`reason`; `409` si el vendedor no está en el estado requerido (`PENDING` para revisión, `APPROVED` para suspensión). En el estado actual del código, tanto `REJECTED` como `SUSPENDED` son terminales.
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-17>>: Administrar cuentas de usuario y supervisar pedidos globales
+* **Actor principal:** Administrador (`ADMIN`).
+* **Precondiciones:** Sesión activa con rol `ADMIN`.
+* **Postcondiciones:** Estado/nombre/contraseña de cuenta no administradora actualizado (con revocación inmediata de sesiones si cambia estado o contraseña), baja lógica o visualización global de pedidos.
+* **Flujo básico:** El Administrador lista/consulta usuarios (`GET /api/users`, `GET /api/users/:email`), modifica estado `ACTIVE`/`SUSPENDED`/`DISABLED` (`PUT /api/users/:email`), realiza borrado lógico de usuarios no `ADMIN` (`DELETE /api/users/:email`) o supervisa todos los pedidos del sistema (`GET /api/orders`, `PUT /api/orders/:id/status`).
+* **Flujos alternos:** `403` al intentar suspender/deshabilitar/eliminar otra cuenta `ADMIN` o auto-suspenderse; `410 Gone` en el endpoint retirado `POST /api/users`.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Users/Index.cshtml y Edit.cshtml — Vistas implementadas, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+==== <<CU-18>>: Consultar bitácora inmutable de auditoría
+* **Actor principal:** Administrador (`ADMIN`).
+* **Precondiciones:** Sesión activa con rol `ADMIN`.
+* **Postcondiciones:** Lista paginada de eventos históricos (`AuditLog`) sin mutación ni exposición de campo interno `details`.
+* **Flujo básico:** Desde `AuditLogController`, el Administrador consulta `GET /api/audit-logs` paginando mediante cursor `before` y `limit` (`1..100`, defecto 50).
+* **Flujos alternos:** `400` si los parámetros `before` o `limit` son inválidos; `403` para cualquier rol distinto a `ADMIN`.
+* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/AuditLog/Index.cshtml — Vista implementada, captura pendiente]`
+* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+
+=== Lista Consolidada de Capturas Pendientes (Prototipos)
+
+[cols="1,3,3,2",options="header"]
 |===
-| ID | Nombre | Descripción Detallada | Contrato HTTP | Prioridad | Estabilidad
-| **RF-01** | Autenticación e Inicio de Sesión | El sistema debe autenticar usuarios mediante correo electrónico y contraseña. Si las credenciales son válidas (comparación bcrypt con `salt rounds=10`), debe emitir un token JWT firmado con HMAC SHA-256 (`HS256`), con vigencia de 20 minutos y claims estándar WS-Federation: `Name`, `GivenName`, `Role`. El frontend almacena el JWT dentro de la cookie cifrada `.frontendnet` y lo reenvía automáticamente en cabecera `Authorization: Bearer <jwt>` mediante `EnviaBearerDelegatingHandler`. | `POST /api/auth` | Alta | Estable
-| **RF-02** | Consulta de Tiempo Restante de Sesión | El sistema debe proveer un endpoint protegido que retorne el tiempo de vida remanente del token activo en formato `HH:MM:SS`. Ante ausencia de token, debe responder `404 Not Found`. | `GET /api/auth/tiempo` | Media | Estable
-| **RF-03** | Gestión de Catálogo de Categorías | El sistema debe permitir crear, consultar, actualizar y eliminar categorías de productos. La eliminación de categorías marcadas con `protegida = true` debe ser rechazada con `400 Bad Request`. La eliminación de categorías no protegidas debe limpiar en cascada las relaciones en la tabla asociativa `categoriaproducto`. | `GET/POST/PUT/DELETE /api/categorias` | Alta | Estable
-| **RF-04** | Gestión de Inventario de Productos | El sistema debe permitir registrar, consultar, actualizar y eliminar productos. Cada producto tiene: `titulo` (máx. 255 chars), `descripcion`, `precio` (decimal válido) y referencia opcional a archivo multimedia (`archivoid`). La actualización emplea listas blancas (Whitelist DTO) para prevenir Mass Assignment (CWE-915). | `GET/POST/PUT/DELETE /api/productos` | Alta | Estable
-| **RF-05** | Búsqueda y Filtrado de Productos | El sistema debe permitir buscar productos por título mediante el parámetro de consulta `?s=termino`, utilizando coincidencia parcial (`LIKE %termino%`) parametrizada mediante Sequelize ORM para prevenir inyección SQL. | `GET /api/productos?s={termino}` | Media | Estable
-| **RF-06** | Asociación Relacional N:M (Categoría-Producto) | El sistema debe permitir asociar y desasociar múltiples categorías a un producto mediante la tabla pivote `categoriaproducto`. Antes de asociar, ambos recursos deben existir en base de datos. | `POST /api/productos/:id/categoria` + `DELETE /api/productos/:id/categoria/:catId` | Alta | Estable
-| **RF-07** | Carga y Descarga de Archivos Multimedia | El sistema debe permitir la subida de imágenes JPEG/JPG mediante `multipart/form-data` validando MIME (`image/jpeg`), extensión y cuota (≤ 2 MB). Los nombres de archivo deben ser generados criptográficamente (`crypto.randomUUID() + '.jpg'`). El almacenamiento es dual: filesystem o `LONGBLOB` en MySQL controlado por la variable `FILES_IN_BD`. La descarga retorna el binario con `Content-Type` apropiado. | `POST/PUT/GET/DELETE /api/archivos` | Alta | Estable
-| **RF-08** | Trazabilidad Inmutable — Bitácora de Auditoría | Toda operación de mutación (crear, editar, eliminar en cualquier recurso, e inicio de sesión) debe registrarse automáticamente en `bitacora`, capturando: acción, identificador del recurso afectado, IP real del cliente (resolviendo proxies con `request-ip`), usuario responsable y marca temporal. La bitácora es de solo lectura para todos los clientes. | `GET /api/bitacora` | Alta | Estable
-| **RF-09** | Gestión de Usuarios del Sistema | El sistema debe permitir al rol `Administrador` crear, consultar, actualizar y eliminar cuentas de usuario. La creación debe validar unicidad de correo (`409 Conflict`) y hash bcrypt de contraseña. La actualización aplica Whitelist DTO: solo acepta los campos `nombre`, `email`, `password` y `rolid`; si `password` se incluye, se re-deriva el hash con `bcrypt(10)`. Ninguna operación puede modificar los campos `protegido`, `id` o `passwordhash` directamente. La eliminación de usuarios con `protegido = true` es rechazada con `403 Forbidden`. | `GET/POST/PUT/DELETE /api/usuarios` | Alta | Estable
-| **RF-10** | Consulta del Catálogo de Roles | El sistema debe proveer un endpoint protegido que retorne el listado de roles disponibles del sistema (`Administrador`, `Usuario`) para ser utilizado en los formularios de creación y edición de cuentas de usuario. | `GET /api/roles` | Baja | Estable
-|===
-
-=== Casos de Uso del Sistema
-
-Los casos de uso detallan la **interacción paso a paso** entre los actores y el sistema, incluyendo flujos principales y flujos alternos de error.
-
-==== CU-01: Iniciar Sesión en la Plataforma
-
-[cols="1,3", options="header"]
-|===
-| Campo | Descripción
-| **Actor Principal** | Usuario / Administrador
-| **Sistema Participante** | Cliente Frontend .NET — `AuthController.cs` / API Backend — `auth.controller.js`
-| **Precondición** | El usuario no tiene una sesión activa. La base de datos tiene al menos una cuenta registrada.
-| **Disparador** | El usuario navega a la vista `/auth` y hace clic en "Iniciar Sesión".
-|===
-
-*Flujo Principal:*
-
-. El usuario escribe su correo electrónico y contraseña en el formulario de la vista `Auth/Index.cshtml`.
-. La librería `jquery.validate.unobtrusive.js` valida en cliente que el correo tiene formato válido (`[EmailAddress]`) y que ningún campo está vacío (`[Required]`).
-. El formulario realiza un `POST /auth` al `AuthController` de ASP.NET Core.
-. El `AuthController` verifica que `ModelState.IsValid` y llama a `AuthClientService.ObtenTokenAsync(email, password)`.
-. El servicio despacha una petición `POST http://localhost:3000/api/auth` con payload JSON.
-. El backend de Node.js busca el usuario por correo en MySQL (Sequelize). Si existe, ejecuta `bcrypt.compare(password, passwordhash)`.
-. Ante credenciales válidas, genera el JWT con claims `Name`, `GivenName`, `Role` y vigencia de 20 minutos. Registra `usuario.login` en bitácora.
-. El backend responde `200 OK` con el payload `{ email, nombre, rol, jwt }`.
-. El `AuthController` crea la identidad de claims C# con el token JWT embebido y ejecuta `HttpContext.SignInAsync()`, generando la cookie `.frontendnet` cifrada en el navegador.
-. El sistema redirige: si el rol es `Administrador` → `/Productos`; si es `Usuario` → `/Home`.
-
-*Flujos Alternos:*
-
-* *FA-01: Campos vacíos o formato inválido.* La validación unobtrusive impide el envío del formulario y muestra mensajes de error junto a cada campo. HTTP: No se realiza petición al servidor.
-* *FA-02: Correo inexistente en base de datos.* El backend ejecuta `bcrypt.compare(password, DUMMY_HASH)` (mitigación Timing Attack - CWE-208) y responde `401 Unauthorized`. El frontend muestra el mensaje "Usuario o contraseña incorrectos."
-* *FA-03: Contraseña incorrecta.* El backend ejecuta `bcrypt.compare` real y el resultado es `false`. Responde `401 Unauthorized` con el mismo mensaje genérico de FA-02 para no revelar si el usuario existe.
-* *FA-04: Campos de `email` o `password` ausentes en el request.* El backend retorna `400 Bad Request` indicando los campos requeridos.
-
-*Postcondición:* El usuario tiene una sesión activa representada por la cookie `.frontendnet` en su navegador. Las peticiones subsecuentes al backend llevan automáticamente el `Bearer <jwt>` vía `EnviaBearerDelegatingHandler`.
-
----
-
-==== CU-02: Gestionar Catálogo de Categorías
-
-[cols="1,3", options="header"]
-|===
-| Campo | Descripción
-| **Actor Principal** | Administrador
-| **Sistema Participante** | `CategoriasController.cs` (Frontend) — `categorias.controller.js` (Backend)
-| **Precondición** | El Administrador tiene una sesión activa con rol `Administrador`.
-| **Disparador** | El Administrador navega a la vista `/Categorias`.
-|===
-
-*Operaciones del Flujo Principal:*
-
-* *Consultar:* El sistema muestra la lista completa de categorías. Cada fila indica si la categoría es protegida con un badge visual.
-* *Crear:* El Administrador llena el formulario de nueva categoría (nombre único). El sistema persiste el registro con `protegida = false` por defecto y registra `categoria.crear` en bitácora.
-* *Editar:* El Administrador modifica el nombre de una categoría existente. El sistema actualiza el registro y registra `categoria.editar` en bitácora.
-* *Eliminar:* El sistema evalúa el campo `protegida`. Si `protegida = true`, responde `400 Bad Request` indicando que la categoría no puede eliminarse. Si `protegida = false`, elimina el registro y limpia en cascada la tabla `categoriaproducto`. Registra `categoria.eliminar` en bitácora.
-
-*Flujos Alternos:*
-
-* *FA-01: Token expirado al realizar operación.* El middleware de autenticación del backend responde `401 Unauthorized`. Si el `RefrescaTokenDelegatingHandler` no pudo renovar la cookie, el frontend redirige al login.
-* *FA-02: Intento de eliminar categoría protegida.* El backend responde `400 Bad Request`. El frontend muestra un modal o mensaje de error indicando que la operación no está permitida.
-* *FA-03: Rol insuficiente.* Si se intenta acceder a este módulo sin rol `Administrador`, el backend responde `403 Forbidden` y el atributo `[Authorize(Roles = "Administrador")]` del controlador .NET redirige al inicio.
-
-*Postcondición:* El catálogo de categorías refleja el estado actualizado. El evento queda registrado en la tabla `bitacora`.
-
----
-
-==== CU-03: Administrar Productos e Inventario
-
-[cols="1,3", options="header"]
-|===
-| Campo | Descripción
-| **Actor Principal** | Administrador
-| **Sistema Participante** | `ProductosController.cs` (Frontend) — `productos.controller.js` (Backend)
-| **Precondición** | El Administrador tiene una sesión activa.
-| **Disparador** | El Administrador navega a la vista `/Productos`.
-|===
-
-*Operaciones del Flujo Principal:*
-
-* *Consultar:* Lista todos los productos con sus categorías asignadas y la imagen asociada (`archivoid`). Soporta filtro por nombre con el parámetro `?s=termino`.
-* *Crear:* El formulario captura `titulo`, `descripcion`, `precio` y opcionalmente un `archivoid`. El backend valida con `express-validator` (título no vacío, precio decimal válido). Al crear, se registra `producto.crear` en bitácora.
-* *Editar:* El backend aplica **Whitelist DTO** — solo acepta los campos `titulo`, `descripcion`, `precio` y `archivoid`. Cualquier otro campo en `req.body` es ignorado silenciosamente (mitigación CWE-915). Registra `producto.editar`.
-* *Eliminar:* Se elimina el registro de producto. Las relaciones en `categoriaproducto` se limpian por cascada. La FK `producto.archivoid` no elimina el archivo (solo se desvincula). Registra `producto.eliminar`.
-
-*Flujos Alternos:*
-
-* *FA-01: Campos obligatorios vacíos o precio no numérico.* `express-validator` retorna `400 Bad Request` con el listado de errores detallados. El frontend muestra los mensajes junto a los campos inválidos.
-* *FA-02: Producto no encontrado en edición o eliminación.* El backend retorna `404 Not Found`.
-
-*Postcondición:* El catálogo de productos refleja el estado actualizado. El evento queda registrado en `bitacora`.
-
----
-
-==== CU-04: Consultar Catálogo y Realizar Compras
-
-[cols="1,3", options="header"]
-|===
-| Campo | Descripción
-| **Actor Principal** | Usuario / Administrador
-| **Sistema Participante** | `HomeController.cs`, `ComprarController.cs`, `CarritoController.cs` (Frontend) — `GET /api/productos`, `GET /api/categorias` (Backend)
-| **Precondición** | El usuario puede tener o no tener sesión activa para consultar el catálogo público.
-| **Disparador** | El usuario accede a la portada (`/Home`) o a la sección de compras (`/Comprar`).
-|===
-
-*Flujo Principal:*
-
-. El sistema presenta en la portada un carrusel con productos destacados y el catálogo organizado por categorías (tema Mercado Libre, color `#ffe600`).
-. El usuario puede buscar productos escribiendo en el campo de búsqueda; el sistema envía `GET /api/productos?s=termino` al backend.
-. El usuario selecciona un producto y lo agrega al carrito de compras gestionado en la sesión del frontend.
-. El usuario visualiza el carrito en `/Carrito` con el desglose de artículos y el total calculado.
-
-*Flujos Alternos:*
-
-* *FA-01: Búsqueda sin resultados.* El backend retorna un arreglo vacío `[]` con `200 OK`. El frontend muestra el mensaje "No se encontraron productos".
-* *FA-02: Error de conectividad con el backend.* El frontend captura la excepción de `HttpClient` y muestra un mensaje de error genérico sin exponer detalles técnicos.
-
-*Postcondición:* El usuario visualizó el catálogo. Si agregó productos al carrito, la selección persiste en la sesión del navegador hasta que cierre la sesión o limpie el carrito.
-
----
-
-==== CU-05: Asociar y Desasociar Categorías a Productos
-
-[cols="1,3", options="header"]
-|===
-| Campo | Descripción
-| **Actor Principal** | Administrador
-| **Sistema Participante** | `ProductosController.cs` (Frontend) — `productos.controller.js` (Backend)
-| **Precondición** | Existen productos y categorías no protegidas registrados en el sistema.
-| **Disparador** | El Administrador hace clic en "Gestionar Categorías" en la vista de detalle de un producto.
-|===
-
-*Flujo Principal (Asociar):*
-
-. El sistema muestra la lista de categorías disponibles y las categorías ya asignadas al producto.
-. El Administrador selecciona una categoría a agregar y confirma.
-. El sistema verifica que tanto el producto como la categoría existan en base de datos.
-. El sistema inserta la tupla en la tabla pivote `categoriaproducto` mediante el método `item.addCategoria(itemToAssign)`.
-. Registra `productocategoria.agregar` en bitácora con el par `productoId:categoriaId`.
-. Responde `204 No Content`. El frontend actualiza la vista.
-
-*Flujo Principal (Desasociar):*
-
-. El Administrador selecciona la categoría a remover del producto.
-. El sistema verifica la existencia de ambos recursos y elimina la tupla de la tabla pivote con `item.removeCategoria(itemToRemove)`.
-. Registra `productocategoria.remover` en bitácora.
-
-*Flujos Alternos:*
-
-* *FA-01: Producto o categoría no encontrada.* Responde `404 Not Found` con el recurso faltante especificado.
-* *FA-02: Sin `categoriaid` en el cuerpo de la petición.* Responde `400 Bad Request` indicando el campo obligatorio.
-
-*Postcondición:* La relación entre el producto y la(s) categoría(s) queda actualizada en la tabla `categoriaproducto`.
-
----
-
-==== CU-06: Subir y Descargar Archivos Multimedia
-
-[cols="1,3", options="header"]
-|===
-| Campo | Descripción
-| **Actor Principal** | Usuario / Administrador
-| **Sistema Participante** | `ArchivosController.cs` (Frontend) — `archivos.controller.js` + `upload.middleware.js` (Backend)
-| **Precondición** | El actor tiene una sesión activa. El archivo a subir es una imagen JPEG válida.
-| **Disparador** | El Administrador navega a la vista `/Archivos/Crear` o hace clic en "Subir Imagen" al crear/editar un producto.
+| Módulo | Ruta de Vista (`frontendnet/Views/`) | Propósito de la Captura | Estado
+| Acceso y Registro | `frontendnet/Views/Auth/Index.cshtml`, `Register.cshtml`, `VerifyRegistration.cshtml`, `ForgotPassword.cshtml`, `ResetPassword.cshtml` | Login con Turnstile, alta en dos fases y recuperación OTP | `[CAPTURA PENDIENTE]`
+| Perfil | `frontendnet/Views/Profile/Index.cshtml`, `Edit.cshtml`, `ChangePassword.cshtml` | Datos de cuenta, estado de vendedor y cambio de clave | `[CAPTURA PENDIENTE]`
+| Catálogo Comprador | `frontendnet/Views/Shopping/Index.cshtml`, `Details.cshtml` | Exploración autenticada con búsqueda `?s=` | `[CAPTURA PENDIENTE]`
+| Direcciones | `frontendnet/Views/Addresses/Index.cshtml`, `Create.cshtml`, `Edit.cshtml` | Libreta de direcciones y predeterminada | `[CAPTURA PENDIENTE]`
+| Carrito y Checkout | `frontendnet/Views/ShoppingCart/Index.cshtml`, `Orders/Checkout.cshtml` | Carrito multi-vendedor y resumen de cotización | `[CAPTURA PENDIENTE]`
+| Pedidos | `frontendnet/Views/Orders/Index.cshtml`, `Details.cshtml` | Seguimiento de pedidos, cancelación y transiciones | `[CAPTURA PENDIENTE]`
+| Productos Vendedor | `frontendnet/Views/Products/Index.cshtml`, `Create.cshtml`, `Edit.cshtml`, `SellerPending.cshtml` | Gestión de catálogo propio, imagen y bloqueo pending | `[CAPTURA PENDIENTE]`
+| Administración | `frontendnet/Views/Categories/Index.cshtml`, `Users/Index.cshtml`, `AuditLog/Index.cshtml` | Categorías, moderación de vendedores y bitácora | `[CAPTURA PENDIENTE]`
 |===
 
-*Flujo Principal (Subida):*
+=== Matriz de Requisitos Funcionales (`RF`) vs. Casos de Uso (`CU`)
 
-. El usuario selecciona un archivo de imagen desde su equipo en el formulario Razor.
-. El modelo `Upload.cs` en C# valida en cliente: tamaño ≤ 100 KB (validación frontend), `ContentType == "image/jpeg"`.
-. El frontend construye un `MultipartFormDataContent` y lo envía vía `POST /api/archivos` con la cabecera `Authorization: Bearer <jwt>`.
-. El middleware Multer en Node.js verifica la cuota de 2 MB. Si excede, rechaza con error `MulterError`.
-. Multer valida el tipo MIME (`image/jpeg`) y extensión (`.jpg`/`.jpeg`). Si falla, rechaza con `400 Bad Request`.
-. Multer genera el nombre criptográfico de disco: `crypto.randomUUID() + '.jpg'`. Escribe el archivo en `/uploads`.
-. El controlador evalúa `FILES_IN_BD`:
-** Si `true`: lee el buffer con `fs.readFileSync`, elimina el archivo físico con `fs.unlinkSync` y persiste el binario en la columna `LONGBLOB` de MySQL (`indb = true`).
-** Si `false`: mantiene el archivo en disco (`indb = false`, `datos = null`).
-. Registra `archivos.crear` en bitácora. Responde `201 Created` con metadatos del archivo (`id`, `mime`, `nombre`, `indb`).
-. El frontend muestra la vista de detalle del archivo con la imagen renderizada.
+La definición normativa de cada `<<RF-01>>` a `<<RF-18>>` y su enlace completo se encuentran en `_registro_ids.adoc`. La siguiente matriz vincula cada par `RF–CU` con las rutas HTTP reales del contrato API vigente:
 
-*Flujo Principal (Descarga/Visualización):*
-
-. Se realiza `GET /api/archivos/:id` al backend.
-. Si `indb = true`, el backend retorna el binario de la columna `LONGBLOB` con el `Content-Type` del MIME original.
-. Si `indb = false`, el backend localiza el archivo en `/uploads` y lo sirve con `res.contentType(data.mime).send(binario)`.
-
-*Flujos Alternos:*
-
-* *FA-01: Archivo excede 2 MB.* Multer interrumpe y el ErrorHandler retorna `400 Bad Request` con descripción del límite excedido.
-* *FA-02: Formato distinto a JPEG.* El filtro de Multer rechaza el archivo con `400 Bad Request`.
-* *FA-03: Archivo no encontrado en disco.* Si `indb = false` y el archivo físico fue borrado externamente, el backend retorna `404 Not Found`.
-* *FA-04: Intento de actualizar un archivo inexistente.* El backend retorna `404 Not Found` y elimina el archivo recién subido para no dejar archivos huérfanos.
-
-*Postcondición:* El archivo multimedia queda persistido en el sistema (filesystem o MySQL). Su `id` puede asociarse a un producto mediante `archivoid`. El evento queda registrado en bitácora.
-
----
-
-==== CU-07: Consultar la Bitácora de Auditoría
-
-[cols="1,3", options="header"]
+[cols="1,1,4,2",options="header"]
 |===
-| Campo | Descripción
-| **Actor Principal** | Administrador
-| **Sistema Participante** | `BitacoraController.cs` (Frontend) — `bitacora.controller.js` (Backend)
-| **Precondición** | El Administrador tiene una sesión activa con rol `Administrador`.
-| **Disparador** | El Administrador navega a la sección `/Bitacora`.
+| Requisito (`RF`) | Caso de Uso (`CU`) | Endpoints Reales (`auditoria/contrato_api.md`) | Estado
+| <<RF-01>> | <<CU-01>> | `POST /api/auth/register`, `POST /api/auth/register/verify` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-02>> | <<CU-02>> | `POST /api/auth` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-03>> | <<CU-03>> | `POST /api/auth/refresh`, `GET /api/auth/time` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-04>> | <<CU-04>> | `POST /api/auth/logout` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-05>> | <<CU-05>> | `POST /api/auth/password/forgot`, `POST /api/auth/password/reset` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-06>> | <<CU-06>> | `GET /api/users/me`, `PUT /api/users/me`, `PUT /api/users/me/password` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-07>> | <<CU-07>> | `GET /api/products`, `GET /api/products/:id`, `GET /api/categories`, `GET /api/categories/:id` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-08>> | <<CU-08>> | `GET/POST /api/addresses`, `PUT/DELETE /api/addresses/:id`, `PUT /api/addresses/:id/default` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-09>> | <<CU-09>> | `GET /api/cart`, `POST /api/cart/items`, `PUT/DELETE /api/cart/items/:productId`, `DELETE /api/cart` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-10>> | <<CU-10>> | `POST /api/checkout/quote`, `POST /api/checkout` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-11>> | <<CU-11>> | `GET /api/orders`, `GET /api/orders/:id`, `PUT /api/orders/:id/status` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-12>> | <<CU-12>> | `POST /api/products`, `PUT/DELETE /api/products/:id`, `POST/DELETE /api/products/:id/categories` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-13>> | <<CU-13>> | `PUT /api/products/:id/image`, `DELETE /api/products/:id/image` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-14>> | <<CU-14>> | `GET /api/orders/seller`, `GET /api/orders/:id`, `PUT /api/orders/:id/status` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-15>> | <<CU-15>> | `POST /api/categories`, `PUT /api/categories/:id`, `DELETE /api/categories/:id` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-16>> | <<CU-16>> | `PUT /api/users/sellers/:userId/review`, `PUT /api/users/sellers/:userId/suspend` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-17>> | <<CU-17>> | `GET /api/users`, `GET/PUT/DELETE /api/users/:email`, `GET /api/orders`, `PUT /api/orders/:id/status` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-18>> | <<CU-18>> | `GET /api/audit-logs` | `IMPLEMENTADO Y VERIFICADO`
 |===
 
-*Flujo Principal:*
+=== Requisitos No Funcionales (Seguridad, Desempeño y Disponibilidad)
 
-. El frontend emite `GET /api/bitacora` con el token Bearer.
-. El backend valida el rol `Administrador`. Si falla, responde `403 Forbidden`.
-. El backend consulta toda la tabla `bitacora` con Sequelize y retorna la lista ordenada por fecha descendente.
-. El frontend renderiza la vista `Bitacora/Index.cshtml` con una tabla que muestra: acción ejecutada, identificador del elemento afectado, IP de origen, usuario responsable y fecha/hora en formato `es-MX`.
+Se separan explícitamente los controles verificados en el código fuente (`IMPLEMENTADO Y VERIFICADO`) de las metas de nivel de servicio propuestas que requieren infraestructura de carga o producción aún no ejecutadas (`PLANIFICADO` / `NO_VERIFICABLE`):
 
-*Flujos Alternos:*
+* **Seguridad (`<<RNF-01>>`–`<<RNF-04>>`):**
+  * Cifrado/hashing de contraseñas con `scrypt` (`N={scrypt-n}`, `r={scrypt-r}`, `p={scrypt-p}`, `{scrypt-clave-bytes}` B de clave, `{scrypt-sal-bytes}` B de sal) y `createDummyHash()` (`IMPLEMENTADO Y VERIFICADO`).
+  * Tokens de acceso RS256 (`{jwt-rsa-bits}` bits, `LIFETIME_SECONDS={jwt-ttl-seg}` s) verificados en cada petición contra Redis y MySQL (`IMPLEMENTADO Y VERIFICADO`).
+  * Registro inmutable `audit_logs` mediante hooks Sequelize bloqueando `UPDATE` y `DELETE` (`backendnode/models/audit-log.js:3-10`) (`IMPLEMENTADO Y VERIFICADO`).
+  * Conexión HTTPS obligatoria en proxies inversos Apache 2, TLS en Redis/MySQL y reglas de firewall `ufw` + `DOCKER-USER` verificadas en red local (`IMPLEMENTADO Y VERIFICADO`, ver Capítulo 8).
+* **Desempeño (`<<RNF-05>>`–`<<RNF-06>>`):**
+  * _Controles implementados:_ cola acotada de `scrypt`, subprocesos Sharp con `--max-old-space-size={img-worker-mem-mb}` MB y timeout de `{img-timeout-ms}` ms, timeout de carga `{img-receive-seg}` s y cuotas Redis (`IMPLEMENTADO Y VERIFICADO`).
+  * _Metas propuestas (`PLANIFICADO`, medición en vivo `NO_VERIFICABLE` hasta ejecutar `k6`):_ tiempo de respuesta `p95 <= 500 ms` en consultas autenticadas de catálogo y `<= 1500 ms` en autenticación/checkout bajo carga nominal.
+* **Disponibilidad (`<<RNF-07>>`–`<<RNF-08>>`):**
+  * _Controles implementados:_ endpoint `GET /health` en `backendnode/index.js:127-130` (`200 { status: 'ok' }` sin consultar bases de datos desde HTTP), healthchecks de contenedor (`mysqladmin ping`, `/health` y `redis-cli --tls ... ping`), reinicio automático `restart: unless-stopped` y cuotas de recursos (`mem_limit`, `cpus`, `pids_limit`) en `backendnode/compose.yaml`, más rechazo controlado `503` si Redis no está disponible (`IMPLEMENTADO Y VERIFICADO`).
+  * _Metas propuestas (`PLANIFICADO`, sin despliegue productivo aún `NO_VERIFICABLE`):_ disponibilidad objetivo de `99.5%` mensual en operación con `RPO <= 24 h` y `RTO <= 2 h`.
 
-* *FA-01: Rol insuficiente.* El backend retorna `403 Forbidden`. El frontend muestra "Acceso no autorizado."
-* *FA-02: Bitácora vacía.* El backend retorna `[]` con `200 OK`. El frontend muestra "No hay eventos registrados."
+=== Reglas de Negocio Verificadas (`RN`)
 
-*Postcondición:* El Administrador visualizó el registro inmutable de todos los eventos del sistema.
+Las reglas `<<RN-01>>` a `<<RN-12>>` registradas en `_registro_ids.adoc` resumen los invariantes críticos del código:
 
----
+* **Sesiones y contraseñas (`<<RN-01>>`, `<<RN-02>>`):** TTL JWT `{jwt-ttl-seg}` s, inactividad `{sesion-inactividad-min}` min, tope absoluto `{sesion-absoluto-h}` h, refresco proactivo `{refresh-proactivo-seg}` s antes del vencimiento, contraseñas de `{pwd-min-chars}`..`{pwd-max-chars}` caracteres Unicode (`<= {pwd-max-bytes} bytes` UTF-8) con letra, dígito y símbolo Unicode en `password-policy.service.js` y `SecurePasswordAttribute.cs`.
+* **Límites de tasa y lockout (`<<RN-03>>`):** Login limitado por IP (`{rl-login-ip-max}`/`{rl-ip-ventana-seg}` s) y cuenta (`{rl-login-cuenta-max}`/`{rl-ip-ventana-seg}` s), registro (`{rl-registro-ip-max}`/`{rl-ip-ventana-seg}` s IP, `{rl-registro-cuenta-max}`/`{rl-cuenta-ventana-min}` min cuenta), verificación OTP (`{rl-otp-cuenta-max}`/`{rl-cuenta-ventana-min}` min), bloqueo desde `{lockout-umbral}` fallos en `{lockout-ventana-min}` min con backoff exponencial desde `{lockout-base-seg}` s hasta `{lockout-max-min}` min.
+* **Categorías solo `ADMIN` y cuotas de vendedor (`<<RN-04>>`, `<<RN-05>>`, `<<RN-06>>`):** Solo `ADMIN` crea, edita o elimina categorías (`normalizedName` único, `protected` inborrable); los vendedores aprobados tienen tope de `{cuota-productos-activos}` productos activos, `{cuota-categorias-producto}` categorías activas por producto (`409 Conflict`) y `{catalogo-escrituras-max}` escrituras de catálogo/min (`429`).
+* **Cotización, inventario y aislamiento (`<<RN-07>>`, `<<RN-08>>`, `<<RN-09>>`):** Cotización HMAC válida por `{quote-ttl-seg}` s (máx. `{cart-max-items}` ítems), confirmación transaccional con `LOCK.UPDATE` e idempotencia por `checkoutId`, restitución atómica en cancelación, y validación estricta de propietario `sellerId`/`buyerId`.
+* **Imágenes y acceso (`<<RN-10>>`, `<<RN-11>>`, `<<RN-12>>`):** Límite de `{img-max-mib} MiB`, hasta `{img-max-dim-px} px`/lado y `{img-max-mp} MP` estáticos (`{img-max-frames}` frame), cuotas Redis (`{img-vendedor-min}`/min vendedor, `{img-vendedor-conc}` concurrente; `{img-global-min}`/min global, `{img-global-conc}` concurrentes), catálogo restringido a usuarios autenticados y endpoints heredados retirados con `410 Gone`.
 
-==== CU-08: Gestionar Usuarios del Sistema
+=== Limitaciones Conocidas y Decisiones de Alcance
 
-[cols="1,3", options="header"]
-|===
-| Campo | Descripción
-| **Actor Principal** | Administrador
-| **Sistema Participante** | `UsuariosController.cs` (Frontend) — `usuarios.controller.js` + `roles.controller.js` (Backend)
-| **Precondición** | El Administrador tiene una sesión activa con rol `Administrador`.
-| **Disparador** | El Administrador navega a la sección `/Usuarios`.
-|===
+. **Ciclo de vida terminal de vendedores rechazados o suspendidos (decisión de alcance cerrada):** En `backendnode/services/accounts.service.js:123-173`, los estados `REJECTED` y `SUSPENDED` de la tabla `sellers` son **terminales** en esta versión (`reviewSeller` exige `seller.status === 'PENDING'` y `suspendSeller` exige `seller.status === 'APPROVED'`). Se excluye deliberadamente un flujo de reactivación o apelación en `frontendnet`, dejando su incorporación como posible extensión futura.
+. **Descripción obligatoria `NOT NULL` y visibilidad de borradores sin imagen (decisión implementada en `main`):**
+  * _Descripción:_ Tanto `catalog.service.js` y `backendnode/models/product.js:8` (`allowNull: false`) como `ProductFormModel.cs` exigen una descripción no vacía de 1 a `{desc-max-bytes}` bytes UTF-8 al crear o editar; la migración `backendnode/migrations/20261123000001-require-products-description-not-null.js` impone la restricción física `NOT NULL` en MySQL tras verificar la integridad previa de datos.
+  * _Imagen y borradores:_ La creación de producto (`POST /api/products`) y la carga de imagen (`PUT /api/products/:id/image`) permanecen desacopladas por seguridad (cuotas Redis y subprocesos Sharp); cuando un vendedor crea un producto sin imagen o falla la carga posterior, `visibleProductQuery` en `backendnode/services/catalog.service.js:200-212` oculta ese borrador a `BUYER` y `ADMIN` y expone `hasImage: false` exclusivamente al `SELLER` propietario hasta completar la subida.
+. **Riesgo residual en historial de Git (`<<RSG-10>>`):** Una credencial antigua de desarrollo en `config/config.json` fue eliminada en `c8a22f3`, pero persiste en el historial del commit `7b2e983`. Documentado exclusivamente como **riesgo residual revocado** (sin exponer valor alguno), pendiente de rotación externa (`NO_VERIFICABLE`) y limpieza de historial antes de exposición pública.
 
-*Flujo Principal (Consultar):*
+=== Riesgos de Seguridad Identificados (`RSG`)
 
-. El sistema emite `GET /api/usuarios` con el Bearer Token.
-. El backend valida el rol `Administrador`. Si falla, responde `403 Forbidden`.
-. Retorna la lista de usuarios registrados en MySQL.
-. El frontend renderiza la vista `Usuarios/Index.cshtml` con tabla que muestra: nombre, correo, rol y si es protegido.
+La matriz completa de riesgos (`<<RSG-01>>` a `<<RSG-10>>`) reside en `_registro_ids.adoc`, destacando los riesgos críticos cubiertos desde el diseño:
 
-*Flujo Principal (Crear):*
-
-. El Administrador completa el formulario en `Usuarios/Crear.cshtml` con los campos: nombre, correo, contraseña y rol.
-. Para obtener los roles disponibles, el frontend emite `GET /api/roles` y puebla la lista desplegable.
-. DataAnnotations validan en cliente: `[Required]`, `[EmailAddress]`, `[MinLength(6)]`.
-. El frontend envía `POST /api/usuarios` con los datos al backend.
-. El backend verifica que el correo no exista (`409 Conflict` si ya existe) y deriva el hash bcrypt de la contraseña.
-. Persiste el nuevo usuario con `protegido = false` por defecto y registra `usuarios.crear` en bitácora.
-. Responde `201 Created` con los metadatos del usuario (sin `passwordhash`).
-
-*Flujo Principal (Editar):*
-
-. El Administrador navega a `Usuarios/Editar/:email` y modifica los campos permitidos.
-. El backend aplica Whitelist DTO: solo acepta `nombre`, `email`, `password` y `rolid`. Si `password` está presente, lo re-hashea con `bcrypt(10)`.
-. Registra `usuarios.editar` en bitácora. Responde `200 OK` con los datos actualizados.
-
-*Flujo Principal (Eliminar):*
-
-. El Administrador confirma la eliminación de un usuario en la vista de confirmación.
-. El sistema recupera el usuario por correo y evalúa el flag `protegido`.
-. Si `protegido = true`, responde `403 Forbidden` y aborta la eliminación.
-. Si `protegido = false`, elimina el registro y registra `usuarios.eliminar` en bitácora.
-
-*Flujos Alternos:*
-
-* *FA-01: Correo ya registrado al crear.* El backend retorna `409 Conflict`. El frontend muestra "Ya existe una cuenta con ese correo electrónico."
-* *FA-02: Intento de eliminar usuario protegido.* El backend retorna `403 Forbidden`. El frontend muestra el error sin detalles adicionales.
-* *FA-03: Usuario no encontrado en edición o eliminación.* El backend retorna `404 Not Found`.
-* *FA-04: Rol no existente al crear o editar.* El backend verifica la existencia del rol con `rol.findOne()`; si no existe, responde `400 Bad Request`.
-* *FA-05: Rol insuficiente para acceder al módulo.* El backend retorna `403 Forbidden`. El atributo `[Authorize(Roles = "Administrador")]` del controlador .NET redirige al inicio.
-
-*Postcondición:* El directorio de usuarios del sistema refleja el estado actualizado. El evento queda registrado en la tabla `bitacora`.
-
----
-
-=== Prototipos de Interfaz de Usuario
-
-Los prototipos corresponden a las vistas Razor (`.cshtml`) implementadas en la aplicación ASP.NET Core 8.0 MVC del cliente frontend. El sistema de diseño emplea **Bootstrap 5.3.3** con el tema corporativo de Mercado Libre (color primario `#ffe600`, fondo oscuro `#1a1a2e` en modo oscuro) y soporte de tema claro/oscuro mediante `cambio_tema.js`.
-
-==== Prototipo 1: Portada Principal (Home)
-
-[source,text]
-----
-┌─────────────────────────────────────────────────────────────┐
-│  🛒 MercadoLibreNode         [Iniciar Sesión] [Carrito 🛒]  │ ← Navbar Bootstrap
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │        CARRUSEL DE PRODUCTOS DESTACADOS (#ffe600)     │  │
-│  │   ← [Imagen Producto 1 / Producto 2 / Producto 3] →  │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  🔍  [Buscar producto...                        ] [Buscar]  │
-│                                                             │
-│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐  │
-│  │  [Imagen] │ │  [Imagen] │ │  [Imagen] │ │  [Imagen] │  │ ← Cards Bootstrap
-│  │ Televisor │ │  Celular  │ │  Laptop   │ │ Refriger. │  │
-│  │  $12,999  │ │  $8,499   │ │ $15,999   │ │  $9,799   │  │
-│  │[Agregar🛒]│ │[Agregar🛒]│ │[Agregar🛒]│ │[Agregar🛒]│  │
-│  └───────────┘ └───────────┘ └───────────┘ └───────────┘  │
-└─────────────────────────────────────────────────────────────┘
-----
-
-==== Prototipo 2: Pantalla de Autenticación (Login)
-
-[source,text]
-----
-┌─────────────────────────────────────────────────────────────┐
-│                    🔐  Iniciar Sesión                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│         ┌─────────────────────────────────────────┐        │
-│         │        TARJETA DE LOGIN Bootstrap        │        │
-│         │                                          │        │
-│         │  Correo Electrónico                      │        │
-│         │  ┌────────────────────────────────────┐  │        │
-│         │  │ usuario@ejemplo.com                │  │        │
-│         │  └────────────────────────────────────┘  │        │
-│         │  [Required] [EmailAddress]                │        │ ← DataAnnotations
-│         │                                          │        │
-│         │  Contraseña                              │        │
-│         │  ┌────────────────────────────────────┐  │        │
-│         │  │ ••••••••••                         │  │        │
-│         │  └────────────────────────────────────┘  │        │
-│         │  [Required] [MinLength(6)]                │        │
-│         │                                          │        │
-│         │     [ Iniciar Sesión (#ffe600) ]          │        │
-│         │                                          │        │
-│         │  ⚠️ Usuario o contraseña incorrectos.     │        │ ← Mensaje FA-02/FA-03
-│         └─────────────────────────────────────────┘        │
-└─────────────────────────────────────────────────────────────┘
-----
-
-==== Prototipo 3: Administración de Productos
-
-[source,text]
-----
-┌─────────────────────────────────────────────────────────────┐
-│ 📦 Gestión de Productos — Panel Administrador               │
-├─────────────────────────────────────────────────────────────┤
-│  [+ Nuevo Producto]                 🔍 [Buscar...] [Buscar] │
-│                                                             │
-│  ┌──────┬──────────────┬──────────────┬─────────┬─────────┐ │
-│  │ Img  │    Título    │  Categorías  │ Precio  │Acciones │ │
-│  ├──────┼──────────────┼──────────────┼─────────┼─────────┤ │
-│  │[IMG] │ Televisor 4K │ Electronica, │$12,999  │✏️ 🗑️ 🏷 │ │ ← Editar, Eliminar, Categorías
-│  │[IMG] │ Celular Pro  │ Celulares    │ $8,499  │✏️ 🗑️ 🏷 │ │
-│  │[IMG] │ Laptop Ultra │ Cómputo      │$15,999  │✏️ 🗑️ 🏷 │ │
-│  └──────┴──────────────┴──────────────┴─────────┴─────────┘ │
-└─────────────────────────────────────────────────────────────┘
-
-Formulario Crear/Editar:
-┌─────────────────────────────────────────────────────────────┐
-│  Título: [___________________________] [Required, Max 255]  │
-│  Descripción: [______________________] [Required]           │
-│  Precio: [__________] [Required, Decimal válido]            │
-│  Imagen: Seleccionar archivo → ID del archivo en BD         │
-│  [ Guardar ]   [ Cancelar ]                                 │
-└─────────────────────────────────────────────────────────────┘
-----
-
-==== Prototipo 4: Gestión de Archivos Multimedia
-
-[source,text]
-----
-┌─────────────────────────────────────────────────────────────┐
-│ 🖼️  Gestión de Archivos Multimedia                          │
-├─────────────────────────────────────────────────────────────┤
-│  [+ Subir Archivo]                                          │
-│                                                             │
-│  ┌──────┬────────────────────────────┬──────────┬─────────┐ │
-│  │  ID  │        Nombre en Disco     │   MIME   │ Tamaño  │ │
-│  ├──────┼────────────────────────────┼──────────┼─────────┤ │
-│  │   1  │ 3a4b-uuid-....jpg          │image/jpeg│  142 KB │ │
-│  │   2  │ 9f2c-uuid-....jpg          │image/jpeg│   87 KB │ │
-│  └──────┴────────────────────────────┴──────────┴─────────┘ │
-│                                                             │
-│ Vista previa al seleccionar un archivo:                     │
-│  ┌──────────────────────────────┐                           │
-│  │         [Imagen JPEG]        │ ← Servida desde           │
-│  │      (GET /api/archivos/1)   │   el backend Node.js      │
-│  └──────────────────────────────┘                           │
-│  Formulario Subida: [Seleccionar archivo .jpg ≤ 2MB]        │
-└─────────────────────────────────────────────────────────────┘
-----
-
-==== Prototipo 5: Bitácora de Auditoría
-
-[source,text]
-----
-┌─────────────────────────────────────────────────────────────┐
-│ 📋  Bitácora de Auditoría — Solo Administradores            │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌────────────────────┬───────────┬───────────────┬───────┐ │
-│  │      Acción        │ Elemento  │  Usuario / IP │ Fecha │ │
-│  ├────────────────────┼───────────┼───────────────┼───────┤ │
-│  │ usuario.login      │ admin@... │ admin@... /   │ 26 oct│ │
-│  │                    │           │ 192.168.1.10  │ 20:01 │ │
-│  │ producto.crear     │    7      │ admin@... /   │ 26 oct│ │
-│  │                    │           │ 192.168.1.10  │ 20:03 │ │
-│  │ categoria.eliminar │    3      │ admin@... /   │ 26 oct│ │
-│  │                    │           │ 192.168.1.10  │ 20:05 │ │
-│  └────────────────────┴───────────┴───────────────┴───────┘ │
-│                  Formato fecha: es-MX                       │
-└─────────────────────────────────────────────────────────────┘
-----
-
-=== Validaciones en Dos Capas (Defense in Depth)
-
-La estrategia de validación se aplica en dos niveles independientes para garantizar que ninguna entrada maliciosa o incorrecta alcance la capa de persistencia.
-
-[cols="1,3,3", options="header"]
-|===
-| Campo / Recurso | Capa 1 — Frontend C# (DataAnnotations) | Capa 2 — Backend Node.js (express-validator / Multer)
-| **email (login)** | `[Required]`, `[EmailAddress]` — Validado con `jquery.validate.unobtrusive.js` antes del submit. | Comprobación de `email` y `password` presentes en `req.body`; si faltan: `400 Bad Request`.
-| **password (login)** | `[Required]`, `[MinLength(6)]` | `bcrypt.compare` contra hash almacenado; tiempo de respuesta constante anti-timing (CWE-208).
-| **titulo (producto)** | `[Required]`, `[MaxLength(255)]` | `body('titulo').trim().notEmpty().isLength({ max: 255 })` → rechazo con `400 Bad Request`.
-| **precio (producto)** | `[Required]`, `[RegularExpression(@"^\d+(\.\d{1,2})?$")]` | `body('precio').isDecimal()` → rechazo con `400 Bad Request`.
-| **archivo (upload)** | `IFormFile`: verifica `ContentType == "image/jpeg"` y `Length ≤ 102400` (100 KB) en C#. | Multer: `limits: { fileSize: 2097152 }` y `fileFilter` → MIME + extensión; nombre aleatorio UUID (CWE-22).
-| **rol (usuario)** | `[Required]`, lista desplegable controlada con opciones válidas del catálogo. | `rol.findOne({ where: { nombre: req.body.rol } })`; si no existe: `400 Bad Request` (evita Null Pointer - CWE-703).
-| **email (usuario)** | `[Required]`, `[EmailAddress]` | `usuario.findOne({ where: { email } })`; si ya existe: `409 Conflict`.
-|===
-
-=== Requisitos No Funcionales
-
-[cols="1,2,4", options="header"]
-|===
-| ID | Nombre | Descripción con Parámetros Medibles
-| **RNF-01** | Autenticación Stateless y Efímera | El backend emite JWTs con algoritmo HMAC SHA-256 (`HS256`), secreto de 35 bytes de alta entropía y vigencia máxima de **20 minutos**. El servidor no almacena estado de sesión. El frontend almacena el JWT dentro de una **cookie cifrada** (`.frontendnet`) con expiración deslizante de 20 minutos, protegiendo el token del acceso directo por scripts del DOM (mitigación de XSS).
-| **RNF-02** | Renovación Continua de Sesión (Rolling Tokens) | El middleware `auth.middleware.js` detecta automáticamente si el tiempo de vida restante del token es menor a **5 minutos**. En ese caso, emite un nuevo JWT (20 min) en la cabecera `Set-Authorization`. El `RefrescaTokenDelegatingHandler.cs` del frontend intercepta esta cabecera y renueva la cookie del usuario de forma transparente sin interrumpir su sesión.
-| **RNF-03** | Control de Acceso Basado en Roles (RBAC) | La API implementa el principio `Deny by Default`: todos los endpoints de mutación requieren autenticación y el rol específico. La normalización con `.map(r => r.trim())` garantiza que los roles declarados en los endpoints (`'Usuario, Administrador'`) se comparen sin errores de espaciado. El frontend aplica `[Authorize(Roles = "Administrador")]` en los controladores de administración.
-| **RNF-04** | Rendimiento | Las consultas al catálogo de productos y categorías deben responder en menos de **200 ms** bajo condiciones normales. El ORM Sequelize utiliza un pool de conexiones MySQL y las búsquedas por `LIKE` operan sobre campos indexados. El Event Loop de Node.js gestiona la concurrencia sin bloqueo de I/O.
-| **RNF-05** | Portabilidad y Disponibilidad | La capa de API y base de datos está contenerizada con Docker Compose. La imagen base es `node:20-alpine` (mínima superficie de ataque). La aplicación Node.js se ejecuta bajo el usuario sin privilegios `USER node` (mitigación de escalada de privilegios - CWE-250). El contenedor `ecommerce_db` cuenta con un `healthcheck` activo que garantiza que la API solo arranque cuando MySQL esté listo.
-|===
-
-=== Reglas de Negocio del Dominio
-
-Las siguientes reglas constituyen **invariantes del sistema** que no pueden ser violadas bajo ninguna circunstancia, independientemente del actor o del endpoint invocado.
-
-[cols="1,2,4,2", options="header"]
-|===
-| ID | Nombre | Descripción | Enforcement
-| **RN-01** | Protección de Registros del Sistema | Las categorías con `protegida = true` y los usuarios con `protegido = true` son registros de sistema inicializados por seeders y **no pueden ser eliminados**. Intentar eliminarlos devuelve `400 Bad Request` (categorías) o `403 Forbidden` (usuarios). | `categorias.controller.js` y `usuarios.controller.js`
-| **RN-02** | Unicidad de Identidad de Usuario | No se permite registrar dos cuentas con el mismo correo electrónico. El sistema verifica la existencia previa con `usuario.findOne({ where: { email } })` y retorna `409 Conflict` si el correo ya está registrado. | `usuarios.controller.js`
-| **RN-03** | Cuota Máxima de Archivo Multimedia | Los archivos multimedia subidos no pueden exceder **2 MB** (2,097,152 bytes). Esta cuota es verificada por Multer en el backend y también validada de forma inicial en el cliente frontend C# (100 KB) para mejorar la experiencia de usuario. | `upload.middleware.js`, `Upload.cs`
-| **RN-04** | Restricción de Formato de Archivo | Solo se admiten archivos con extensión `.jpg` o `.jpeg` cuyo tipo MIME binario corresponda a `image/jpeg`. La verificación es doble: extensión mediante `path.extname()` y tipo MIME reportado por el cliente. Los nombres de archivo en disco se generan criptográficamente para eliminar la dependencia del nombre original del cliente. | `upload.middleware.js`
-|===
-
-=== Matriz de Riesgos de Seguridad Identificados
-
-[cols="1,2,3,1,3", options="header"]
-|===
-| ID | Vulnerabilidad / Riesgo | Descripción del Vector de Ataque | Nivel CWE / OWASP | Mitigación Arquitectónica Implementada
-| **RS-01** | Inyección SQL | Un atacante manipula parámetros de entrada (búsqueda, identificadores) insertando sentencias SQL que alteren el comportamiento de las consultas a la base de datos. | CWE-89 / OWASP A03:2021 | Sequelize ORM con consultas parametrizadas en 100% de las operaciones. Ninguna sentencia SQL se construye por concatenación de cadenas. La búsqueda `?s=` usa `Op.like` con valores enlazados.
-| **RS-02** | Fuerza Bruta y Ataques de Temporización | Medición del tiempo de respuesta del endpoint de login para deducir si un correo electrónico existe en la base de datos, o intentos repetidos de adivinar contraseñas. | CWE-208 / CWE-307 | Si el usuario no existe, el sistema ejecuta `bcrypt.compare(password, DUMMY_HASH)` manteniendo el tiempo de respuesta constante (~100 ms). El endpoint de login dispone de Rate Limiting para bloquear ráfagas de intentos fallidos.
-| **RS-03** | Asignación Masiva (Mass Assignment) | Un atacante inyecta campos extra en `req.body` (como `protegido: false` o `passwordhash: "hash_malicioso"`) que el ORM escribe directamente en la base de datos si no hay filtrado. | CWE-915 / OWASP API3:2023 | Los controladores de mutación (`usuarios`, `productos`, `categorias`) construyen manualmente el objeto de actualización con solo los campos permitidos (Whitelist DTO). `req.body` nunca se pasa íntegro al ORM.
-| **RS-04** | Path Traversal (Salto de Directorio) | Un atacante nombra su archivo como `../../etc/passwd` o `../../index.js` esperando que el servidor lo escriba fuera del directorio `/uploads`. | CWE-22 / OWASP A01:2021 | El middleware Multer genera nombres de archivo con `crypto.randomUUID() + '.jpg'`, desvinculando completamente el nombre del archivo en disco del nombre original enviado por el cliente. Las rutas de destino se resuelven con `path.resolve(__dirname, '../uploads')`.
-| **RS-05** | Agotamiento de Recursos / DoS por Archivos | Un atacante sube archivos de gran tamaño (gigabytes) repetidamente hasta agotar el espacio en disco o la memoria del servidor. | CWE-400 / OWASP API4:2023 | Multer aplica `limits: { fileSize: 2 * 1024 * 1024 }` (2 MB). Si el archivo excede este límite, el stream se interrumpe antes de completar la escritura. El frontend aplica una validación adicional de 100 KB para mejorar la UX.
-|===
+* **XSS (`<<RSG-01>>`) y CSRF (`<<RSG-02>>`):** Mitigados mediante escape contextual Razor, políticas CSP en `backendnode` y `SecurityHeadersMiddleware`, `AutoValidateAntiforgeryTokenAttribute` global en `frontendnet`, cookies `.frontendnet` con `HttpOnly` y `SameSite=Lax` y autenticación REST por cabecera explícita `Bearer`.
+* **SQLi (`<<RSG-03>>`), Fuerza Bruta (`<<RSG-04>>`), Secuestro de Sesión (`<<RSG-05>>`) e IDOR (`<<RSG-06>>`):** Mitigados por Sequelize parametrizado + `escapeLike()`, rate limiting y lockout en Redis + `scrypt` / `createDummyHash()`, rotación de refresh tokens con detección `REFRESH_REUSED` y recarga autoritativa en vivo en `Authorize`.
+* **Carga maliciosa de imágenes (`<<RSG-07>>`), fraude en checkout (`<<RSG-08>>`), SSRF (`<<RSG-09>>`) y credencial histórica (`<<RSG-10>>`):** Mitigados mediante validación en 6 capas en worker aislado + cuotas Redis, cotizaciones firmadas HMAC con verificación transaccional `LOCK.UPDATE`, lista blanca Cloudinary y gestión de secretos por `*_FILE`.

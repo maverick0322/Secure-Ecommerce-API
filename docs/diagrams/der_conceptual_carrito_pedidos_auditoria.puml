@@ -1,0 +1,73 @@
+' TRACE: backendnode/models/cart.js; backendnode/models/cart-item.js; backendnode/models/order.js; backendnode/models/order-item.js; backendnode/models/order-status-history.js; backendnode/models/audit-log.js; backendnode/models/buyer.js; backendnode/models/seller.js; backendnode/models/product.js; backendnode/models/user.js
+@startuml der_conceptual_carrito_pedidos_auditoria
+!include _skin.puml
+title DER Conceptual — Contexto Carrito, Pedidos y Auditoría
+caption 10 entidades de dominio: 6 propias + 4 puente (límite de la guía: máx. 15 entidades)
+
+class User <<entity>> {
+  + name
+  + email
+}
+
+class Buyer <<entity>> {
+}
+
+class Seller <<entity>> {
+  + storeName
+  + status
+}
+
+class Product <<entity>> {
+  + title
+  + price
+  + stock
+}
+
+class Cart <<entity>> {
+  + updatedAt
+}
+
+class CartItem <<entity>> {
+  + quantity
+}
+
+class Order <<entity>> {
+  + checkoutId
+  + status
+  + total
+  + deliveryAddressSnapshot
+}
+
+class OrderItem <<entity>> {
+  + productTitle
+  + quantity
+  + unitPrice
+}
+
+class OrderStatusHistory <<entity>> {
+  + previousStatus
+  + newStatus
+  + reason
+  + occurredAt
+}
+
+class AuditLog <<entity>> {
+  + action
+  + targetType
+  + targetId
+  + ipAddress
+  + outcome
+  + occurredAt
+}
+
+Buyer "1" *-- "0..1" Cart : "posee >"
+Cart "1" *-- "0..100" CartItem : "contiene >"
+Product "1" -- "0..*" CartItem : "referenciado en >"
+Buyer "1" -- "0..*" Order : "compra >"
+Seller "1" -- "0..*" Order : "surte >"
+Order "1" *-- "1..*" OrderItem : "detalla >"
+Product "1" -- "0..*" OrderItem : "histórico en >"
+Order "1" *-- "1..*" OrderStatusHistory : "registra >"
+User "0..1" -- "0..*" OrderStatusHistory : "cambia estado >"
+User "0..1" -- "0..*" AuditLog : "actor >"
+@enduml

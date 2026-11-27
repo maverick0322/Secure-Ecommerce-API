@@ -1,0 +1,50 @@
+' TRACE: frontendnet/Controllers/ProductsController.cs; frontendnet/Helpers/ImageUploadValidator.cs; backendnode/routes/products.routes.js; backendnode/middlewares/image-limits.middleware.js; backendnode/middlewares/upload.middleware.js; backendnode/controllers/products.controller.js; backendnode/services/image-limits.service.js; backendnode/services/image-validation.service.js; backendnode/services/image-container.service.js; backendnode/services/image-decoder.service.js; backendnode/services/product-images.service.js; backendnode/services/cloudinary.service.js
+@startuml seq_carga_imagen_producto
+!include _skin.puml
+hide footbox
+autonumber "<b>[00]"
+title Secuencia — Carga, Validación Aislada y Almacenamiento de Imagen (SEQ-05B)
+caption 7 lifelines, 15 mensajes, 2 niveles máx. (límite: 7 lifelines, 16 mensajes, 2 niveles)
+
+actor "Vendedor" as Seller
+boundary "Products\nController" as FeProd <<boundary>>
+control "checkImageOwner\n+ image-limits" as Admission <<control>>
+control "upload.\nmiddleware" as UploadMw <<control>>
+control "Worker Sharp\n(--max-old-space=64)" as Worker <<control>>
+control "product-images\n+ Cloudinary" as ImgSvc <<control>>
+database "Redis 8.2 /\nMySQL 8.4" as DataStores <<database>>
+
+Seller -> FeProd : Adjuntar imagen (<= 2 MiB)
+activate FeProd
+FeProd -> FeProd : ImageUploadValidator.Validate()
+FeProd -> Admission : PUT /api/products/:id/image
+activate Admission
+
+Admission -> DataStores : Validar dueño y cuotas Redis\n(6/m, 1 conc; 60/m, 8 conc)
+Admission -> UploadMw : next() (lease 90s, receive 30s)
+deactivate Admission
+activate UploadMw
+
+UploadMw -> Worker : normalize(buffer)\n(container + Sharp <=4096px, 8MP)
+activate Worker
+Worker --> UploadMw : Buffer saneado (5000ms)
+deactivate Worker
+
+UploadMw -> ImgSvc : replaceImage(account, id, file)
+deactivate UploadMw
+activate ImgSvc
+
+alt Validación y carga exitosas
+  ImgSvc -> ImgSvc : cloudinary.upload() + reserva
+  ImgSvc -> DataStores : UPDATE products (imagePublicId)
+  ImgSvc --> FeProd : 200 OK { imagePublicId, imageUrl }
+  FeProd --> Seller : Miniatura Cloudinary
+else Cuota 429, 413, formato 400 o fallo 502
+  ImgSvc -> DataStores : Liberar lease y limpiar huérfano
+  ImgSvc --> FeProd : 400 / 408 / 413 / 429 / 502
+  FeProd --> Seller : Error sanitizado
+end
+
+deactivate ImgSvc
+deactivate FeProd
+@enduml

@@ -1,61 +1,52 @@
+' TRACE: backendnode/Dockerfile; backendnode/compose.yaml; backendnode/compose.dev.yaml; backendnode/compose.vm2-backend.yaml; backendnode/compose.vm3-db.yaml; backendnode/config/redis/redis.conf; backendnode/index.js; backendnode/services/database.service.js; backendnode/services/redis-tls-config.service.js; backendnode/scripts/deploy/generate-lan-certs.sh; backendnode/scripts/deploy/verify-vm.sh; frontendnet/Dockerfile; frontendnet/compose.vm1-frontend.yaml; frontendnet/Program.cs; frontendnet/appsettings.json; frontendnet/Services/CloudflareTurnstileService.cs; frontendnet/scripts/deploy/verify-vm.sh
 @startuml despliegue
-!theme plain
-skinparam node {
-  BackgroundColor #F8F9FA
-  BorderColor #495057
-}
-skinparam artifact {
-  BackgroundColor #E3F2FD
-  BorderColor #1976D2
-}
-skinparam component {
-  BackgroundColor #E8F5E9
-  BorderColor #388E3C
-}
-skinparam database {
-  BackgroundColor #FFF3E0
-  BorderColor #F57C00
+!include _skin.puml
+top to bottom direction
+skinparam Nodesep 32
+skinparam Ranksep 42
+
+title Diagrama de Despliegue UML 2.5.1 — Topología Distribuida en 3 VMs (DEP-01)
+caption 5 nodos y 12 artefactos (límite: máx. 8 nodos y 12 artefactos · Red Adaptador Puente + Hotspot)
+
+node "Evaluador / Cliente" as N_Client {
+  artifact "Navegador HTTPS\n(HTTP/2, TLS 1.3, Cookies HttpOnly)" as A_Browser <<frontend>>
 }
 
-title Vista Física / Despliegue — Topología Docker y Distribución en Red LAN\n(Arquitectura Segura Distribuida en 3 Nodos / Equipos)
+node "VM 1: Presentación\n(Ubuntu 24.04.5 · tienda.lan)" <<frontend>> as N_VM1 {
+  artifact "Apache 2 Proxy Inverso\nTLS 1.3 :443 -> 127.0.0.1:5000\nRedir. :80->:443, UFW HTTP/S" as A_Apache1 <<security>>
+  artifact "Contenedor frontendnet\n.NET 9.0 Kestrel :5000\nDataProtection-Keys + XFF" as A_Fe <<frontend>>
+}
 
-node "Equipo 3: Estación Cliente / Frontend (LAN 192.168.1.100)" as E3 {
-  node "Host OS (Windows / Linux)" {
-    artifact "Browser Web (Edge / Chrome / Firefox)" as Browser {
-      [Almacén Cookies HTTP (.frontendnet)]
-    }
-    node "Runtime .NET 8 (Kestrel Server :8080)" as NetHost {
-      component "Frontend ASP.NET Core 8 MVC\n(Secure-Ecommerce-FrontendNet)" as NetApp
-      file "appsettings.json\n(Secretos y URLs)" as NetConfig
-      NetApp ..> NetConfig : lee
-    }
+node "VM 2: Lógica de Negocio\n(Ubuntu 24.04.5 · api.tienda.lan)" <<backend>> as N_VM2 {
+  artifact "Apache 2 Proxy Inverso\nTLS 1.3 :443 -> 127.0.0.1:3000\nUFW :443 solo desde IP VM 1" as A_Apache2 <<security>>
+  artifact "Contenedor ecommerce_api\nnode:24-alpine :3000\nTRUST_PROXY + DB_SSL=true" as A_Be <<backend>>
+  artifact "Contenedor redis:8.2 (TLS)\nRed privada backend_internal\n:6379 RESP TLS + ACL + AOF" as A_Redis <<cache>>
+  artifact "Secretos /run/secrets/*\nJWT RS256, DB, Gmail, Cloud." as A_Secrets <<secret>>
+}
+
+together {
+  node "VM 3: Capa de Datos\n(Ubuntu 24.04.5 · db.tienda.lan)" <<database>> as N_VM3 {
+    artifact "Contenedor mysql:8.4\n:3306 TLS + DOCKER-USER + UFW\necommerce_app@IP_VM2" as A_MySql <<database>>
+    artifact "Volumen mysql_data +\nRespaldos gzip cron" as A_Backup <<database>>
+  }
+
+  node "Proveedores Externos" <<external>> as N_Ext {
+    artifact "Cloudinary Media API\nAlmacenamiento + CDN" as A_Cloud <<external>>
+    artifact "Gmail OAuth2 API\nOTP y Notificaciones" as A_Gmail <<external>>
+    artifact "Cloudflare Turnstile\nOpcional / Claves Prueba" as A_Turn <<external>>
   }
 }
 
-node "Equipo 2: Servidor de Aplicaciones API (LAN 192.168.1.101)" as E2 {
-  node "Docker Host (Bridge Network: ecommerce_net)" {
-    node "Contenedor: ecommerce_api (:3000)" as C_API {
-      component "Express.js REST API\n(Node.js 20 LTS)" as NodeApp
-      file ".env\n(JWT_SECRET, DB_PASS, CORS)" as NodeEnv
-      folder "/app/uploads\n(Volumen de Disco Local)" as UploadsDir
-      NodeApp ..> NodeEnv : lee
-      NodeApp ..> UploadsDir : almacena si indb=0
-    }
-  }
-}
-
-node "Equipo 1: Servidor de Base de Datos (LAN 192.168.1.102)" as E1 {
-  node "Docker Host (Bridge Network: db_net)" {
-    node "Contenedor: ecommerce_db (:3306)" as C_DB {
-      database "MySQL 8.0 Community\n(mercadolibrenode)" as MySQLInstance
-      folder "/var/lib/mysql\n(Docker Volume: db_data)" as DBVolume
-      MySQLInstance ..> DBVolume : persistencia ACID
-    }
-  }
-}
-
-Browser --> NetApp : "HTTPS / HTTP :8080\n(Solicitudes HTML + Cookie .frontendnet)"
-NetApp --> NodeApp : "HTTP REST :3000\n(Bearer JWT via DelegatingHandler)\n[Firewall Inbound TCP:3000]"
-NodeApp --> MySQLInstance : "TCP :3306 (Sequelize Pool / SQL Parametrizado)\n[Firewall Inbound TCP:3306]"
+A_Browser --> A_Apache1 : "HTTPS :443 (LAN)"
+A_Apache1 -> A_Fe : "HTTP loopback\nX-Forwarded-For"
+A_Fe --> A_Apache2 : "HTTPS :443\nBearer RS256 + IP"
+A_Apache2 -> A_Be : "HTTP loopback"
+A_Be -> A_Redis : "RESP TLS :6379\n(red interna)"
+A_Secrets .up.> A_Be : "Solo lectura"
+A_Be --> A_MySql : "MySQL TLS :3306\nUFW solo VM 2"
+A_MySql .> A_Backup : "Persistencia"
+A_Fe ..> A_Turn : "HTTPS /siteverify"
+A_Be --> A_Cloud : "HTTPS Upload/CDN"
+A_Be --> A_Gmail : "HTTPS OAuth2"
 
 @enduml

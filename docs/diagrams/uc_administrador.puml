@@ -1,0 +1,21 @@
+' TRACE: backendnode/routes/users.routes.js; backendnode/routes/categories.routes.js; backendnode/routes/orders.routes.js; backendnode/routes/audit-logs.routes.js; frontendnet/Controllers/UsersController.cs; frontendnet/Controllers/CategoriesController.cs; frontendnet/Controllers/OrdersController.cs; frontendnet/Controllers/AuditLogController.cs
+@startuml uc_administrador
+!include _skin.puml
+left to right direction
+title Casos de Uso — Administrador (hereda de Usuario Autenticado)
+caption 4 casos de uso y 1 actor (límite: máx. 14 CU y 5 actores)
+
+actor "Administrador" as Admin
+
+rectangle "Tienda en Línea Segura — Administración" {
+  usecase "CU-15: Administrar categorías\ndel catálogo" as UC15
+  usecase "CU-16: Revisar y suspender\nvendedores" as UC16
+  usecase "CU-17: Administrar usuarios y\nsupervisar pedidos globales" as UC17
+  usecase "CU-18: Consultar bitácora\ninmutable de auditoría" as UC18
+}
+
+Admin -- UC15
+Admin -- UC16
+Admin -- UC17
+Admin -- UC18
+@enduml

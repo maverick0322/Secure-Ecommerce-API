@@ -1,28 +1,50 @@
 == Introducción
 
 === Propósito
-El propósito del presente documento es formalizar la especificación de requisitos, arquitectura, diseño defensivo, estándares de codificación, aseguramiento de la calidad y estrategia de despliegue seguro para el backend de una plataforma de comercio electrónico (E-Commerce). Este sistema provee servicios web RESTful robustos bajo los principios fundamentales de la seguridad de la información: Confidencialidad, Integridad y Disponibilidad (Tríada CIA).
+
+Este documento especifica la arquitectura, los requisitos con enfoque en seguridad, el diseño UML 2.5.1, las decisiones de construcción segura, los estándares de codificación y el plan de pruebas de la plataforma web **Tienda en Línea Segura**, compuesta por el servicio REST `backendnode` (Node.js 24 LTS / Express 4) y el cliente web BFF (_Backend-for-Frontend_) `frontendnet` (ASP.NET Core 9.0 MVC / Razor Views). Su finalidad es servir como referencia técnica trazable al código fuente vigente para auditoría, mantenimiento y evaluación académica en la materia **Programación Segura** de la Facultad de Estadística e Informática de la Universidad Veracruzana.
 
 === Justificación
-Las aplicaciones de comercio electrónico operan en entornos altamente hostiles expuestos continuamente a vectores de ataque como inyección de código SQL, ataques de fuerza bruta, secuestro de sesión y exposición involuntaria de información confidencial. Construir un backend resiliente desde sus cimientos mitiga riesgos de alto impacto financiero, legal y reputacional, alineándose a los estándares de OWASP (Open Web Application Security Project) y el catálogo CWE/SANS Top 25.
 
-=== Objetivo
-* **Objetivo General:** Desarrollar, auditar y documentar una API RESTful segura en Node.js que soporte las operaciones comerciales clave (catálogo de categorías, inventario de productos, autenticación de usuarios y administración de archivos multimedia), garantizando el cumplimiento de los estándares de programación defensiva.
-* **Objetivos Específicos:**
-** Implementar persistencia relacional con Sequelize ORM neutralizando vulnerabilidades de inyección SQL (CWE-89).
-** Establecer un esquema de autenticación sin estado mediante JSON Web Tokens (JWT) y control de acceso basado en roles (RBAC).
-** Configurar un esquema de renovación de sesión transparente (Rolling Tokens) que reduzca la ventana de exposición ante interceptación.
-** Asegurar una cobertura de pruebas automatizadas superior al 90% y validar el código con análisis estático en SonarQube Cloud.
+Las operaciones comerciales informales realizadas por medios no estructurados (mensajería instantánea, correo electrónico o anuncios físicos) carecen de control de inventario transaccional, trazabilidad de pedidos, protección de credenciales y garantías de autenticidad sobre identidad y precios. La plataforma resuelve esa problemática mediante una tienda virtual autenticada donde los vendedores aprobados publican su catálogo con imagen y descripción obligatoria, los compradores exploran productos tras iniciar sesión y confirman pedidos idempotentes respaldados por cotizaciones firmadas, y los administradores gobiernan cuentas, categorías y bitácoras de auditoría bajo el principio de mínimo privilegio.
 
-=== Metodología
-El desarrollo del proyecto se fundamenta en el ciclo de vida de desarrollo de software seguro (**S-SDLC** / Secure Software Development Life Cycle), complementado con:
-* **Defensa en Profundidad (Defense in Depth):** Aplicación de múltiples capas de seguridad (validaciones en capas HTTP, middlewares de autorización, ORM parametrizado y aislamiento en contenedores Docker).
-* **Principio de Menor Privilegio:** Restricción de permisos en base de datos, usuarios del sistema operativo dentro del contenedor (`USER node`) y roles de acceso a la API.
-* **Integración Continua Segura (CI/CD):** Automatización de pruebas unitarias, de integración y análisis estático en GitHub Actions.
+=== Objetivo General y Objetivos Específicos
 
-=== Referencias
-* OWASP Top 10 API Security Risks (2023).
-* RFC 7519: JSON Web Token (JWT).
-* NIST SP 800-63B: Digital Identity Guidelines (Authentication and Lifecycle Management).
-* CWE/SANS Top 25 Most Dangerous Software Weaknesses.
-* Estándares de Codificación Segura para Node.js y Express (OpenSSF / OWASP Node.js Cheat Sheet).
+* **Objetivo general:** Documentar y verificar de manera trazable una plataforma de comercio electrónico web con arquitectura separada frontend/backend diseñada con controles de seguridad por capas, preservando confidencialidad, integridad y disponibilidad operativa.
+* **Objetivos específicos:**
+  . Formalizar los requisitos funcionales (`RF`), casos de uso (`CU`), reglas de negocio (`RN`), requisitos no funcionales (`RNF`) y riesgos (`RSG`) con enfoque de seguridad alineados al código real.
+  . Modelar la arquitectura y comportamiento del sistema mediante diagramas UML 2.5.1 conformes a `GUIA_ESTILO_UML.md` y acotados en complejidad visual.
+  . Documentar los mecanismos implementados contra vulnerabilidades web comunes (inyección SQL, XSS, CSRF, SSRF, fuerza bruta, secuestro de sesión y carga maliciosa de imágenes).
+  . Establecer los estándares de codificación reales de Node.js y C#, así como el plan de pruebas unitarias, análisis estático y pruebas de seguridad (`PLANIFICADO` y `IMPLEMENTADO Y VERIFICADO`).
+
+=== Alcance del Sistema
+
+El alcance cubre la aplicación web completa integrada por:
+
+. **`frontendnet/` (`net9.0`, ASP.NET Core 9.0 MVC):** Aplicación web multipágina (MPA) que actúa como BFF ante el navegador mediante 12 controladores (`AuthController`, `ProfileController`, `ShoppingController`, `AddressesController`, `ShoppingCartController`, `OrdersController`, `ProductsController`, `CategoriesController`, `UsersController`, `AuditLogController`, `HomeController` y `AppController`), `SessionTokenManager`, handlers HTTP delegados (`BearerTokenDelegatingHandler`, `RefreshTokenDelegatingHandler`, `ClientIpForwardingDelegatingHandler`) y `SecurityHeadersMiddleware`.
+. **`backendnode/` (Node.js 24 LTS, Express `^4.21.2`):** API RESTful que expone `{endpoints-operativos}` endpoints operativos (y `{endpoints-retirados}` retirados con código `410`) bajo `/api/*`, además de `/health` y `/swagger` fuera de `production`, respaldada por **MySQL 8.4** (14 modelos Sequelize / 14 tablas finales en `backendnode/migrations/20261110000001-create-secure-ecommerce-tables.js`) y **Redis 8.2** sobre TLS (`backendnode/compose.yaml:144`).
+. **Integraciones externas:** Cloudinary (`cloudinary ^2.11.0`) para almacenamiento de imágenes de producto, Gmail OAuth2 (`googleapis 171.4.0`) para códigos OTP de verificación/recuperación y Cloudflare Turnstile (`CloudflareTurnstileService`) en formularios públicos de acceso.
+
+=== Metodología de Desarrollo y Verificación Documental
+
+El desarrollo y mantenimiento del proyecto sigue un flujo de ingeniería verificable:
+
+* **Control de versiones y ramas:** Trabajo por ramas temáticas (`feature/*`, `fix/backend-hardening`, `docs/lote-0`, `docs/incremento-1`) integradas hacia `main` mediante Pull Requests revisados.
+* **Integración continua (`backendnode/.github/workflows/`):** Flujo `test.yml` sobre Node.js 24 (`npm ci --ignore-scripts`, `npm audit --audit-level=high`, `npm run test:coverage` con MySQL y Redis aislados y `scripts/database/stage5-historical-tests.js`), flujo `sonar.yml` para SonarQube Cloud y flujo `docs.yml` para generación de diagramas con PlantUML 1.2024.8 y compilación AsciiDoctor a HTML5. En `frontendnet/`, las `{fe-tests-pasados}` pruebas automatizadas se ejecutan con `dotnet test` (workflow de GitHub Actions pendiente: `PLANIFICADO`).
+* **Verificación documental en el código:** Todo dato estructural en `docs/BASELINE.md` se genera con `backendnode/docs/generate-inventory.js`, las constantes numéricas se centralizan en `docs/asciidoc/_hechos.adoc`, y los scripts `backendnode/docs/verify-traces.js` y `backendnode/docs/verify-docs.js` comprueban antes de cada confirmación la inexistencia de términos prohibidos, la integridad de identificadores y la existencia real de cada archivo y símbolo citado.
+
+=== Procesos a Modelar
+
+De acuerdo con la especificación académica del proyecto final y la arquitectura vigente del sistema, se destacan tres procesos nucleares transversales y de negocio para su modelado detallado en requisitos, diseño UML y secuencias:
+
+. **Inicio de sesión (`<<CU-02>>`):** Validación anti-bot en `AuthController`, control de tasa por IP (`{rl-login-ip-max}`/`{rl-ip-ventana-seg}` s) y cuenta (`{rl-login-cuenta-max}`/`{rl-ip-ventana-seg}` s) y lockout exponencial en Redis (`auth-rate-limit.middleware.js`), verificación constante en `scrypt` (`N={scrypt-n}`) o `createDummyHash()`, emisión de JWT RS256 (`{jwt-ttl-seg}` s) más refresh token opaco y emisión de cookie `.frontendnet`.
+. **Registro de nueva cuenta (`<<CU-01>>`):** Flujo en dos fases (`POST /api/auth/register` y `POST /api/auth/register/verify`) con elección de perfil (`BUYER` o `SELLER`), validación estricta de contraseña (`{pwd-min-chars}`..`{pwd-max-chars}` caracteres), emisión de código OTP de `{otp-digitos}` dígitos con vigencia de `{otp-ttl-min}` min enviada por Gmail OAuth2 (`gmail.service.js`), y creación transaccional de `User` más perfil `Buyer` o `Seller` (en estado `PENDING`).
+. **Carrito de compras y checkout (`<<CU-09>>`, `<<CU-10>>`):** Administración de ítems en `ShoppingCartController` / `cart.service.js` verificando stock y vendedor `APPROVED`, generación de cotización firmada HMAC (`checkout-quote.service.js`, vigencia `{quote-ttl-seg}` s) y confirmación idempotente por `checkoutId` que particiona los pedidos por vendedor y descuenta inventario atómicamente en MySQL.
+
+=== Referencias Bibliográficas
+
+. **Seidl, M., Scholz, M., Huemer, C., & Kappel, G. (2015).** _UML @ Classroom: An Introduction to Object-Oriented Modeling_. Springer (`libros/UML_at_Classroom_3dfd.pdf`). Referencia normativa para notación UML 2.5.1 de casos de uso, clases, secuencia, componentes y despliegue.
+. **Rosenberg, D., & Stephens, M. (2007).** _Use Case Driven Object Modeling with UML: Theory and Practice_ (ICONIX Process). Apress (`libros/Apress.Use.Case.Driven.Object.Modeling.with.UML.Jan.2007_7c25.pdf`). Referencia para trazabilidad casos de uso -> robustez -> clases/secuencia y modelado de tablas relacionales.
+. **OWASP Foundation.** _OWASP Application Security Verification Standard (ASVS)_ y _OWASP Top 10_. Criterios de verificación para autenticación, gestión de sesiones, control de acceso, validación de entradas y mitigación de SQLi, XSS, CSRF y SSRF.
+. **Microsoft Patterns & Practices Team (2009).** _Microsoft Application Architecture Guide_ (2nd Edition). Referencia base de la guía académica para arquetipos de aplicación web y separación por capas.
+. **Guías y documentos normativos del repositorio:** `backendnode/docs/BASELINE.md`, `auditoria/contrato_api.md`, `backendnode/docs/diagrams/GUIA_ESTILO_UML.md` y `backendnode/docs/diagrams/PLAN_DIAGRAMAS.md`.

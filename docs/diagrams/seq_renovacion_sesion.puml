@@ -1,0 +1,47 @@
+' TRACE: frontendnet/Middlewares/BearerTokenDelegatingHandler.cs; frontendnet/Middlewares/RefreshTokenDelegatingHandler.cs; frontendnet/Services/SessionTokenManager.cs; frontendnet/Services/AuthClientService.cs; backendnode/routes/auth.routes.js; backendnode/middlewares/auth-rate-limit.middleware.js; backendnode/controllers/auth.controller.js; backendnode/services/authentication.service.js; backendnode/services/auth-session.service.js; backendnode/services/rs256-access-token.service.js
+@startuml seq_renovacion_sesion
+!include _skin.puml
+hide footbox
+autonumber "<b>[00]"
+title Secuencia — Renovación de Sesión y Rotación de Refresh Token (SEQ-02)
+caption 6 lifelines, 15 mensajes, 2 niveles máx. (límite: 7 lifelines, 16 mensajes, 2 niveles)
+
+control "DelegatingHandlers\n(frontendnet)" as Handlers <<control>>
+control "SessionTokenManager\n(SemaphoreSlim por sid)" as TokenMgr <<control>>
+control "auth-rate-limit\n(refresh)" as RateLimit <<control>>
+control "auth.controller\n(refresh)" as AuthCtrl <<control>>
+control "authentication.service\n(refresh)" as AuthSvc <<control>>
+database "Redis 8.2\n(TLS :6379)" as Redis <<database>>
+
+Handlers -> TokenMgr : EnsureValidAccessTokenAsync(ctx, TryRefreshAsync)
+activate TokenMgr
+
+opt JWT expira en <= 30s o respuesta previa fue 401
+  TokenMgr -> TokenMgr : WaitAsync(SemaphoreSlim single-flight)
+  TokenMgr -> RateLimit : POST /api/auth/refresh { refreshToken }
+  activate RateLimit
+  RateLimit -> Redis : Verificar límite IP (180/60s) y sesión (15/60s)
+  RateLimit -> AuthCtrl : next() -> auth.controller.refresh(req, res)
+  deactivate RateLimit
+  activate AuthCtrl
+  AuthCtrl -> AuthSvc : authentication.refresh(req.body, { ipAddress })
+  activate AuthSvc
+
+  AuthSvc -> Redis : sessions.rotate(refreshToken, credentialVersion)
+  alt Refresh token vigente y generación coincide
+    Redis --> AuthSvc : Nuevo refreshToken rotado + extensión IDLE 30m
+    AuthSvc --> AuthCtrl : { jwt RS256 (300s), refreshToken }
+    AuthCtrl --> TokenMgr : 200 OK
+    TokenMgr -> TokenMgr : Actualizar SessionState y liberar SemaphoreSlim
+  else Reúso detectado (REFRESH_REUSED), expirado o credenciales cambiadas
+    Redis --> AuthSvc : Revocar sesión completa en Redis (AuthSessionError)
+    AuthSvc --> AuthCtrl : 401 Unauthorized
+    AuthCtrl --> TokenMgr : 401 -> SignOutAsync + redirección a /Auth
+  end
+  deactivate AuthSvc
+  deactivate AuthCtrl
+end
+
+TokenMgr --> Handlers : JWT vigente (o null si revocado)
+deactivate TokenMgr
+@enduml

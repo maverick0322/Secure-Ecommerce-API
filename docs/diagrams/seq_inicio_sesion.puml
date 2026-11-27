@@ -1,0 +1,47 @@
+' TRACE: frontendnet/Controllers/AuthController.cs; frontendnet/Services/CloudflareTurnstileService.cs; frontendnet/Services/AuthClientService.cs; frontendnet/Services/SessionTokenManager.cs; backendnode/routes/auth.routes.js; backendnode/middlewares/auth-rate-limit.middleware.js; backendnode/controllers/auth.controller.js; backendnode/services/authentication.service.js; backendnode/services/password-hash.service.js; backendnode/services/auth-session.service.js; backendnode/services/rs256-access-token.service.js
+@startuml seq_inicio_sesion
+!include _skin.puml
+hide footbox
+autonumber "<b>[00]"
+title Secuencia — Inicio de Sesión (SEQ-01)
+caption 7 lifelines, 16 mensajes, 2 niveles máx. (routes/auth.routes.js:8 -> auth-rate-limit -> auth.controller.login -> authentication.service.login)
+
+actor "Visitante" as Visitor
+boundary "AuthController\n(frontendnet)" as FeAuth <<boundary>>
+control "auth-rate-limit\n(middleware)" as RateLimit <<control>>
+control "auth.controller\n(login)" as AuthCtrl <<control>>
+control "authentication.service\n(login)" as AuthSvc <<control>>
+database "Redis 8.2\n(TLS :6379)" as Redis <<database>>
+database "MySQL 8.4\n(:3306)" as MySQL <<database>>
+
+Visitor -> FeAuth : POST /Auth/Index (Login + Turnstile)
+activate FeAuth
+FeAuth -> RateLimit : POST /api/auth { email, password }
+activate RateLimit
+RateLimit -> Redis : Verificar límite IP (120/60s), cuenta (10/60s) y lockout
+RateLimit -> AuthCtrl : next() -> auth.controller.login(req, res)
+deactivate RateLimit
+activate AuthCtrl
+
+AuthCtrl -> AuthSvc : authentication.login(req.body, { ipAddress })
+activate AuthSvc
+AuthSvc -> MySQL : findAccountByEmail(email)
+MySQL --> AuthSvc : User + perfil (o null)
+AuthSvc -> AuthSvc : verify(password, hash o createDummyHash()) — scrypt N=32768
+
+alt Credenciales válidas y cuenta ACTIVE
+  AuthSvc -> Redis : sessions.create() -> IDLE 30m, ABS 8h
+  AuthSvc --> AuthCtrl : { id, profile, jwt RS256 (300s), refreshToken }
+  AuthCtrl -> Redis : clearLoginFailures(emailKey)
+  AuthCtrl --> FeAuth : 200 OK
+  FeAuth --> Visitor : SignInAsync(.frontendnet HttpOnly) + Redirect
+else Credenciales inválidas o cuenta inactiva
+  AuthSvc --> AuthCtrl : AccountError(401) -> recordLoginFailure (lockout >= 5)
+  AuthCtrl --> FeAuth : 401 Unauthorized (429 si excede umbral)
+  FeAuth --> Visitor : Vista Index con error sanitizado
+end
+
+deactivate AuthSvc
+deactivate AuthCtrl
+deactivate FeAuth
+@enduml

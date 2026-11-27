@@ -1,0 +1,46 @@
+' TRACE: frontendnet/Controllers/ShoppingCartController.cs; frontendnet/Services/ShoppingCart/ShoppingCartClientService.cs; backendnode/routes/cart.routes.js; backendnode/controllers/cart.controller.js; backendnode/services/cart.service.js; backendnode/validators/cart.js
+@startuml seq_carrito
+!include _skin.puml
+hide footbox
+autonumber "<b>[00]"
+title Secuencia — Gestión del Carrito de Compras (SEQ-04A)
+caption 6 lifelines, 14 mensajes, 1 nivel (dividido de carrito+checkout para mantener <= 16 mensajes)
+
+actor "Comprador" as Buyer
+boundary "ShoppingCartController\n(frontendnet)" as FeCart <<boundary>>
+control "ShoppingCartClient\nService" as FeClient <<control>>
+control "cart.controller\n+ validators/cart" as CartCtrl <<control>>
+control "cart.service\n(withCart / put)" as CartSvc <<control>>
+database "MySQL 8.4\n(:3306)" as MySQL <<database>>
+
+Buyer -> FeCart : POST /ShoppingCart/Add (productId, quantity)
+activate FeCart
+FeCart -> FeClient : AddAsync(productId, quantity)
+activate FeClient
+FeClient -> CartCtrl : POST /api/cart/items { productId, quantity }
+activate CartCtrl
+
+ref over CartCtrl : Autorización previa: SEQ-06 (authorize 'BUYER')
+
+CartCtrl -> CartSvc : cart.put(req.account.id, productId, quantity, add=true)
+activate CartSvc
+CartSvc -> MySQL : Transacción LOCK.UPDATE: verificar User ACTIVE, Seller APPROVED y Product
+
+alt Stock suficiente y vendedor aprobado
+  CartSvc -> MySQL : UPSERT carts / cart_items + INSERT audit_logs ('cart.add')
+  CartSvc --> CartCtrl : Snapshot calculado en centavos { id, items, subtotal }
+  CartCtrl --> FeClient : 200 OK
+  FeClient --> FeCart : ShoppingCart DTO
+  FeCart --> Buyer : Redirección a ShoppingCart/Index con snapshot
+else Stock insuficiente o vendedor no aprobado
+  CartSvc --> CartCtrl : AccountError(409)
+  CartCtrl --> FeClient : 409 Conflict
+  FeClient --> FeCart : ApiException
+  FeCart --> Buyer : TempData["Error"] sanitizado
+end
+
+deactivate CartSvc
+deactivate CartCtrl
+deactivate FeClient
+deactivate FeCart
+@enduml

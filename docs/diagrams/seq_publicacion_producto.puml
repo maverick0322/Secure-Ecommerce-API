@@ -1,0 +1,48 @@
+' TRACE: frontendnet/Controllers/ProductsController.cs; frontendnet/Services/ProductClientService.cs; backendnode/routes/products.routes.js; backendnode/middlewares/auth.middleware.js; backendnode/middlewares/catalog-rate-limit.middleware.js; backendnode/controllers/products.controller.js; backendnode/services/catalog.service.js; backendnode/services/audit.service.js
+@startuml seq_publicacion_producto
+!include _skin.puml
+hide footbox
+autonumber "<b>[00]"
+title Secuencia — Publicación de Producto por Vendedor Aprobado (SEQ-05A)
+caption 6 lifelines, 15 mensajes, 1 nivel (dividido de producto+imagen para mantener <= 16 mensajes)
+
+actor "Vendedor\n(APPROVED)" as Seller
+boundary "ProductsController\n(frontendnet)" as FeProd <<boundary>>
+control "catalog-rate-limit\n(sellerWriteLimit)" as WriteLimit <<control>>
+control "products.controller\n(create)" as ProdCtrl <<control>>
+control "catalog.service\n(createProduct)" as CatSvc <<control>>
+database "MySQL 8.4\n(:3306)" as MySQL <<database>>
+
+Seller -> FeProd : POST /Products/Create (ProductFormModel)
+activate FeProd
+FeProd -> FeProd : Validar ModelState + UTF-8 description (1..65535 B)
+FeProd -> WriteLimit : POST /api/products { title, description, price, stock, categoryId? }
+activate WriteLimit
+
+ref over WriteLimit : Autorización previa: SEQ-06 (authorize 'SELLER' -> Seller.status == APPROVED)
+
+WriteLimit -> WriteLimit : Verificar en Redis <= 30 escrituras / 60s por vendedor
+WriteLimit -> ProdCtrl : next() -> products.controller.create(req, res)
+deactivate WriteLimit
+activate ProdCtrl
+
+ProdCtrl -> CatSvc : catalog.createProduct(req.account, input, context)
+activate CatSvc
+CatSvc -> MySQL : Transacción LOCK.UPDATE: contar productos activos del vendedor
+
+alt Productos activos < SELLER_MAX_ACTIVE_PRODUCTS (200)
+  CatSvc -> MySQL : INSERT products + INSERT product_categories + INSERT audit_logs
+  CatSvc --> ProdCtrl : Product creado
+  ProdCtrl --> FeProd : 201 Created { productId, title, price, ... }
+  FeProd --> Seller : Redirect a Products/Index (o subida de imagen si se adjuntó)
+else Cuota excedida (>= 200 productos activos)
+  CatSvc -> MySQL : recordQuotaDenial('producto.quota_exceeded', 'DENIED')
+  CatSvc --> ProdCtrl : AccountError(409)
+  ProdCtrl --> FeProd : 409 Conflict
+  FeProd --> Seller : Vista Create con error de cuota
+end
+
+deactivate CatSvc
+deactivate ProdCtrl
+deactivate FeProd
+@enduml

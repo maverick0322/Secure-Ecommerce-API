@@ -1,0 +1,100 @@
+' TRACE: backendnode/migrations/20261110000001-create-secure-ecommerce-tables.js; backendnode/migrations/cutover/20261110000003-finalize-secure-ecommerce-schema.js; backendnode/models/cart.js; backendnode/models/cart-item.js; backendnode/models/order.js; backendnode/models/order-item.js; backendnode/models/order-status-history.js; backendnode/models/audit-log.js
+@startuml der_logico_carrito_pedidos_auditoria
+!include _skin.puml
+title DER Lógico / Físico MySQL 8.4 — Carrito, Pedidos y Auditoría
+caption 10 tablas físicas (6 propias + 4 referencia FK; límite: máx. 15 tablas)
+
+class "users" as TUsers <<table>> {
+  + *id : CHAR(36) <<PK>>
+}
+
+class "buyers" as TBuyers <<table>> {
+  + *userId : CHAR(36) <<PK, FK>>
+}
+
+class "sellers" as TSellers <<table>> {
+  + *userId : CHAR(36) <<PK, FK>>
+}
+
+class "products" as TProducts <<table>> {
+  + *id : INT <<PK>>
+}
+
+class "carts" as TCarts <<table>> {
+  + *id : BIGINT UNSIGNED <<PK>>
+  --
+  + *buyerId : CHAR(36) <<FK, UK>>
+  + *createdAt : DATETIME(3)
+  + *updatedAt : DATETIME(3)
+  + deletedAt : DATETIME(3)
+}
+
+class "cart_items" as TCartItems <<table>> {
+  + *id : BIGINT UNSIGNED <<PK>>
+  --
+  + *cartId : BIGINT UNSIGNED <<FK, UK>>
+  + *productId : INT <<FK, UK>>
+  + *quantity : INT UNSIGNED
+  + *createdAt : DATETIME(3)
+  + *updatedAt : DATETIME(3)
+  + deletedAt : DATETIME(3)
+}
+
+class "orders" as TOrders <<table>> {
+  + *id : BIGINT UNSIGNED <<PK>>
+  --
+  + *buyerId : CHAR(36) <<FK>>
+  + *sellerId : CHAR(36) <<FK, UK>>
+  + *checkoutId : CHAR(36) <<UK>>
+  + *status : ENUM('PENDING','PREPARING','SHIPPED','DELIVERED','CANCELED')
+  + *total : DECIMAL(12,2)
+  + *deliveryAddressSnapshot : JSON
+  + *createdAt : DATETIME(3)
+  + *updatedAt : DATETIME(3)
+}
+
+class "order_items" as TOrderItems <<table>> {
+  + *id : BIGINT UNSIGNED <<PK>>
+  --
+  + *orderId : BIGINT UNSIGNED <<FK>>
+  + *productId : INT <<FK>>
+  + *productTitle : VARCHAR(255)
+  + *quantity : INT UNSIGNED
+  + *unitPrice : DECIMAL(12,2)
+}
+
+class "order_status_history" as THistory <<table>> {
+  + *id : BIGINT UNSIGNED <<PK>>
+  --
+  + *orderId : BIGINT UNSIGNED <<FK>>
+  + previousStatus : ENUM('PENDING','PREPARING','SHIPPED','DELIVERED','CANCELED')
+  + *newStatus : ENUM('PENDING','PREPARING','SHIPPED','DELIVERED','CANCELED')
+  + changedByUserId : CHAR(36) <<FK>>
+  + reason : VARCHAR(255)
+  + *occurredAt : DATETIME(3)
+}
+
+class "audit_logs" as TAuditLogs <<table>> {
+  + *id : INT <<PK>>
+  --
+  + actorUserId : CHAR(36) <<FK>>
+  + *action : VARCHAR(80)
+  + targetType : VARCHAR(40)
+  + targetId : VARCHAR(64)
+  + ipAddress : VARCHAR(45)
+  + *outcome : VARCHAR(16)
+  + details : JSON
+  + *occurredAt : DATETIME(3)
+}
+
+TBuyers "1" ||--o| "0..1" TCarts : "buyerId"
+TCarts "1" ||--o{ "0..100" TCartItems : "cartId"
+TProducts "1" ||--o{ "0..*" TCartItems : "productId"
+TBuyers "1" ||--o{ "0..*" TOrders : "buyerId"
+TSellers "1" ||--o{ "0..*" TOrders : "sellerId"
+TOrders "1" ||--o{ "1..*" TOrderItems : "orderId"
+TProducts "1" ||--o{ "0..*" TOrderItems : "productId"
+TOrders "1" ||--o{ "1..*" THistory : "orderId"
+TUsers "0..1" ||--o{ "0..*" THistory : "changedByUserId"
+TUsers "0..1" ||--o{ "0..*" TAuditLogs : "actorUserId"
+@enduml

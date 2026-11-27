@@ -1,0 +1,63 @@
+' TRACE: backendnode/models/user.js; backendnode/models/admin.js; backendnode/models/buyer.js; backendnode/models/seller.js; backendnode/models/user-address.js; backendnode/models/category.js; backendnode/models/product.js; backendnode/models/product-category.js
+@startuml der_conceptual_identidad_catalogo
+!include _skin.puml
+title DER Conceptual — Contexto Identidad, Direcciones y Catálogo
+caption 8 entidades de dominio (límite de la guía: máx. 15 entidades)
+
+class User <<entity>> {
+  + name
+  + email
+  + phoneNumber
+  + status
+  + emailVerifiedAt
+}
+
+class Admin <<entity>> {
+}
+
+class Buyer <<entity>> {
+}
+
+class Seller <<entity>> {
+  + storeName
+  + status
+  + requestedAt
+  + reviewedAt
+  + rejectionReason
+}
+
+class UserAddress <<entity>> {
+  + recipientName
+  + street
+  + city
+  + postalCode
+  + isDefault
+}
+
+class Category <<entity>> {
+  + name
+  + normalizedName
+  + protected
+}
+
+class Product <<entity>> {
+  + title
+  + description
+  + price
+  + stock
+  + imagePublicId
+}
+
+class ProductCategory <<entity>> {
+  + createdAt
+}
+
+User "1" -- "0..1" Admin : "perfil"
+User "1" -- "0..1" Buyer : "perfil"
+User "1" -- "0..1" Seller : "perfil"
+Admin "0..1" -- "0..*" Seller : "revisa >"
+Buyer "1" *-- "0..*" UserAddress : "direcciones >"
+Seller "1" -- "0..200" Product : "publica >"
+Product "1" *-- "0..10" ProductCategory
+Category "1" *-- "0..*" ProductCategory
+@enduml

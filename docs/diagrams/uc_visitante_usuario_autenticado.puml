@@ -1,0 +1,34 @@
+' TRACE: backendnode/routes/auth.routes.js; backendnode/routes/users.routes.js; backendnode/controllers/auth.controller.js; backendnode/controllers/personal-account.controller.js; frontendnet/Controllers/AuthController.cs; frontendnet/Controllers/ProfileController.cs
+@startuml uc_visitante_usuario_autenticado
+!include _skin.puml
+left to right direction
+title Casos de Uso — Visitante y Usuario Autenticado (Actores Generales)
+caption 7 casos de uso y 4 actores (límite: máx. 14 CU y 5 actores)
+
+actor "Visitante" as Visitor
+actor "Usuario Autenticado" as AuthUser
+actor "Gmail OAuth2 API" as Gmail <<external>>
+actor "Cloudflare Turnstile" as Turnstile <<external>>
+
+rectangle "Tienda en Línea Segura — Identidad y Sesión" {
+  usecase "CU-01: Registrar cuenta\ncon verificación OTP" as UC01
+  usecase "CU-02: Iniciar sesión" as UC02
+  usecase "CU-05: Recuperar y restablecer\ncontraseña vía OTP" as UC05
+  usecase "CU-03: Renovar sesión\n(refresh token)" as UC03
+  usecase "CU-04: Cerrar sesión" as UC04
+  usecase "CU-06: Consultar y actualizar\nperfil y contraseña" as UC06
+}
+
+Visitor -- UC01
+Visitor -- UC02
+Visitor -- UC05
+
+AuthUser -- UC03
+AuthUser -- UC04
+AuthUser -- UC06
+
+UC01 -- Gmail
+UC01 -- Turnstile
+UC02 -- Turnstile
+UC05 -- Gmail
+@enduml

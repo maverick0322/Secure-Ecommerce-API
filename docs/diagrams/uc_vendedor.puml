@@ -1,0 +1,26 @@
+' TRACE: backendnode/routes/categories.routes.js; backendnode/routes/products.routes.js; backendnode/routes/orders.routes.js; frontendnet/Controllers/ProductsController.cs; frontendnet/Controllers/OrdersController.cs
+@startuml uc_vendedor
+!include _skin.puml
+left to right direction
+title Casos de Uso — Vendedor Aprobado (hereda de Usuario Autenticado)
+caption 3 casos de uso y 2 actores (límite: máx. 14 CU y 5 actores)
+
+actor "Vendedor" as Seller
+actor "Cloudinary API" as Cloudinary <<external>>
+
+rectangle "Tienda en Línea Segura — Flujo del Vendedor" {
+  usecase "CU-12: Publicar, editar y\neliminar productos propios" as UC12
+  usecase "CU-13: Subir y eliminar\nimagen de producto" as UC13
+  usecase "CU-14: Gestionar pedidos\ny transiciones de envío" as UC14
+}
+
+note right of UC12
+  Precondición: Seller.status == APPROVED
+  (cuota: 200 activos, 10 categorías)
+end note
+
+Seller -- UC12
+Seller -- UC13
+Seller -- UC14
+UC13 -- Cloudinary
+@enduml

@@ -1,0 +1,105 @@
+' TRACE: frontendnet/Controllers/UsersController.cs; frontendnet/Controllers/CategoriesController.cs; frontendnet/Controllers/AuditLogController.cs; frontendnet/Controllers/HomeController.cs; frontendnet/Services/UsersClientService.cs; frontendnet/Services/CategoryClientService.cs; frontendnet/Services/AuditLogClientService.cs; frontendnet/Extensions/ApiClientExtensions.cs; frontendnet/Helpers/DisplayFormatter.cs; frontendnet/Helpers/JwtInfo.cs; frontendnet/Helpers/UrlHelper.cs; frontendnet/Models/User.cs; frontendnet/Models/Category.cs; frontendnet/Models/AuditEntry.cs; frontendnet/Models/ApiException.cs
+@startuml clases_frontend_admin_auditoria
+!include _skin.puml
+title Clases Frontend (.NET 9.0) — Administración, Categorías, Auditoría y Soporte
+caption 15 clases reales <= 15 (máx. 6 atrib. y 6 oper. por clase)
+
+class UsersController <<boundary>> {
+  + Index(page) : Task<IActionResult>
+  + Details(email) : Task<IActionResult>
+  + EditAsync(model) : Task<IActionResult>
+  + ApproveSellerAsync(userId) : Task<IActionResult>
+  + RejectSellerAsync(userId, reason) : Task<IActionResult>
+  + SuspendSellerAsync(userId, reason) : Task<IActionResult>
+}
+
+class CategoriesController <<boundary>> {
+  + Index(page) : Task<IActionResult>
+  + CreateAsync(model) : Task<IActionResult>
+  + EditAsync(id, model) : Task<IActionResult>
+  + DeleteAsync(id) : Task<IActionResult>
+}
+
+class AuditLogController <<boundary>> {
+  + Index(before, limit) : Task<IActionResult>
+}
+
+class HomeController <<boundary>> {
+  + Index() : IActionResult
+  + Error() : IActionResult
+  + AccessDenied() : IActionResult
+  + Status(code) : IActionResult
+}
+
+class UsersClientService <<boundary>> {
+  + GetAsync() : Task<List<User>>
+  + UpdateAsync(email, req) : Task
+  + ReviewSellerAsync(id, status, reason) : Task
+  + SuspendSellerAsync(id, reason) : Task
+}
+
+class CategoryClientService <<boundary>> {
+  + GetAsync() : Task<List<Category>>
+  + CreateAsync(model) : Task
+  + UpdateAsync(id, model) : Task
+  + DeleteAsync(id) : Task
+}
+
+class AuditLogClientService <<boundary>> {
+  + GetAsync(before, limit) : Task<List<AuditEntry>>
+}
+
+class ApiClientExtensions <<control>> {
+  + {static} AddApiClient(services, baseUrl) : IHttpClientBuilder
+}
+
+class DisplayFormatter <<control>> {
+  + {static} OrderStatusLabel(status) : string
+  + {static} SellerStatusLabel(status) : string
+}
+
+class JwtInfo <<control>> {
+  + {static} GetExpirationUtc(jwt) : DateTimeOffset?
+}
+
+class UrlHelper <<control>> {
+  + {static} IsAllowedProductImageUrl(url, config) : bool
+}
+
+class User <<dto>> {
+  + Id : string
+  + Email : string
+  + Name : string
+  + Profile : string
+  + Status : string
+  + SellerStatus : string?
+}
+
+class Category <<dto>> {
+  + CategoryId : int
+  + Name : string
+  + Protected : bool
+}
+
+class AuditEntry <<dto>> {
+  + Id : int
+  + ActorUserId : string?
+  + Action : string
+  + Outcome : string
+  + OccurredAt : DateTimeOffset
+}
+
+class ApiException <<dto>> {
+  + StatusCode : HttpStatusCode?
+  + RetryAfter : TimeSpan?
+  + Error : ApiError?
+}
+
+UsersController ..> UsersClientService
+CategoriesController ..> CategoryClientService
+AuditLogController ..> AuditLogClientService
+UsersClientService ..> User
+CategoryClientService ..> Category
+AuditLogClientService ..> AuditEntry
+UsersClientService ..> ApiException
+@enduml
