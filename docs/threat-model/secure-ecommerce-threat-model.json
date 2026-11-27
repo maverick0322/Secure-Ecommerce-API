@@ -1,0 +1,4925 @@
+{
+  "version": "2.6.2",
+  "summary": {
+    "title": "Secure Ecommerce · Modelo de amenazas",
+    "owner": "Equipo 3",
+    "description": "Plataforma de comercio electrónico con arquitectura BFF/API separada: frontendnet (ASP.NET Core 9.0 MVC con cookies cifradas HttpOnly/SameSite=Lax, protección antiforgery global y Cloudflare Turnstile), backendnode (Node.js 24 LTS, Express, JWT RS256 3072 bits con validación en Redis 8.2 TLS/ACL, scrypt, Sharp en subproceso aislado, MySQL 8.4 con 14 tablas y privilegios mínimos, auditoría append-only en audit_logs, Gmail OAuth 2.0 y Cloudinary) y despliegue distribuido en 3 VMs con Apache 2 TLS 1.3.",
+    "id": 0
+  },
+  "detail": {
+    "contributors": [
+      "Equipo 3"
+    ],
+    "reviewer": "Guillermo Vera",
+    "diagramTop": 4,
+    "threatTop": 51,
+    "diagrams": [
+      {
+        "id": 0,
+        "title": "01 · Contexto y fronteras de confianza",
+        "description": "DFD de contexto (actualizado con despliegue en 3 VMs y pruebas PEN-05). El cliente usa HTTPS hacia frontendnet, frontendnet se comunica por HTTPS (Apache 2 TLS 1.3) con backendnode, y el checkout registra pedidos sin pasarela de pagos externa.",
+        "diagramType": "STRIDE",
+        "thumbnail": "./public/content/images/thumbnail.stride.jpg",
+        "version": "2.0",
+        "cells": [
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 20,
+              "y": 240
+            },
+            "size": {
+              "width": 260,
+              "height": 250
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B1 · Dispositivo no confiable"
+              }
+            },
+            "zIndex": -2,
+            "id": "48a3fcd2-3ee1-5194-a45a-7c4a9fd8e326",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B1 · Dispositivo no confiable",
+              "description": "El navegador y los clientes externos no son confiables",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 360,
+              "y": 240
+            },
+            "size": {
+              "width": 260,
+              "height": 250
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B2 · Aplicación MVC"
+              }
+            },
+            "zIndex": -2,
+            "id": "94ca2e81-d406-52a3-be07-8bb65000b2a7",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B2 · Aplicación MVC",
+              "description": "Cookies del servidor .NET y protección CSRF; la frontera física depende del despliegue",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 700,
+              "y": 190
+            },
+            "size": {
+              "width": 290,
+              "height": 340
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B3 · API y lógica de negocio"
+              }
+            },
+            "zIndex": -2,
+            "id": "a8c6acf5-3495-5939-8f29-4ef71e3aa3c6",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B3 · API y lógica de negocio",
+              "description": "Validación JWT, autorización y transacciones",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 1190,
+              "y": 40
+            },
+            "size": {
+              "width": 310,
+              "height": 430
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B4 · Servicios de datos internos"
+              }
+            },
+            "zIndex": -2,
+            "id": "d4eb5b90-2ac9-50fa-83f4-0cd7e377f165",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B4 · Servicios de datos internos",
+              "description": "Acceso restringido a persistencia y sesiones",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 1190,
+              "y": 520
+            },
+            "size": {
+              "width": 310,
+              "height": 390
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B5 · Proveedores externos"
+              }
+            },
+            "zIndex": -2,
+            "id": "1dc99b81-4ea7-5749-ac3a-75253a28bff1",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B5 · Proveedores externos",
+              "description": "Gmail y Cloudinary: infraestructura operada por terceros",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 700,
+              "y": 650
+            },
+            "size": {
+              "width": 290,
+              "height": 190
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B6 · Secretos locales / Docker"
+              }
+            },
+            "zIndex": -2,
+            "id": "65898470-1a01-5e11-a2ed-b55755143323",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B6 · Secretos locales / Docker",
+              "description": "Material criptográfico local y certificados montados de forma protegida",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "id": "7f5358b8-a9c6-5275-b906-aaa1a541bf0c",
+            "shape": "actor",
+            "position": {
+              "x": 70,
+              "y": 330
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Navegador\nBUYER / SELLER / ADMIN"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Navegador\nBUYER / SELLER / ADMIN",
+              "description": "Usuarios finales; peticiones y cookies HTTP(S).",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [],
+              "providesAuthentication": false
+            }
+          },
+          {
+            "id": "31eff286-fc33-51fa-95b2-119e7387882b",
+            "shape": "process",
+            "position": {
+              "x": 418,
+              "y": 315
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "Frontend\nASP.NET Core 9"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Frontend\nASP.NET Core 9",
+              "description": "Aplicación MVC; formularios CSRF, cookies de sesión y consumidores HttpClient.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [],
+              "isWebApplication": true,
+              "handlesGoodsOrServices": true
+            }
+          },
+          {
+            "id": "62434427-c45e-5286-850f-3e4e3e9d9273",
+            "shape": "process",
+            "position": {
+              "x": 772,
+              "y": 315
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "API\nExpress Node 24"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "API\nExpress Node 24",
+              "description": "API REST. JWT RS256/Redis, verificación de acceso, pedidos, imágenes y auditoría.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [],
+              "isWebApplication": true,
+              "handlesGoodsOrServices": true
+            }
+          },
+          {
+            "id": "4401046f-87f8-5aab-98fa-fbefdf95ef34",
+            "shape": "store",
+            "position": {
+              "x": 1258,
+              "y": 120
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "MySQL 8.4\nsecure_ecommerce"
+              },
+              "topLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "MySQL 8.4\nsecure_ecommerce",
+              "description": "Esquema final de 14 tablas. Usuarios, pedidos, inventario, auditoría (DB_SSL=true en VMs).",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "2938adb5-749c-57e0-85f7-8b43e5f01f08",
+                  "number": 3,
+                  "title": "TH-003 · Privilegios excesivos en MySQL",
+                  "type": "Elevation of privilege",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Si se utiliza root o se concede DDL a la API, una inyección/compromiso aumentaría su alcance.",
+                  "mitigation": "Control observado: Servicios actuales exigen ecommerce_app y el esquema final; instalador concede permisos por tabla.\nAcción / revisión: Confirmar GRANT en cada instalación y negar DDL, DELETE y privilegios globales a la API.\nPrueba recomendada: SHOW GRANTS del usuario efectivo y pruebas negativas CREATE/DROP/DELETE.",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true,
+              "storesInventory": true
+            }
+          },
+          {
+            "id": "1f6bd530-69dd-553d-8ba1-1bde0092fb19",
+            "shape": "store",
+            "position": {
+              "x": 1258,
+              "y": 330
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "Redis 8.2\nTLS y ACL"
+              },
+              "topLine": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Redis 8.2\nTLS y ACL",
+              "description": "Sesiones, límites y señalización de identidad del servicio.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "1ca9448d-5c78-5009-9d4d-89eb18386020",
+                  "number": 4,
+                  "title": "TH-004 · Indisponibilidad de Redis afecta autenticación",
+                  "type": "Denial of service",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Open",
+                  "description": "Escenario: La caída de Redis impide crear o validar sesiones e interrumpe rutas protegidas.",
+                  "mitigation": "Control observado: Conexión Redis con TLS, límite de comandos, fail-closed y recuperación explícita.\nAcción / revisión: Planificar monitoreo, capacidad, recuperación y experiencia de usuario ante 503.",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true
+            }
+          },
+          {
+            "id": "766cc67c-c658-5bb2-86af-c093609a6888",
+            "shape": "actor",
+            "position": {
+              "x": 1265,
+              "y": 600
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Gmail API\nOAuth 2.0"
+              },
+              "body": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Gmail API\nOAuth 2.0",
+              "description": "Proveedor de salida de códigos OTP; API externa y consentimiento.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "2105087a-4ddd-5eb9-a88f-41c5989e9683",
+                  "number": 7,
+                  "title": "TH-007 · Dependencia de la disponibilidad de Gmail",
+                  "type": "Denial of service",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Open",
+                  "description": "Escenario: Credenciales OAuth faltantes, token revocado o cuota impiden enviar OTP; registro/recovery se degrada.",
+                  "mitigation": "Control observado: Envío usa Gmail API OAuth 2.0 con errores genéricos 503 y cooldown anti-reenvío; afecta únicamente flujos de registro y recuperación nuevos (no bloquea sesiones ni checkout).\nRiesgo residual / acción: Aprovisionar client.json/token.json por instalación; en modo Testing de Google OAuth el refresh token caduca cada 7 días si no se publica o reautoriza.",
+                  "score": ""
+                }
+              ],
+              "providesAuthentication": true
+            }
+          },
+          {
+            "id": "97f5d081-f86b-585f-8da9-ed4483d3fafb",
+            "shape": "actor",
+            "position": {
+              "x": 1265,
+              "y": 790
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Cloudinary\nimágenes"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Cloudinary\nimágenes",
+              "description": "Proveedor externo de almacenamiento de imágenes de productos.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "da75217e-75a9-57cf-97c4-48beb641666e",
+                  "number": 6,
+                  "title": "TH-006 · Borrado de activos externos ajenos",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Una confusión entre entornos o entre productos borra recursos de Cloudinary no pertenecientes al catálogo actual.",
+                  "mitigation": "Control observado: Identidad de servidor + DB + cloud y comprobación de contexto del recurso en el servicio de imágenes.\nAcción / revisión: Revisar aislamiento entre cuentas compartidas y ensayar operaciones con productos y entornos simulados.\nPrueba recomendada: Rechazar public_id fuera del scope y confirmar que no invoca destroy.",
+                  "score": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "87514fc5-ae84-5858-95f4-045a21476d23",
+            "shape": "store",
+            "position": {
+              "x": 758,
+              "y": 725
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": ".secrets/\nJWT, Redis, Gmail"
+              },
+              "topLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": ".secrets/\nJWT, Redis, Gmail",
+              "description": "Claves RS256, HMAC, certificados y archivos OAuth en instalaciones locales. No se versionan.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "bb14e25a-8c3e-5ef7-89ef-06a31308d509",
+                  "number": 5,
+                  "title": "TH-005 · Robo de llaves y tokens locales",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Un usuario o proceso local accede a claves RS256, refresh tokens o credenciales de proveedores desde el disco o bind mounts.",
+                  "mitigation": "Control verificado: Secretos fuera de Git (.gitignore), montados en :ro por servicio en Linux con permisos chmod 600, usuario no privilegiado node, contenedor --read-only + --cap-drop ALL y validación de rutas/inodos en secure-config-file.service.js.\nEvidencia: Verificación operativa en VM 2 y suite secure-config-file.test.js.",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true
+            }
+          },
+          {
+            "id": "c4c5cf77-7067-55e0-8dd8-8ef5dfce0557",
+            "shape": "actor",
+            "position": {
+              "x": 70,
+              "y": 65
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Operador del\nentorno"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Operador del\nentorno",
+              "description": "Responsable de aprovisionamiento, rotación de secretos, despliegue y mantenimiento.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": []
+            }
+          },
+          {
+            "id": "69e92525-55b5-5e20-8b06-9b50d99408a9",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Páginas y formularios",
+              "description": "Peticiones web con cookies; controles CSRF para operaciones POST.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": true,
+              "protocol": "HTTP local / HTTPS remoto",
+              "threats": [
+                {
+                  "id": "7e4588c4-9827-5332-8319-e38168c7647f",
+                  "number": 2,
+                  "title": "TH-002 · Exposición de cookies por HTTP externo",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: En un despliegue sin TLS de extremo a extremo, cookies de sesión o formularios pueden interceptarse.",
+                  "mitigation": "Control verificado: Despliegue en 3 VMs con Apache 2 TLS 1.3 de extremo a extremo, redirección 301 HTTP->HTTPS, HSTS y cookies .frontendnet/.frontendnet.af con SecurePolicy=Always y HttpOnly/SameSite=Lax; HTTP plano queda únicamente en loopback aislado.\nEvidencia: Verificación cruzada en tienda.lan y api.tienda.lan más pruebas SecurityAndHeadersTests.",
+                  "score": ""
+                }
+              ]
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Páginas y formularios"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "7f5358b8-a9c6-5275-b906-aaa1a541bf0c"
+            },
+            "target": {
+              "cell": "31eff286-fc33-51fa-95b2-119e7387882b"
+            },
+            "vertices": [
+              {
+                "x": 320,
+                "y": 365
+              }
+            ]
+          },
+          {
+            "id": "a617a7d4-420d-5efc-aac1-67d10bc34c88",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "JSON y JWT",
+              "description": "Peticiones de servicios desde HttpClient con JWT y cabecera de IP de cliente derivada del proxy.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "HTTP loopback / HTTPS remoto",
+              "threats": [
+                {
+                  "id": "b52f9334-6ee0-5c8b-b9a5-eea6662de367",
+                  "number": 1,
+                  "title": "TH-001 · Suplantación del origen y del cliente",
+                  "type": "Spoofing",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Un emisor agrega X-Forwarded-For o CF-Connecting-IP manipulados para evadir controles por IP o adulterar auditoría.",
+                  "mitigation": "Control verificado: API TRUST_PROXY usa allowlist explícita (10.110.92.91/32 en VM 2, rechazando true/* en resolveTrustProxy()) y FrontendNet restringe KnownNetworks/ForwardedHeadersOptions al proxy Apache 2 TLS; además ufw + DOCKER-USER bloquean conexiones directas al puerto :443 de VM 2 fuera de VM 1.\nEvidencia: Verificación en despliegue 3 VMs y pruebas unitarias/despliegue.",
+                  "score": ""
+                }
+              ]
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "JSON y JWT"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "31eff286-fc33-51fa-95b2-119e7387882b"
+            },
+            "target": {
+              "cell": "62434427-c45e-5286-850f-3e4e3e9d9273"
+            },
+            "vertices": [
+              {
+                "x": 660,
+                "y": 365
+              }
+            ]
+          },
+          {
+            "id": "87161ffd-0ade-5b1f-bce5-dae827a62616",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Consultas transaccionales",
+              "description": "Lecturas/escrituras de pedidos, cuentas y registros de auditoría.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "MySQL/TCP privado",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Consultas transaccionales"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "62434427-c45e-5286-850f-3e4e3e9d9273"
+            },
+            "target": {
+              "cell": "4401046f-87f8-5aab-98fa-fbefdf95ef34"
+            },
+            "vertices": [
+              {
+                "x": 1090,
+                "y": 157
+              }
+            ]
+          },
+          {
+            "id": "598eb5b4-bd6b-5261-b5c0-a88304b81cf4",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Sesiones y límites",
+              "description": "Autenticación y gestión de sesiones Redis mediante TLS y ACL.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "Redis TLS",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Sesiones y límites"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "62434427-c45e-5286-850f-3e4e3e9d9273"
+            },
+            "target": {
+              "cell": "1f6bd530-69dd-553d-8ba1-1bde0092fb19"
+            },
+            "vertices": [
+              {
+                "x": 1090,
+                "y": 367
+              }
+            ]
+          },
+          {
+            "id": "492bdb84-2e68-52b4-8711-8442e665b26c",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Correos OTP",
+              "description": "OAuth refresh token y Gmail API; envío de verificación y recuperación.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS Gmail API",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Correos OTP"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "62434427-c45e-5286-850f-3e4e3e9d9273"
+            },
+            "target": {
+              "cell": "766cc67c-c658-5bb2-86af-c093609a6888"
+            },
+            "vertices": [
+              {
+                "x": 1090,
+                "y": 635
+              }
+            ]
+          },
+          {
+            "id": "ce1b2106-3d53-5962-ae66-3ac3b0ee8cbe",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Imágenes de productos",
+              "description": "Subida y borrado controlado de imágenes con verificación de propiedad de recursos.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS Cloudinary",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Imágenes de productos"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "62434427-c45e-5286-850f-3e4e3e9d9273"
+            },
+            "target": {
+              "cell": "97f5d081-f86b-585f-8da9-ed4483d3fafb"
+            },
+            "vertices": [
+              {
+                "x": 1090,
+                "y": 825
+              }
+            ]
+          },
+          {
+            "id": "f45cf2d5-ef47-57e0-a09a-27d65dbdc7d2",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Lectura de secretos",
+              "description": "Material de firma, HMAC y tokens OAuth montado solo en lectura cuando aplica.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "FS / Docker secrets",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Lectura de secretos"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "87514fc5-ae84-5858-95f4-045a21476d23"
+            },
+            "target": {
+              "cell": "62434427-c45e-5286-850f-3e4e3e9d9273"
+            },
+            "vertices": [
+              {
+                "x": 845,
+                "y": 585
+              }
+            ]
+          },
+          {
+            "id": "58427e3c-c243-5cc7-95ec-320addc5df81",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Aprovisionamiento",
+              "description": "Generación local de secretos, reautorización OAuth y recuperación operativa.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "Acceso operador local",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Aprovisionamiento"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "c4c5cf77-7067-55e0-8dd8-8ef5dfce0557"
+            },
+            "target": {
+              "cell": "87514fc5-ae84-5858-95f4-045a21476d23"
+            },
+            "vertices": [
+              {
+                "x": 150,
+                "y": 762
+              },
+              {
+                "x": 520,
+                "y": 762
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 1,
+        "title": "02 · Identidad, OTP y sesiones",
+        "description": "Registro BUYER/SELLER, restablecimiento de contraseña y sesiones JWT. El OTP de registro se guarda en memoria de proceso, no en Redis/MySQL. Las solicitudes de registro exitosas pueden no enviar un segundo correo durante el cooldown.",
+        "diagramType": "STRIDE",
+        "thumbnail": "./public/content/images/thumbnail.stride.jpg",
+        "version": "2.6.2",
+        "cells": [
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 20,
+              "y": 240
+            },
+            "size": {
+              "width": 230,
+              "height": 350
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B1 · Cliente / navegador"
+              }
+            },
+            "zIndex": -2,
+            "id": "f3c42d28-34c2-5a16-a296-89279c0dc7e9",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B1 · Cliente / navegador",
+              "description": "",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 340,
+              "y": 240
+            },
+            "size": {
+              "width": 240,
+              "height": 350
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B2 · Sesión MVC .NET"
+              }
+            },
+            "zIndex": -2,
+            "id": "81024178-f3a5-5067-a731-3737696ddf3a",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B2 · Sesión MVC .NET",
+              "description": "",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 880,
+              "y": 40
+            },
+            "size": {
+              "width": 510,
+              "height": 760
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B3 · Backend de identidad"
+              }
+            },
+            "zIndex": -2,
+            "id": "0bc5555c-42b4-5638-a2f8-2e466c8ec0de",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B3 · Backend de identidad",
+              "description": "",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 1510,
+              "y": 150
+            },
+            "size": {
+              "width": 280,
+              "height": 540
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B4 · Datos internos"
+              }
+            },
+            "zIndex": -2,
+            "id": "dc38e3a6-ef9b-55c3-a7f8-2d2293ebb0e4",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B4 · Datos internos",
+              "description": "",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 880,
+              "y": 860
+            },
+            "size": {
+              "width": 270,
+              "height": 170
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B5 · Correo externo"
+              }
+            },
+            "zIndex": -2,
+            "id": "3b812de8-a1a3-56c5-a427-222447eb4d3c",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B5 · Correo externo",
+              "description": "",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "id": "a78148d5-f27f-58ea-9362-dc12ea63979f",
+            "shape": "actor",
+            "position": {
+              "x": 55,
+              "y": 380
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Visitante /\nusuario"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Visitante /\nusuario",
+              "description": "Solicitante de registro, login, recuperación y cambio de contraseña.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [],
+              "providesAuthentication": false
+            }
+          },
+          {
+            "id": "cf11598a-26db-54f4-bc85-bc90719e047b",
+            "shape": "process",
+            "position": {
+              "x": 388,
+              "y": 365
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "AuthController\nASP.NET MVC"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "AuthController\nASP.NET MVC",
+              "description": "Modelo de formulario, antiforgery, cookies HttpOnly, servicio de tokens.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "7467c799-ab04-5a6f-b902-89a6d7c7fc06",
+                  "number": 17,
+                  "title": "TH-017 · Secuestro de cookie MVC",
+                  "type": "Spoofing",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Una cookie capturada permite tomar sesión del navegador hasta expiración o revocación.",
+                  "mitigation": "Control observado: Cookie HttpOnly, SameSite Lax, política Secure en HTTPS y antiforgery global.\nAcción / revisión: Verificar atributo Secure en producción, logout y cierre al vencer plazo absoluto.",
+                  "score": ""
+                }
+              ],
+              "isWebApplication": true
+            }
+          },
+          {
+            "id": "465f769b-3b3b-5caf-9db1-f83d7dd853a9",
+            "shape": "process",
+            "position": {
+              "x": 925,
+              "y": 365
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "API auth\nExpress"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "API auth\nExpress",
+              "description": "POST /api/auth, /register, /register/verify, /refresh, /password/forgot y /password/reset.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [],
+              "isWebApplication": true
+            }
+          },
+          {
+            "id": "37e1c3a6-e75c-50c1-8cc4-b26eb765b000",
+            "shape": "store",
+            "position": {
+              "x": 1170,
+              "y": 105
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "OTP + datos\npendientes (RAM)"
+              },
+              "topLine": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "OTP + datos\npendientes (RAM)",
+              "description": "Map por correo+propósito; TTL 10 min, cooldown 60 s, 5 intentos; no persistido. Contiene hash HMAC del OTP y datos de registro.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "40be2a5c-361d-554d-9c0b-a50e393cfa90",
+                  "number": 9,
+                  "title": "TH-009 · Reintento OTP usa datos de solicitud anterior",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "Low",
+                  "status": "Open",
+                  "description": "Escenario: Una segunda solicitud con contraseña distinta durante el cooldown recibe 202, pero conserva el payload pendiente de la primera, causando confusión sobre contraseña final.",
+                  "mitigation": "Control observado: Cooldown de 60 s por correo+propósito protege contra spam OTP conservando el reto vigente.\nRiesgo residual: Caso de borde menor de usabilidad/consistencia si un usuario reintenta registro antes de 60 s cambiando contraseña; no expone credenciales ni permite bypass.",
+                  "score": ""
+                },
+                {
+                  "id": "c1f662c2-ecd2-5c66-87de-981486fb6d01",
+                  "number": 10,
+                  "title": "TH-010 · Pérdida de OTP al reiniciar proceso",
+                  "type": "Denial of service",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Open",
+                  "description": "Escenario: Un reinicio de la API elimina todos los códigos pendientes y obliga a repetir registro/recuperación.",
+                  "mitigation": "Control observado: OTP guardado en Map local con TTL y exclusión de reutilización.\nAcción / revisión: Documentar comportamiento, monitorizar reinicios y evaluar almacenamiento compartido si hay múltiples réplicas.\nPrueba recomendada: Simular reinicio entre solicitud y verificación, exigir error controlado y nueva solicitud.",
+                  "score": ""
+                },
+                {
+                  "id": "555a39ef-4d50-55ac-89b9-40e738db47cd",
+                  "number": 11,
+                  "title": "TH-011 · Ataque de fuerza bruta sobre OTP",
+                  "type": "Spoofing",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Un atacante adivina el código de seis dígitos antes de su expiración.",
+                  "mitigation": "Control observado: HMAC, cinco intentos y diez minutos, rate limit por ruta.\nAcción / revisión: Validar persistencia/atomicidad de límites frente a reinicios y distribución multiinstancia.\nPrueba recomendada: Probar seis códigos erróneos y protección concurrente sin filtración de respuestas.",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true
+            }
+          },
+          {
+            "id": "4ff5e5c0-7da7-5d8a-be69-ed5acd106e72",
+            "shape": "store",
+            "position": {
+              "x": 1563,
+              "y": 250
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "Sesiones Redis\nTLS 8.2"
+              },
+              "topLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Sesiones Redis\nTLS 8.2",
+              "description": "Sesiones, refresh token y límites de autenticación; defensa de replay.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "d0423f40-0116-5856-8327-7930b177123f",
+                  "number": 14,
+                  "title": "TH-014 · Uso de refresh tokens robados",
+                  "type": "Spoofing",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Un refresh token expuesto podría rotar sesiones hasta su revocación/expiración.",
+                  "mitigation": "Control verificado: Refresh tokens opacos (32 B / SHA-256) con rotación de un solo uso, detección de reúso REFRESH_REUSED que revoca toda la sesión en Redis, y candado SemaphoreSlim single-flight en SessionTokenManager del BFF.\nEvidencia: Pruebas en vivo contra Redis 8.2 TLS (RUN_STAGE2_REDIS=1) y SessionTokenManagerAndRefreshHandlerTests (69/69 en frontendnet).",
+                  "score": ""
+                },
+                {
+                  "id": "087991f4-cc5d-5361-8e67-6a9cb3b69f9d",
+                  "number": 15,
+                  "title": "TH-015 · Exhaustión Redis por sesión y rate limit",
+                  "type": "Denial of service",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Mitigated",
+                  "description": "Escenario: Petición automatizada agota conexiones/memoria o fuerza 503 en autenticación.",
+                  "mitigation": "Control verificado: Redis 8.2 TLS/ACL limitado a comandos estrictos, maxmemory-policy noeviction, timeouts acotados, rechazo controlado 503 fail-closed y limitadores por IP/cuenta.\nEvidencia: Pruebas live Redis (RUN_STAGE2_REDIS=1) y PEN-05 con k6 (0 errores 5xx bajo carga concurrente).",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true
+            }
+          },
+          {
+            "id": "4a768d55-af7a-5388-ba78-833f6afe9081",
+            "shape": "store",
+            "position": {
+              "x": 1563,
+              "y": 525
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "Cuentas y perfiles\nMySQL 8.4"
+              },
+              "topLine": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Cuentas y perfiles\nMySQL 8.4",
+              "description": "Tablas users, buyers, sellers, admins y audit_logs.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "5f59688f-80d5-5eef-b37e-e02a2c4ff890",
+                  "number": 13,
+                  "title": "TH-013 · Enumeración de cuentas por respuestas",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Open",
+                  "description": "Escenario: El registro o recuperación difiere en tiempos/mensajes y permite inferir correos existentes.",
+                  "mitigation": "Control observado: Recuperación responde antes de consultar DB; registro rechaza 409 cuando existe correo.\nAcción / revisión: Decidir política antienumeración del registro y comprobar mensajes/tiempos con prueba diferencial.",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true
+            }
+          },
+          {
+            "id": "cb8dae8c-717a-5a39-976b-7439ca6f4f9f",
+            "shape": "store",
+            "position": {
+              "x": 1170,
+              "y": 675
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "RS256 + HMAC\n.secrets/auth"
+              },
+              "topLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "RS256 + HMAC\n.secrets/auth",
+              "description": "Claves privadas/públicas RS256 y clave HMAC de versionado de credenciales.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "b7f22db7-d126-5297-8c61-604775aee174",
+                  "number": 16,
+                  "title": "TH-016 · Sustitución de manifiesto o clave RSA",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Manipular manifiesto o archivo privado causa emisión de tokens bajo claves no autorizadas.",
+                  "mitigation": "Control observado: Validación de kid, RSA 3072, verificación de pareja y ruta bajo .secrets.\nAcción / revisión: Asegurar permisos de archivos y operaciones de rotación con registro, pruebas de sustitución.",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true
+            }
+          },
+          {
+            "id": "18a14ce2-4e4a-500d-91b4-b4b761192807",
+            "shape": "actor",
+            "position": {
+              "x": 935,
+              "y": 925
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Gmail API"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Gmail API",
+              "description": "Proveedor de envío de códigos por OAuth, fuera del proceso API.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "222be40b-9ba2-57a7-a748-aee191b5392b",
+                  "number": 12,
+                  "title": "TH-012 · Uso de OAuth remitente no autorizado",
+                  "type": "Spoofing",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: El entorno usa credenciales OAuth no vinculadas al correo remitente o un token robado envía mensajes suplantados.",
+                  "mitigation": "Control verificado: gmail.service.js exige configuración válida de clientId, sender autorizado, scope gmail.send y refreshToken en archivo protegido.\nEvidencia: Pruebas unitarias gmail.service.test.js y envío real verificado en vivo en VM 2 (registro y OTP recibidos correctamente).",
+                  "score": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "36717f2b-1b28-5287-928d-979ee7a6abec",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Formulario de registro",
+              "description": "Perfil BUYER/SELLER, correo, nombre y contraseña. Protección CSRF.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS navegador",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Formulario de registro"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "a78148d5-f27f-58ea-9362-dc12ea63979f"
+            },
+            "target": {
+              "cell": "cf11598a-26db-54f4-bc85-bc90719e047b"
+            },
+            "vertices": [
+              {
+                "x": 295,
+                "y": 415
+              }
+            ]
+          },
+          {
+            "id": "abac0541-099f-57b9-b7c6-a7c6c8aaa1e3",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "POST /register",
+              "description": "JSON de registro incluyendo contraseña; el backend genera hash y prepara OTP.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "HTTP local / HTTPS remoto",
+              "threats": [
+                {
+                  "id": "ad62e804-c9cb-581f-9a5e-acf98ca450a2",
+                  "number": 8,
+                  "title": "TH-008 · Filtración de credenciales de registro",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Un proxy o transporte HTTP remoto no cifrado permite exponer contraseñas durante el registro.",
+                  "mitigation": "Control verificado: Frontend exige HTTPS (SecurePolicy=Always), el salto tienda.lan -> api.tienda.lan usa TLS 1.3 entre VMs, Cache-Control: no-store está activo en /api/auth/* (validado en PEN-05) y no se registran contraseñas en http-logging.middleware.js.\nEvidencia: Verificación en 3 VMs y httpSurfaceChecks de PEN-05.",
+                  "score": ""
+                }
+              ]
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "POST /register"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "cf11598a-26db-54f4-bc85-bc90719e047b"
+            },
+            "target": {
+              "cell": "465f769b-3b3b-5caf-9db1-f83d7dd853a9"
+            },
+            "vertices": [
+              {
+                "x": 730,
+                "y": 215
+              }
+            ]
+          },
+          {
+            "id": "fd88f965-3cf8-5620-9fcd-4014c9ef906b",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Almacenar reto OTP",
+              "description": "Se conserva código HMAC y passwordHash pendiente para el correo y propósito.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "Memoria de proceso",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Almacenar reto OTP"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "465f769b-3b3b-5caf-9db1-f83d7dd853a9"
+            },
+            "target": {
+              "cell": "37e1c3a6-e75c-50c1-8cc4-b26eb765b000"
+            },
+            "vertices": [
+              {
+                "x": 1015,
+                "y": 142
+              }
+            ]
+          },
+          {
+            "id": "56585bd5-a4a7-5cab-994d-f21987a7825a",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Envío de código",
+              "description": "Petición Gmail API con código OTP en contenido del correo.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Envío de código"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "465f769b-3b3b-5caf-9db1-f83d7dd853a9"
+            },
+            "target": {
+              "cell": "18a14ce2-4e4a-500d-91b4-b4b761192807"
+            },
+            "vertices": [
+              {
+                "x": 910,
+                "y": 760
+              }
+            ]
+          },
+          {
+            "id": "a0606798-9aec-5aad-a46d-f4f058c712a2",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "POST /register/verify",
+              "description": "Correo y código de seis dígitos para confirmar y crear usuario.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "HTTP local / HTTPS remoto",
+              "threats": [
+                {
+                  "id": "a4c90db3-32ba-505b-b14c-e9ef31317f2f",
+                  "number": 19,
+                  "title": "TH-019 · Disputa sobre verificación de correo",
+                  "type": "Repudiation",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Mitigated",
+                  "description": "Escenario: Una cuenta se crea sin suficiente trazabilidad sobre la verificación y el origen de la operación.",
+                  "mitigation": "Control verificado: Cada verificación OTP exitosa o rechazada registra evento inmutable en audit_logs con actorUserId, ipAddress, outcome y requestId sin guardar códigos OTP en claro.\nEvidencia: Pruebas unitarias audit.service.test.js e integración MySQL 8.4 (91/91).",
+                  "score": ""
+                }
+              ]
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "POST /register/verify"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "cf11598a-26db-54f4-bc85-bc90719e047b"
+            },
+            "target": {
+              "cell": "465f769b-3b3b-5caf-9db1-f83d7dd853a9"
+            },
+            "vertices": [
+              {
+                "x": 730,
+                "y": 335
+              }
+            ]
+          },
+          {
+            "id": "4b5018d1-cbbc-5558-b9ba-9d9f24a1b82d",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Validar OTP",
+              "description": "Verificación constante, consumo tras éxito, intentos acotados.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "Memoria de proceso",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Validar OTP"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "465f769b-3b3b-5caf-9db1-f83d7dd853a9"
+            },
+            "target": {
+              "cell": "37e1c3a6-e75c-50c1-8cc4-b26eb765b000"
+            },
+            "vertices": [
+              {
+                "x": 1255,
+                "y": 300
+              }
+            ]
+          },
+          {
+            "id": "2a792853-4ac6-5c45-b92b-9d92e5346e9c",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Crear/verificar cuenta",
+              "description": "Transacción de creación de usuario y perfil; recuperación/restablecimiento.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "MySQL privado",
+              "threats": [
+                {
+                  "id": "90781796-0a9d-50be-8a61-c38e2afdfe60",
+                  "number": 20,
+                  "title": "TH-020 · Perfil incorrecto durante registro",
+                  "type": "Elevation of privilege",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Un atacante manipula profile para obtener ADMIN o mezcla perfiles de comprador y vendedor.",
+                  "mitigation": "Control observado: Validador acepta solo BUYER/SELLER; cuentas ADMIN no se registran públicamente.\nAcción / revisión: Añadir prueba adversarial profile=ADMIN y carrera de creación de perfiles.",
+                  "score": ""
+                }
+              ]
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Crear/verificar cuenta"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "465f769b-3b3b-5caf-9db1-f83d7dd853a9"
+            },
+            "target": {
+              "cell": "4a768d55-af7a-5388-ba78-833f6afe9081"
+            },
+            "vertices": [
+              {
+                "x": 1440,
+                "y": 562
+              }
+            ]
+          },
+          {
+            "id": "08e3b571-b352-5ed4-8b35-e1b9c8532b0a",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Credenciales login",
+              "description": "Inicio de sesión con correo y contraseña; backend resuelve perfil/estado.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "HTTP local / HTTPS remoto",
+              "threats": [
+                {
+                  "id": "4d267773-9a55-5196-a4f3-22741c42488a",
+                  "number": 18,
+                  "title": "TH-018 · Credential stuffing y bloqueo indebido",
+                  "type": "Denial of service",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Intentos masivos de login consumen hash de contraseña o bloquean correos legítimos.",
+                  "mitigation": "Control verificado: Limitadores distribuidos en Redis por IP y cuenta, lockout exponencial desde 5 fallos (60 s hasta 15 min) y cola acotada de scrypt (N=32768).\nEvidencia: Prueba de estrés y fuerza bruta PEN-05 con grafana/k6:1.3.0 (5 respuestas 401 seguidas de 7 bloqueos 429 con Retry-After, p95 login 202.93 ms y 0 errores 5xx).",
+                  "score": ""
+                }
+              ]
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Credenciales login"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "cf11598a-26db-54f4-bc85-bc90719e047b"
+            },
+            "target": {
+              "cell": "465f769b-3b3b-5caf-9db1-f83d7dd853a9"
+            },
+            "vertices": [
+              {
+                "x": 730,
+                "y": 465
+              }
+            ]
+          },
+          {
+            "id": "753a0919-38e6-52b3-b760-37b7b76ac2f9",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Crear/rotar sesión",
+              "description": "Refresh token, sesiones y limitadores en Redis TLS.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "TLS",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Crear/rotar sesión"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "465f769b-3b3b-5caf-9db1-f83d7dd853a9"
+            },
+            "target": {
+              "cell": "4ff5e5c0-7da7-5d8a-be69-ed5acd106e72"
+            },
+            "vertices": [
+              {
+                "x": 1440,
+                "y": 287
+              }
+            ]
+          },
+          {
+            "id": "04b81634-5366-57eb-96ed-602e8fe906df",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Firmar y validar JWT",
+              "description": "Lectura de claves RSA para firmar/verificar access tokens; HMAC independiente.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "FS",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Firmar y validar JWT"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "cb8dae8c-717a-5a39-976b-7439ca6f4f9f"
+            },
+            "target": {
+              "cell": "465f769b-3b3b-5caf-9db1-f83d7dd853a9"
+            },
+            "vertices": [
+              {
+                "x": 1265,
+                "y": 515
+              }
+            ]
+          },
+          {
+            "id": "a0aa1efb-843a-56bf-bacb-e8096b816661",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Respuesta + cookie",
+              "description": "Token de acceso/refresh devuelto por API; MVC conserva sesión local.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "HTTP local / HTTPS remoto",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Respuesta + cookie"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "465f769b-3b3b-5caf-9db1-f83d7dd853a9"
+            },
+            "target": {
+              "cell": "cf11598a-26db-54f4-bc85-bc90719e047b"
+            },
+            "vertices": [
+              {
+                "x": 730,
+                "y": 585
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "03 · Catálogo, carrito, pedidos e imágenes",
+        "description": "Operaciones de negocio autenticadas. La edición de productos corresponde a SELLER aprobado; el administrador gestiona categorías y revisión de vendedores; BUYER gestiona carrito y checkout.",
+        "diagramType": "STRIDE",
+        "thumbnail": "./public/content/images/thumbnail.stride.jpg",
+        "version": "2.6.2",
+        "cells": [
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 20,
+              "y": 60
+            },
+            "size": {
+              "width": 220,
+              "height": 690
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B1 · Actores externos"
+              }
+            },
+            "zIndex": -2,
+            "id": "17a77cc7-931f-520c-bee0-769d3dd9b0e8",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B1 · Actores externos",
+              "description": "",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 360,
+              "y": 280
+            },
+            "size": {
+              "width": 220,
+              "height": 270
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B2 · MVC"
+              }
+            },
+            "zIndex": -2,
+            "id": "c0434af1-eb60-5a33-9a48-85c2039e027c",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B2 · MVC",
+              "description": "",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 720,
+              "y": 40
+            },
+            "size": {
+              "width": 700,
+              "height": 780
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B3 · Servicios de negocio (API)"
+              }
+            },
+            "zIndex": -2,
+            "id": "dc73342e-92b0-5bb3-ab24-31e1385a5920",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B3 · Servicios de negocio (API)",
+              "description": "",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 1560,
+              "y": 40
+            },
+            "size": {
+              "width": 280,
+              "height": 780
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B4 · Persistencia interna"
+              }
+            },
+            "zIndex": -2,
+            "id": "aaede356-6ff3-5ada-a040-b29f666265b1",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B4 · Persistencia interna",
+              "description": "",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 1060,
+              "y": 900
+            },
+            "size": {
+              "width": 290,
+              "height": 165
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B5 · Cloudinary externo"
+              }
+            },
+            "zIndex": -2,
+            "id": "9efbbe02-1569-5cde-9420-63ae23696472",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B5 · Cloudinary externo",
+              "description": "",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "id": "5f1711d2-3e76-5bb4-8693-e66c08c6f07a",
+            "shape": "actor",
+            "position": {
+              "x": 50,
+              "y": 135
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "BUYER"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "BUYER",
+              "description": "Comprador con permisos de carrito, direcciones y pedidos.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": []
+            }
+          },
+          {
+            "id": "d94e29df-7d38-51ec-a4c2-3feb2e07c18c",
+            "shape": "actor",
+            "position": {
+              "x": 50,
+              "y": 375
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "SELLER"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "SELLER",
+              "description": "Vendedor aprobado; propietario de sus productos.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": []
+            }
+          },
+          {
+            "id": "82382164-00e9-574b-a566-a32308afbdb2",
+            "shape": "actor",
+            "position": {
+              "x": 50,
+              "y": 615
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "ADMIN"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "ADMIN",
+              "description": "Administrador; revisa vendedores y gestiona categorías.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": []
+            }
+          },
+          {
+            "id": "fe8b49e0-d3e9-5e15-a496-90fdb7e2e53b",
+            "shape": "process",
+            "position": {
+              "x": 398,
+              "y": 365
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "Frontend MVC"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Frontend MVC",
+              "description": "Controladores de productos, compras, carrito y pedidos.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [],
+              "isWebApplication": true,
+              "handlesGoodsOrServices": true
+            }
+          },
+          {
+            "id": "b03dd503-3748-5e21-9e79-47d1236a94c2",
+            "shape": "process",
+            "position": {
+              "x": 770,
+              "y": 135
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "Catálogo y\nautorización"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Catálogo y\nautorización",
+              "description": "services/catalog.service, rutas products y categories; control de propiedad SELLER.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "31127810-8236-594b-8488-3c250f2226a2",
+                  "number": 22,
+                  "title": "TH-022 · Aprobación de vendedor manipulada",
+                  "type": "Elevation of privilege",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Cuenta SELLER pendiente intenta publicar o manipula sellerStatus en el JWT o formulario.",
+                  "mitigation": "Control observado: Backend resuelve perfil/estado actual y exige vendedor aprobado para mutaciones.\nAcción / revisión: Verificar prueba con vendedor pendiente, revocado y suspendido sin confiar en claim cliente.",
+                  "score": ""
+                },
+                {
+                  "id": "292d69a5-98a3-5003-bdc8-a11456c0515f",
+                  "number": 35,
+                  "title": "TH-035 · Datos maliciosos en títulos o descripciones",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Mitigated",
+                  "description": "Escenario: Vendedor ingresa contenido HTML/script y se refleja sin escape en interfaz.",
+                  "mitigation": "Control verificado: Validadores backend rechazan caracteres de control y acotan longitudes; las vistas Razor de frontendnet codifican automáticamente por contexto (sin Html.Raw en campos de catálogo) y SecurityHeadersMiddleware aplica CSP estricta.\nEvidencia: Pruebas unitarias/integración BuyerFlowsTests, SellerAndAdminFlowsTests y SecurityAndHeadersTests.",
+                  "score": ""
+                }
+              ],
+              "handlesGoodsOrServices": true
+            }
+          },
+          {
+            "id": "699ab106-99d2-5b09-a174-41b35eb17b31",
+            "shape": "process",
+            "position": {
+              "x": 770,
+              "y": 410
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "Carrito y\ncheckout"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Carrito y\ncheckout",
+              "description": "services/cart y checkout; calcula importe en backend, controla inventario.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "c9a977cf-d6dd-5113-b5f8-58cc1a2f647b",
+                  "number": 23,
+                  "title": "TH-023 · Alteración de precio por el cliente",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Comprador introduce precio/total manipulado para pagar menos o provocar diferencia de inventario.",
+                  "mitigation": "Control observado: Cálculo de catálogo y stock desde servidor; DTO de carrito sólo recibe productId/quantity.\nAcción / revisión: Probar entradas con campos extra price, total, sellerId y cantidades fuera de rango.",
+                  "score": ""
+                }
+              ],
+              "handlesGoodsOrServices": true
+            }
+          },
+          {
+            "id": "1e5c0ecf-cfc6-52f4-935c-17c3e636fd8b",
+            "shape": "process",
+            "position": {
+              "x": 1120,
+              "y": 610
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "Pedidos y\ntransiciones"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Pedidos y\ntransiciones",
+              "description": "Operaciones transaccionales, transiciones y cancelación, bloqueos por producto.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "8209964e-db5c-56dd-afb3-9094f9a27ba3",
+                  "number": 24,
+                  "title": "TH-024 · Condición de carrera y sobreventa",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Dos pedidos simultáneos agotan la misma existencia o invierten bloqueos y crean un deadlock.",
+                  "mitigation": "Control verificado: Confirmación transaccional con Sequelize + LOCK.UPDATE en orden ascendente de vendedores/productos e idempotencia única (checkoutId, sellerId).\nEvidencia: Las 91/91 suites (1,151/1,151 pruebas) pasaron contra MySQL 8.4 real desechable sin deadlocks ni stock negativo.",
+                  "score": ""
+                },
+                {
+                  "id": "bb849953-89d6-5358-ab98-426176ebea0e",
+                  "number": 25,
+                  "title": "TH-025 · Transición no autorizada del pedido",
+                  "type": "Elevation of privilege",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Un actor altera estado de pedido ajeno o salta transiciones no permitidas.",
+                  "mitigation": "Control verificado: Middleware Authorize + validación de propiedad actor/vendedor y máquina de estados estricta en orders.service.js (PENDING->PREPARING->SHIPPED->DELIVERED o CANCELED con motivo y restitución).\nEvidencia: Cobertura verificada en orders-cancellation.test.js y suites MySQL 8.4 (91/91).",
+                  "score": ""
+                }
+              ],
+              "handlesGoodsOrServices": true
+            }
+          },
+          {
+            "id": "ddcaba75-dcc7-54f6-972e-6fda4d606885",
+            "shape": "process",
+            "position": {
+              "x": 1185,
+              "y": 135
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "Procesador de\nimágenes"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Procesador de\nimágenes",
+              "description": "Multer, validación de contenido/decodificación, cuotas Redis, control Cloudinary.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "44cb0599-e6fe-5f22-9cf7-aff92003dd0b",
+                  "number": 26,
+                  "title": "TH-026 · Archivo bomba o imagen malformada",
+                  "type": "Denial of service",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Se sube PNG/JPEG/WebP que dispara consumo excesivo de memoria/CPU, o contenido no autorizado.",
+                  "mitigation": "Control observado: Límites de bytes/píxeles, validación de contenedor, Sharp y reprocesamiento aislado.\nAcción / revisión: Probar imágenes corruptas, descompresión extrema y timeouts, evitando recursos reales.",
+                  "score": ""
+                },
+                {
+                  "id": "c4f60b52-7908-5e20-bcca-bafddf26a18b",
+                  "number": 27,
+                  "title": "TH-027 · Elusión de validación MIME/extension",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Atacante cambia Content-Type o extensión para almacenar contenido activo o poliglota.",
+                  "mitigation": "Control observado: Validación de firma, decodificación y reencode del contenido.\nAcción / revisión: Añadir pruebas fuzz y asegurar salida sólo en formatos permitidos.",
+                  "score": ""
+                }
+              ],
+              "handlesGoodsOrServices": true
+            }
+          },
+          {
+            "id": "c072c69f-8892-5dd5-8c7c-3484e5e257c1",
+            "shape": "store",
+            "position": {
+              "x": 1613,
+              "y": 155
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "MySQL 8.4\n14 tablas"
+              },
+              "topLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "MySQL 8.4\n14 tablas",
+              "description": "Datos de catálogo, carritos, órdenes, inventario, cuentas.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "e9f67d19-a37f-562a-9e94-10fd33fb78a4",
+                  "number": 33,
+                  "title": "TH-033 · Cambio de inventario fuera de transacción",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Operaciones de catálogo, checkout y cancelación se entrelazan y dejan stock inconsistente.",
+                  "mitigation": "Control verificado: Todas las mutaciones de inventario en checkout y cancelación ocurren dentro de transacciones MySQL con bloqueo pesimista LOCK.UPDATE.\nEvidencia: Suites de integración MySQL 8.4 ejecutadas localmente (final-backend.mysql.test.js + stage5-historical-tests.js, 0 fallos).",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true,
+              "storesInventory": true
+            }
+          },
+          {
+            "id": "54234a97-e5e8-5066-9278-6ae72b212a4e",
+            "shape": "store",
+            "position": {
+              "x": 1613,
+              "y": 465
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "audit_logs\nappend-only"
+              },
+              "topLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "audit_logs\nappend-only",
+              "description": "Auditoría de acciones críticas, actor, resultado y contexto sanitizado.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "acda3c6f-b382-5d4f-a47c-2a51e2586be7",
+                  "number": 30,
+                  "title": "TH-030 · Operación crítica sin auditoría",
+                  "type": "Repudiation",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Fallo de escritura de audit_logs permite confirmar cambios sin evidencia suficiente o genera reversión parcial.",
+                  "mitigation": "Control observado: Auditoría en transacción para acciones de negocio y comportamiento append-only.\nAcción / revisión: Revalidar atomicidad en integración SQL cuando la escritura de auditoría falla.\nPrueba recomendada: Simular fallo INSERT audit_logs y exigir rollback completo de la mutación.",
+                  "score": ""
+                },
+                {
+                  "id": "94d431ae-03dd-50c1-b2f6-99745994ab10",
+                  "number": 31,
+                  "title": "TH-031 · PII o tokens en bitácora",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Mitigated",
+                  "description": "Escenario: Mensajes de error o detalles de usuario insertan correos, JWT o códigos de verificación en audit_logs.",
+                  "mitigation": "Control observado: El servicio sanitiza campos admitidos y redacta patrones sensibles.\nAcción / revisión: Ejecutar pruebas de redacción y retención de PII; no registrar cuerpo HTTP.",
+                  "score": ""
+                }
+              ],
+              "isALog": true
+            }
+          },
+          {
+            "id": "b9a797d9-c8fb-59c4-9b65-73c0611b4431",
+            "shape": "store",
+            "position": {
+              "x": 1613,
+              "y": 695
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "Redis límites\nde imágenes"
+              },
+              "topLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Redis límites\nde imágenes",
+              "description": "Cuotas, concurrencia y seguridad de recuperación de imágenes.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "2cf81222-ba31-5c61-985d-517c560855e6",
+                  "number": 29,
+                  "title": "TH-029 · Abuso de cuotas de subida",
+                  "type": "Denial of service",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Mitigated",
+                  "description": "Escenario: Peticiones repetidas agotan la capacidad del worker o el presupuesto Cloudinary.",
+                  "mitigation": "Control verificado: Límite de 6 subidas/min y 1 en vuelo por vendedor (60/min y 8 globales en vuelo) respaldado en Redis con lease de 90 s y heartbeat de 20 s, devolviendo 429 + Retry-After sin saturar workers Sharp.\nEvidencia: Suites images-phase3b.limits.test.js e images-phase3b.recovery.test.js aprobadas.",
+                  "score": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "f9cf080a-240e-5fd0-b6e7-005bdd4a5b92",
+            "shape": "actor",
+            "position": {
+              "x": 1125,
+              "y": 965
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Cloudinary\nactivos externos"
+              },
+              "body": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Cloudinary\nactivos externos",
+              "description": "Recursos externos con prefijo de entorno/producto y metadata de propiedad.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "c0a51c14-9811-5529-8c03-35a3fe4ff2b0",
+                  "number": 36,
+                  "title": "TH-036 · Exposición inadvertida por URL pública de imagen",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "Low",
+                  "status": "Open",
+                  "description": "Escenario: Una imagen publicada contiene metadatos privados o URL no debería ser accesible públicamente.",
+                  "mitigation": "Control observado: Sharp decodifica y re-codifica cada imagen eliminando metadatos EXIF/privados antes de subirla a Cloudinary; las imágenes del catálogo son intencionalmente públicas.\nRiesgo residual menor: Aplica solo a visibilidad pública de fotos de producto aprobadas.",
+                  "score": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "808958ab-6466-57c5-91b2-37aad7ba0eae",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Carrito y compras",
+              "description": "Operaciones autenticadas de comprador.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS/HTTP local",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Carrito y compras"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "5f1711d2-3e76-5bb4-8693-e66c08c6f07a"
+            },
+            "target": {
+              "cell": "fe8b49e0-d3e9-5e15-a496-90fdb7e2e53b"
+            },
+            "vertices": [
+              {
+                "x": 295,
+                "y": 230
+              }
+            ]
+          },
+          {
+            "id": "6433b7d3-df02-5cf5-a49d-6b6bc67572a1",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Gestión de productos",
+              "description": "Solicitudes de alta, edición, categorías e imágenes de productos.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS/HTTP local",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Gestión de productos"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "d94e29df-7d38-51ec-a4c2-3feb2e07c18c"
+            },
+            "target": {
+              "cell": "fe8b49e0-d3e9-5e15-a496-90fdb7e2e53b"
+            },
+            "vertices": [
+              {
+                "x": 295,
+                "y": 412
+              }
+            ]
+          },
+          {
+            "id": "41978bc1-5352-545a-9739-dd17a8cb093d",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Categorías y revisión",
+              "description": "Altas y cambios de categorías, aprobación de vendedores.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS/HTTP local",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Categorías y revisión"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "82382164-00e9-574b-a566-a32308afbdb2"
+            },
+            "target": {
+              "cell": "fe8b49e0-d3e9-5e15-a496-90fdb7e2e53b"
+            },
+            "vertices": [
+              {
+                "x": 295,
+                "y": 590
+              }
+            ]
+          },
+          {
+            "id": "42f6e99d-70c0-5a08-8c9a-66a3b074be43",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Productos y categorías",
+              "description": "GET, POST, PUT, DELETE /api/products y /api/categories; JWT por llamada.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "HTTP local / HTTPS remoto",
+              "threats": [
+                {
+                  "id": "32cbd555-04cd-52d7-b4f5-8bc6d86a4d6c",
+                  "number": 21,
+                  "title": "TH-021 · Modificación de productos de otro vendedor",
+                  "type": "Elevation of privilege",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: SELLER envía productId ajeno para modificar o borrar su producto o imagen.",
+                  "mitigation": "Control observado: Middleware autoriza SELLER y servicios revisan propiedad; frontend también limita acciones.\nAcción / revisión: Mantener validación en backend, no confiar en UI; ejecutar pruebas IDOR con dos vendedores.",
+                  "score": ""
+                }
+              ]
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Productos y categorías"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "fe8b49e0-d3e9-5e15-a496-90fdb7e2e53b"
+            },
+            "target": {
+              "cell": "b03dd503-3748-5e21-9e79-47d1236a94c2"
+            },
+            "vertices": [
+              {
+                "x": 640,
+                "y": 185
+              }
+            ]
+          },
+          {
+            "id": "088a0354-ca09-586d-a67b-5ca4830b96e0",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Carrito y cotización",
+              "description": "GET/POST/PUT/DELETE de ítems, POST /api/checkout/quote.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "HTTP local / HTTPS remoto",
+              "threats": [
+                {
+                  "id": "6181913b-1c62-566d-8127-542549c96105",
+                  "number": 32,
+                  "title": "TH-032 · Carrito de otro comprador",
+                  "type": "Elevation of privilege",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Token válido de BUYER consulta o elimina artículos de otro userId.",
+                  "mitigation": "Control observado: Rutas cart requieren BUYER y consultan actor autenticado, no ID cliente.\nAcción / revisión: Verificar pruebas con dos cuentas y tokens distintos.",
+                  "score": ""
+                }
+              ]
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Carrito y cotización"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "fe8b49e0-d3e9-5e15-a496-90fdb7e2e53b"
+            },
+            "target": {
+              "cell": "699ab106-99d2-5b09-a174-41b35eb17b31"
+            },
+            "vertices": [
+              {
+                "x": 640,
+                "y": 460
+              }
+            ]
+          },
+          {
+            "id": "320157af-5bab-533c-9657-4452dcf3615c",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Pedidos y estados",
+              "description": "Consulta y transición de pedidos /api/orders.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "HTTP local / HTTPS remoto",
+              "threats": [
+                {
+                  "id": "5e0da4e6-66cc-5a23-89ef-51b452e33f3c",
+                  "number": 34,
+                  "title": "TH-034 · Exposición de pedidos y direcciones",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Una respuesta con datos de pedido se sirve a usuario incorrecto o se almacena en caché de proxy.",
+                  "mitigation": "Control observado: Middleware auth y Cache-Control: no-store en rutas sensibles.\nAcción / revisión: Probar IDOR, cabeceras en errores y caché externa/cliente.",
+                  "score": ""
+                }
+              ]
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Pedidos y estados"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "fe8b49e0-d3e9-5e15-a496-90fdb7e2e53b"
+            },
+            "target": {
+              "cell": "1e5c0ecf-cfc6-52f4-935c-17c3e636fd8b"
+            },
+            "vertices": [
+              {
+                "x": 640,
+                "y": 660
+              },
+              {
+                "x": 920,
+                "y": 660
+              }
+            ]
+          },
+          {
+            "id": "9398c683-ad4e-54bd-89ad-ac333be7dc27",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Catálogo SQL",
+              "description": "Acceso a productos, vendedores y categorías con condiciones de propiedad.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "MySQL privado",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Catálogo SQL"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "b03dd503-3748-5e21-9e79-47d1236a94c2"
+            },
+            "target": {
+              "cell": "c072c69f-8892-5dd5-8c7c-3484e5e257c1"
+            },
+            "vertices": [
+              {
+                "x": 1210,
+                "y": 62
+              }
+            ]
+          },
+          {
+            "id": "4caf536c-4189-5a83-ad5f-3367cce9c78f",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Reserva / carrito SQL",
+              "description": "Operaciones sobre carts y cart_items; validación de inventario.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "MySQL privado",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Reserva / carrito SQL"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "699ab106-99d2-5b09-a174-41b35eb17b31"
+            },
+            "target": {
+              "cell": "c072c69f-8892-5dd5-8c7c-3484e5e257c1"
+            },
+            "vertices": [
+              {
+                "x": 1150,
+                "y": 365
+              },
+              {
+                "x": 1475,
+                "y": 235
+              }
+            ]
+          },
+          {
+            "id": "6ba9c839-2cca-5951-b7e1-fb5b21dbfce9",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Órdenes SQL",
+              "description": "Pedidos, ítems, historial, precios snapshot y stock.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "MySQL privado",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Órdenes SQL"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "1e5c0ecf-cfc6-52f4-935c-17c3e636fd8b"
+            },
+            "target": {
+              "cell": "c072c69f-8892-5dd5-8c7c-3484e5e257c1"
+            },
+            "vertices": [
+              {
+                "x": 1475,
+                "y": 350
+              }
+            ]
+          },
+          {
+            "id": "7a9a1eb4-85f3-5244-86d7-11a7d4987450",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Subir y retirar imagen",
+              "description": "PUT/DELETE /api/products/:id/image; verificación previa de propiedad.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "Memoria API",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Subir y retirar imagen"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "b03dd503-3748-5e21-9e79-47d1236a94c2"
+            },
+            "target": {
+              "cell": "ddcaba75-dcc7-54f6-972e-6fda4d606885"
+            },
+            "vertices": [
+              {
+                "x": 1050,
+                "y": 185
+              }
+            ]
+          },
+          {
+            "id": "cca66967-eab8-5c97-8c6a-e80eaa80a7b2",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Admisión imagen",
+              "description": "Cuotas/concurrencia Redis para operaciones de medios.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "Redis TLS",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Admisión imagen"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "ddcaba75-dcc7-54f6-972e-6fda4d606885"
+            },
+            "target": {
+              "cell": "b9a797d9-c8fb-59c4-9b65-73c0611b4431"
+            },
+            "vertices": [
+              {
+                "x": 1455,
+                "y": 430
+              },
+              {
+                "x": 1455,
+                "y": 732
+              }
+            ]
+          },
+          {
+            "id": "f25a7bc4-d086-558a-9f12-4ed64c168374",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Guardar/borrar activo",
+              "description": "Upload, inspect, destroy de recursos verificados.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS Cloudinary",
+              "threats": [
+                {
+                  "id": "2bd15924-e911-5251-8eca-ba1ac83fcd0d",
+                  "number": 28,
+                  "title": "TH-028 · Borrado cruzado de imágenes",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Se presenta public_id de otro entorno/producto y se solicita borrado o reemplazo.",
+                  "mitigation": "Control observado: Prefijos con scope y cotejo remoto de metadatos y referencias.\nAcción / revisión: Mantener segunda comprobación antes de destroy; prueba aislada de carrera y estado de journal.",
+                  "score": ""
+                }
+              ]
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Guardar/borrar activo"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "ddcaba75-dcc7-54f6-972e-6fda4d606885"
+            },
+            "target": {
+              "cell": "f9cf080a-240e-5fd0-b6e7-005bdd4a5b92"
+            },
+            "vertices": [
+              {
+                "x": 1355,
+                "y": 460
+              },
+              {
+                "x": 1355,
+                "y": 850
+              }
+            ]
+          },
+          {
+            "id": "7e0e638f-874a-5351-bb9b-47932628d863",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Registrar catálogo",
+              "description": "Eventos de mutaciones de productos y categorías.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "SQL transaccional",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Registrar catálogo"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "b03dd503-3748-5e21-9e79-47d1236a94c2"
+            },
+            "target": {
+              "cell": "54234a97-e5e8-5066-9278-6ae72b212a4e"
+            },
+            "vertices": [
+              {
+                "x": 1005,
+                "y": 300
+              },
+              {
+                "x": 1460,
+                "y": 502
+              }
+            ]
+          },
+          {
+            "id": "8d5b5d39-e1a2-5ca6-93a7-c39e32b73970",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Registrar pedido",
+              "description": "Eventos de pedidos/cancelaciones y estado.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "SQL transaccional",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Registrar pedido"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "1e5c0ecf-cfc6-52f4-935c-17c3e636fd8b"
+            },
+            "target": {
+              "cell": "54234a97-e5e8-5066-9278-6ae72b212a4e"
+            },
+            "vertices": [
+              {
+                "x": 1460,
+                "y": 600
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "04 · Instalación, secretos y despliegue",
+        "description": "Modelo del instalador setup/ para entornos descartables y riesgos de cadena de suministro, diferenciado del despliegue distribuido en 3 VMs con Apache 2 TLS 1.3.",
+        "diagramType": "STRIDE",
+        "thumbnail": "./public/content/images/thumbnail.stride.jpg",
+        "version": "2.0",
+        "cells": [
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 20,
+              "y": 80
+            },
+            "size": {
+              "width": 640,
+              "height": 830
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B1 · Estación de desarrollo"
+              }
+            },
+            "zIndex": -2,
+            "id": "df097c60-a719-53e9-8162-4c4744697537",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B1 · Estación de desarrollo",
+              "description": "Acceso de operador; contiene repositorio y comandos de instalación",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 790,
+              "y": 260
+            },
+            "size": {
+              "width": 430,
+              "height": 670
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B2 · Contenedores Docker del clon"
+              }
+            },
+            "zIndex": -2,
+            "id": "0e0d05b2-589e-5a2a-bfd7-655f4620b877",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B2 · Contenedores Docker del clon",
+              "description": "Proyecto independiente de Compose, MySQL y Redis en redes internas",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "shape": "trust-boundary-box",
+            "position": {
+              "x": 1360,
+              "y": 80
+            },
+            "size": {
+              "width": 350,
+              "height": 850
+            },
+            "attrs": {
+              "headerText": {
+                "text": "B3 · Servicios y repos externos"
+              }
+            },
+            "zIndex": -2,
+            "id": "cd18deea-b3e9-581a-a76b-1aceae095489",
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "B3 · Servicios y repos externos",
+              "description": "Servicios de terceros, cadenas de suministro, identidad OAuth y Cloudinary",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "id": "30d3c94c-ed25-5bbd-b77a-6f64f1cbb1c0",
+            "shape": "actor",
+            "position": {
+              "x": 65,
+              "y": 165
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Repositorio\nGitHub"
+              },
+              "body": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Repositorio\nGitHub",
+              "description": "Código fuente, configuración versionada y dependencias del proyecto.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "3d4ff189-be83-5d0e-8437-b2417a5117cf",
+                  "number": 37,
+                  "title": "TH-037 · Credencial histórica expuesta en Git",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "Low",
+                  "status": "Open",
+                  "description": "Contexto histórico (RSG-10): Una credencial de ejemplo sin privilegios productivos, creada únicamente durante el alta inicial de la base local para desarrollo, permaneció en commits históricos (eliminada de config/config.json en c8a22f3 y de bd.sql desde 11c58cc).",
+                  "mitigation": "Estado real: Credencial obsoleta/deprecada y sin uso alguno; la base de datos y las 3 VMs operan exclusivamente con ecommerce_app (15 GRANTs mínimos) y contraseñas aleatorias generadas por despliegue. Se conserva nota en RSG-10 sin reescribir historial por trazabilidad de trabajo en curso.",
+                  "score": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "eb7f2eea-051b-5daf-9c7f-5287a2b55e51",
+            "shape": "actor",
+            "position": {
+              "x": 65,
+              "y": 445
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Compañero /\noperador"
+              },
+              "body": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Compañero /\noperador",
+              "description": "Usuario que clona, aporta .env, ejecuta setup y administra secretos.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "bdc13187-3a00-5ef2-a9ac-317dff5c903c",
+                  "number": 38,
+                  "title": "TH-038 · Distribución del .env entre compañeros",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Open",
+                  "description": "Escenario: El .env compartido contiene credenciales reutilizables de Cloudinary y puede incluir credenciales MySQL copiadas.",
+                  "mitigation": "Control observado: El instalador genera secretos locales MySQL y mantiene .env intacto, usando overrides Compose.\nAcción / revisión: Distribuir ejemplos sin valores reales; compartición segura y rotación de credenciales ya difundidas.",
+                  "score": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "eac9dbfc-8977-512b-a04f-8a75028ff0e8",
+            "shape": "process",
+            "position": {
+              "x": 430,
+              "y": 430
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "setup/install.ps1\n+ install.cjs"
+              },
+              "body": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "setup/install.ps1\n+ install.cjs",
+              "description": "Bootstrap de host Windows, secretos, esquema final, Redis recovery y arranque Compose.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "ffee16ee-9254-52c1-8237-4602c2aa6463",
+                  "number": 39,
+                  "title": "TH-039 · Versión de Node incompatible",
+                  "type": "Denial of service",
+                  "modelType": "STRIDE",
+                  "severity": "Low",
+                  "status": "Open",
+                  "description": "Escenario: Si el instalador ejecutara herramientas en host con versiones anteriores a Node 24 cuando package.json exige engines 24.x, instalar o correr scripts locales podría fallar o comportarse de forma distinta.",
+                  "mitigation": "Control observado: Dockerfile fija Node.js 24 LTS y package.json exige Node 24.\nRiesgo residual menor: Afecta únicamente ejecución local manual en estaciones sin Node 24.",
+                  "score": ""
+                },
+                {
+                  "id": "7e6be3cd-4c31-5e3f-8eca-b04080281df8",
+                  "number": 40,
+                  "title": "TH-040 · Sustitución de binarios auxiliares",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "Low",
+                  "status": "Open",
+                  "description": "Escenario: Un ejecutable openssl/node de PATH manipulado se invoca durante el aprovisionamiento.",
+                  "mitigation": "Control observado: Solo aplica en máquinas locales de desarrollo donde el propio operador ejecuta setup/install.ps1 buscando openssl/docker/node del sistema.",
+                  "score": ""
+                }
+              ],
+              "isWebApplication": false
+            }
+          },
+          {
+            "id": "0c8150d0-ffa2-57fc-b0f9-5e6a79a30927",
+            "shape": "store",
+            "position": {
+              "x": 415,
+              "y": 745
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "Directorio local\n.secrets/"
+              },
+              "topLine": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Directorio local\n.secrets/",
+              "description": "Root MySQL local, app password, PEM RS256, HMAC, Redis CA/ACL, OAuth si se aprovisiona.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "2259bfe4-afd6-5fee-8c80-00e6037ccdd9",
+                  "number": 41,
+                  "title": "TH-041 · Permisos demasiado amplios sobre secretos",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Open",
+                  "description": "Escenario: Archivos locales JWT, OAuth o Redis se copian entre usuarios o quedan legibles por cuentas no autorizadas.",
+                  "mitigation": "Control observado: Secrets fuera de Git (.gitignore) y bind mounts :ro; en servidores Linux ya se restringió a 600.\nRiesgo residual: En estaciones locales Windows (NTFS), verificar ACL de usuario en .secrets/ si el equipo es compartido.",
+                  "score": ""
+                },
+                {
+                  "id": "e5b3bdb9-4a2a-5a48-adc8-9a025663fb97",
+                  "number": 51,
+                  "title": "TH-051 · Falta de evidencia de rotación y recovery",
+                  "type": "Repudiation",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Open",
+                  "description": "Escenario: Una reautorización o cambio de certificados invalida sesiones sin trazabilidad operativa verificable.",
+                  "mitigation": "Control observado: Herramientas de recovery explícitas, pero estado de operación está fuera de bitácora de negocio.\nAcción / revisión: Guardar evidencia operacional sin tokens ni PEM, fecha y operador de rotación.",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true
+            }
+          },
+          {
+            "id": "ceb55c57-203a-54ca-b2bc-7e4131fb124b",
+            "shape": "process",
+            "position": {
+              "x": 915,
+              "y": 360
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "Docker Compose\nproyecto aislado"
+              },
+              "body": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Docker Compose\nproyecto aislado",
+              "description": "Contenedores db, redis y app, secretos de Docker, puertos loopback.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "1ebda101-7615-5c24-b02d-998984c0c985",
+                  "number": 49,
+                  "title": "TH-049 · Puerto publicado fuera de loopback",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: MySQL/Redis o API se exponen accidentalmente a LAN o Internet cuando se modifica Compose.",
+                  "mitigation": "Control observado: Setup publica API/Redis en loopback, MySQL permanece interno.\nAcción / revisión: Probar mapeo efectivo docker ps e inventario de redes por equipo.",
+                  "score": ""
+                },
+                {
+                  "id": "c87063b8-70a2-5d4d-9413-b5489399c4ee",
+                  "number": 50,
+                  "title": "TH-050 · Frontend no encuentra la API local",
+                  "type": "Denial of service",
+                  "modelType": "STRIDE",
+                  "severity": "Low",
+                  "status": "Open",
+                  "description": "Escenario: FrontendNet usa ApiBaseUrl predeterminado diferente del puerto 13000 usado por setup.",
+                  "mitigation": "Control observado: Frontend permite ApiBaseUrl por entorno y guía de despliegue documenta puertos locales; no aplica en despliegue TLS 3 VMs.",
+                  "score": ""
+                }
+              ],
+              "isWebApplication": false
+            }
+          },
+          {
+            "id": "58d8adfe-9eac-5bcf-82c3-b20e8cafa872",
+            "shape": "store",
+            "position": {
+              "x": 825,
+              "y": 615
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "MySQL 8.4 privado\n14 tablas"
+              },
+              "topLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "MySQL 8.4 privado\n14 tablas",
+              "description": "Base local segura, usuario ecommerce_app con permisos mínimos.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "daeae883-04b3-5541-a393-4af436eb8056",
+                  "number": 42,
+                  "title": "TH-042 · Cuenta de aplicación con privilegios elevados",
+                  "type": "Elevation of privilege",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Bootstrap o una migración deja GRANT global o acceso DDL para ecommerce_app.",
+                  "mitigation": "Control observado: Script de setup usa grants mínimos del esquema final.\nAcción / revisión: Comparar los grants reales y rechazar cambios que concedan ALTER, DROP o root.",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true,
+              "storesInventory": true
+            }
+          },
+          {
+            "id": "3ab2cfc0-abfe-579f-8239-da822347e725",
+            "shape": "store",
+            "position": {
+              "x": 965,
+              "y": 810
+            },
+            "size": {
+              "width": 174,
+              "height": 74
+            },
+            "attrs": {
+              "text": {
+                "text": "Redis TLS\nACL y estado"
+              },
+              "topLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              },
+              "bottomLine": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Redis TLS\nACL y estado",
+              "description": "Instancia local con certificado y marcadores run_id/generation.",
+              "type": "tm.Store",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "fc03a0b6-9b8e-5fbd-b9f5-c9dafcfcee9a",
+                  "number": 43,
+                  "title": "TH-043 · Reinicio Redis invalida identidad de sesión",
+                  "type": "Denial of service",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Mitigated",
+                  "description": "Escenario: Se reinicia Redis y un estado antiguo sigue autorizado o una recuperación automática conserva sesiones inesperadas.",
+                  "mitigation": "Control observado: Marcador run_id y generación; recuperacion explícita con -RecoverRedis.\nAcción / revisión: Controlar procedimientos de reinicio y revocación; probar que sin recovery la API falla cerrado.",
+                  "score": ""
+                }
+              ],
+              "storesCredentials": true
+            }
+          },
+          {
+            "id": "95c67218-b52c-52f8-8b17-aa44d3b1358d",
+            "shape": "actor",
+            "position": {
+              "x": 1455,
+              "y": 745
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Proveedores externos\nGoogle + Cloudinary"
+              },
+              "body": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Proveedores externos\nGoogle + Cloudinary",
+              "description": "Cuentas externas; OAuth manual y almacenamiento de imágenes.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "4a4581aa-25ce-563f-842a-40549c1c13b2",
+                  "number": 44,
+                  "title": "TH-044 · OAuth token copiado o reutilizado entre equipos",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Open",
+                  "description": "Escenario: Se comparte token.json con refresh token de una misma cuenta Gmail, permitiendo envíos no autorizados.",
+                  "mitigation": "Control observado: El instalador no genera ni copia tokens OAuth; autoriza manualmente.\nAcción / revisión: Autorizar por equipo con acceso limitado; rotar token comprometido, no almacenar en Git.",
+                  "score": ""
+                },
+                {
+                  "id": "9b9d1efc-5034-5811-9517-663e30913c12",
+                  "number": 45,
+                  "title": "TH-045 · Entornos comparten activos Cloudinary",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Dos compañeros usan el mismo cloud y confunden recursos, cuotas o ámbitos de limpieza.",
+                  "mitigation": "Control verificado: El servicio de imágenes amarra cada public_id al prefijo de pertenencia (UUID de instancia MySQL + ID de producto) y valida metadatos remotos antes de destruir activos.\nEvidencia: Suites cloudinary.service.test.js e images-phase3a.ownership.test.js.",
+                  "score": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "cf9da3bc-4db1-5108-8199-b6cddba48667",
+            "shape": "process",
+            "position": {
+              "x": 1463,
+              "y": 375
+            },
+            "size": {
+              "width": 145,
+              "height": 100
+            },
+            "attrs": {
+              "text": {
+                "text": "Proxy inverso TLS\n(Apache 2 / VM)"
+              },
+              "body": {
+                "stroke": "#374151",
+                "strokeWidth": 1.6,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Proxy inverso TLS\n(Apache 2 / VM)",
+              "description": "Proxy inverso Apache 2 con TLS 1.3 en despliegue distribuido de 3 VMs, límites de IP confiables y terminación HTTPS.",
+              "type": "tm.Process",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "319de5e3-a13d-5bf2-a535-606e8fdf8ea8",
+                  "number": 46,
+                  "title": "TH-046 · CIDR de proxy confía en un segmento amplio",
+                  "type": "Spoofing",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: La configuración de despliegue confía en proxies no autorizados dentro de un rango grande y acepta IP/Proto falsificados.",
+                  "mitigation": "Control verificado: En despliegue distribuido 3 VMs, TRUST_PROXY=10.110.92.91/32 (IP única del proxy VM 1), ForwardedHeadersOptions limita proxies de confianza y ufw + DOCKER-USER bloquean bypass directo.\nEvidencia: Verificación de manifiestos compose.vm2-backend.yaml y reglas de firewall en VM 2.",
+                  "score": ""
+                },
+                {
+                  "id": "365a0e91-8c7e-5ac0-ae24-53cd93aa6d45",
+                  "number": 47,
+                  "title": "TH-047 · TLS termina antes del backend sin cifrado interno",
+                  "type": "Information disclosure",
+                  "modelType": "STRIDE",
+                  "severity": "High",
+                  "status": "Mitigated",
+                  "description": "Escenario: Frontend y backend en VM diferentes se comunican en HTTP plano expuesto a otras máquinas de red.",
+                  "mitigation": "Control verificado: En el despliegue distribuido de 3 VMs, Apache 2 cifra tanto tienda.lan (VM 1) como el salto interno hacia api.tienda.lan (VM 2) con TLS 1.3 y CA privada, mientras VM 2 -> VM 3 exige DB_SSL=true.\nEvidencia: Verificación SSLProtocol/verify-vm.sh en las 3 VMs y configuración MySQL TLS obligatoria.",
+                  "score": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "78ce35f0-055c-51b2-88cb-18887c3dbeff",
+            "shape": "actor",
+            "position": {
+              "x": 1455,
+              "y": 155
+            },
+            "size": {
+              "width": 160,
+              "height": 70
+            },
+            "attrs": {
+              "text": {
+                "text": "Registro de\ndependencias"
+              },
+              "body": {
+                "stroke": "#dc2626",
+                "strokeWidth": 2.4,
+                "strokeDasharray": ""
+              }
+            },
+            "visible": true,
+            "zIndex": 5,
+            "data": {
+              "name": "Registro de\ndependencias",
+              "description": "Paquetes npm, Docker base images, OpenSSL y artefactos de distribución.",
+              "type": "tm.Actor",
+              "isTrustBoundary": false,
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "7e22fbde-963e-5116-bf0c-c96effc424af",
+                  "number": 48,
+                  "title": "TH-048 · Dependencia o imagen de contenedor comprometida",
+                  "type": "Tampering",
+                  "modelType": "STRIDE",
+                  "severity": "Medium",
+                  "status": "Open",
+                  "description": "Escenario: Actualización maliciosa de npm packages, imagen base o herramientas de build introduce código no confiable.",
+                  "mitigation": "Control observado: package-lock.json versionado, flujo CI ejecuta npm ci --ignore-scripts y npm audit --audit-level=high, Dockerfile usa Node 24.\nAcción pendiente: Fijar imágenes base de Docker por digest SHA-256 en compose y flujos de build.",
+                  "score": ""
+                }
+              ]
+            }
+          },
+          {
+            "id": "e88e6194-2266-5bdc-b159-b2ba2e2aa42b",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Clonar código",
+              "description": "Se ejecuta instalador procedente de repositorio que pudo recibir cambios maliciosos.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "Git HTTPS",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Clonar código"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "30d3c94c-ed25-5bbd-b77a-6f64f1cbb1c0"
+            },
+            "target": {
+              "cell": "eac9dbfc-8977-512b-a04f-8a75028ff0e8"
+            },
+            "vertices": [
+              {
+                "x": 325,
+                "y": 265
+              }
+            ]
+          },
+          {
+            "id": "634f3e40-2261-59a4-a4e2-eb0fc7228a56",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Ejecutar instalador",
+              "description": "Inicio manual del setup con .env previamente copiado.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "PowerShell local",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Ejecutar instalador"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "eb7f2eea-051b-5daf-9c7f-5287a2b55e51"
+            },
+            "target": {
+              "cell": "eac9dbfc-8977-512b-a04f-8a75028ff0e8"
+            },
+            "vertices": [
+              {
+                "x": 320,
+                "y": 480
+              }
+            ]
+          },
+          {
+            "id": "c7feef18-f643-54b5-b72b-eca3f9940b21",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Descarga de dependencias",
+              "description": "npm ci, Docker pull, binarios de sistema necesarios.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS/registries",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Descarga de dependencias"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "78ce35f0-055c-51b2-88cb-18887c3dbeff"
+            },
+            "target": {
+              "cell": "eac9dbfc-8977-512b-a04f-8a75028ff0e8"
+            },
+            "vertices": [
+              {
+                "x": 940,
+                "y": 160
+              }
+            ]
+          },
+          {
+            "id": "95ccf8b6-fd7b-5738-a4c2-4fc14b45704f",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Crear secretos",
+              "description": "Creación local exclusiva de claves y credenciales sin sobreescribir existentes.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "FS local",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Crear secretos"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "eac9dbfc-8977-512b-a04f-8a75028ff0e8"
+            },
+            "target": {
+              "cell": "0c8150d0-ffa2-57fc-b0f9-5e6a79a30927"
+            },
+            "vertices": [
+              {
+                "x": 502,
+                "y": 635
+              }
+            ]
+          },
+          {
+            "id": "d1ddf59e-b71f-510a-8a09-1c6331c1f9c4",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Provisionar Compose",
+              "description": "Bootstrap red, contenedores, secretos y puertos en un proyecto aislado.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "Docker Engine local",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Provisionar Compose"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "eac9dbfc-8977-512b-a04f-8a75028ff0e8"
+            },
+            "target": {
+              "cell": "ceb55c57-203a-54ca-b2bc-7e4131fb124b"
+            },
+            "vertices": [
+              {
+                "x": 725,
+                "y": 410
+              }
+            ]
+          },
+          {
+            "id": "89215132-ece3-5a4c-aabd-050c9bc16e98",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Montar secretos",
+              "description": "Secretos de Docker y bind mounts para Redis, Gmail, JWT y CA.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "FS bind",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Montar secretos"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "0c8150d0-ffa2-57fc-b0f9-5e6a79a30927"
+            },
+            "target": {
+              "cell": "ceb55c57-203a-54ca-b2bc-7e4131fb124b"
+            },
+            "vertices": [
+              {
+                "x": 725,
+                "y": 620
+              }
+            ]
+          },
+          {
+            "id": "d431dabf-1755-56f9-9920-5840ef43a994",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Inicializar MySQL",
+              "description": "Crear secure_ecommerce y cuenta con grants mínimos.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "Red Docker privada",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Inicializar MySQL"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "ceb55c57-203a-54ca-b2bc-7e4131fb124b"
+            },
+            "target": {
+              "cell": "58d8adfe-9eac-5bcf-82c3-b20e8cafa872"
+            },
+            "vertices": [
+              {
+                "x": 875,
+                "y": 540
+              }
+            ]
+          },
+          {
+            "id": "f664c189-4be5-597f-a09a-fbabb4cd2d1b",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Preparar Redis",
+              "description": "Inicio Redis TLS con ACL, primer recovery explícito.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "Red Docker interna",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Preparar Redis"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "ceb55c57-203a-54ca-b2bc-7e4131fb124b"
+            },
+            "target": {
+              "cell": "3ab2cfc0-abfe-579f-8239-da822347e725"
+            },
+            "vertices": [
+              {
+                "x": 1135,
+                "y": 630
+              }
+            ]
+          },
+          {
+            "id": "88040fec-08db-5660-907a-f39e3c244fd0",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Autorizar Gmail",
+              "description": "OAuth manual; client.json/token.json no los crea instalador.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Autorizar Gmail"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "eb7f2eea-051b-5daf-9c7f-5287a2b55e51"
+            },
+            "target": {
+              "cell": "95c67218-b52c-52f8-8b17-aa44d3b1358d"
+            },
+            "vertices": [
+              {
+                "x": 145,
+                "y": 980
+              },
+              {
+                "x": 1535,
+                "y": 980
+              }
+            ]
+          },
+          {
+            "id": "f12af23b-07b7-5490-897f-f4e60cda3935",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Compartir Cloudinary",
+              "description": "API usa variables del .env que pueden apuntar a cuenta compartida.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Compartir Cloudinary"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "ceb55c57-203a-54ca-b2bc-7e4131fb124b"
+            },
+            "target": {
+              "cell": "95c67218-b52c-52f8-8b17-aa44d3b1358d"
+            },
+            "vertices": [
+              {
+                "x": 1280,
+                "y": 600
+              }
+            ]
+          },
+          {
+            "id": "926395bc-5e03-5151-9e53-7ab033c26c63",
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#64748b",
+                "strokeWidth": 1.5,
+                "targetMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": ""
+              }
+            },
+            "zIndex": 8,
+            "connector": "smooth",
+            "data": {
+              "name": "Proxy -> API",
+              "description": "Conexiones distribuidas si existe proxy; cabeceras X-Forwarded-* y TLS.",
+              "type": "tm.Flow",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "isTrustBoundary": false,
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": false,
+              "isPublicNetwork": false,
+              "protocol": "HTTP/HTTPS según despliegue",
+              "threats": []
+            },
+            "labels": [
+              {
+                "position": 0.5,
+                "attrs": {
+                  "label": {
+                    "text": "Proxy -> API"
+                  }
+                }
+              }
+            ],
+            "source": {
+              "cell": "cf9da3bc-4db1-5108-8199-b6cddba48667"
+            },
+            "target": {
+              "cell": "ceb55c57-203a-54ca-b2bc-7e4131fb124b"
+            },
+            "vertices": [
+              {
+                "x": 1290,
+                "y": 425
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "released_at": "2026-11-02"
+}

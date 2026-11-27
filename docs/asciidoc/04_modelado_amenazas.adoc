@@ -1,6 +1,199 @@
-== Modelado de Amenazas (OWASP Threat Dragon)
+== Modelado de Amenazas (OWASP Threat Dragon / STRIDE)
 
-[IMPORTANT]
-====
-**PENDIENTE:** Este capítulo queda explícitamente fuera del alcance del Incremento 1. El modelo de amenazas (OWASP Threat Dragon / STRIDE) y sus artefactos derivados se integrarán en el incremento dedicado de modelado de amenazas.
-====
+Este capítulo documenta el modelado sistemático de amenazas de la plataforma (`backendnode/` y `frontendnet/`) elaborado con **OWASP Threat Dragon v2.6.2** mediante la metodología **STRIDE** (_Spoofing_, _Tampering_, _Repudiation_, _Information disclosure_, _Denial of service_, _Elevation of privilege_) sobre cuatro Diagramas de Flujo de Datos (DFD). El archivo fuente versionado se encuentra en `backendnode/docs/threat-model/secure-ecommerce-threat-model.json`.
+
+=== Metodología, Alcance y Resumen Ejecutivo
+
+El modelo cubre la arquitectura completa BFF (`ASP.NET Core 9.0 MVC`) + API REST (`Node.js 24 LTS` / `Express`) + persistencia (`MySQL 8.4` TLS y `Redis 8.2` TLS/ACL) + proveedores externos (`Gmail API` OAuth 2.0 y `Cloudinary`), incluyendo el flujo de aprovisionamiento local (`backendnode/setup/install.ps1` y `backendnode/setup/install.cjs`) y el despliegue distribuido en tres máquinas virtuales con Apache 2 TLS 1.3. Los estados y severidades están sincronizados con la evidencia real de código, pruebas automatizadas, pruebas `k6` (`PEN-05`) y despliegue en 3 VMs.
+
+[cols="2,1,1,3",options="header"]
+|===
+| Estado / Severidad | Cantidad | Proporción | Significado en el Modelo Vigente
+
+| **Mitigadas (`Mitigated`)**
+| `36`
+| `70.6 %`
+| Amenazas con control implementado en código/infraestructura y verificado mediante pruebas unitarias, integración real (`MySQL 8.4` / `Redis 8.2`), `PEN-05` (`k6`) o validación en 3 VMs.
+
+| **Abiertas — `High`**
+| `2`
+| `3.9 %`
+| Riesgo humano/operativo al compartir manualmente archivos `.env` (`TH-038`) o `token.json` OAuth (`TH-044`) entre integrantes del equipo.
+
+| **Abiertas — `Medium`**
+| `7`
+| `13.7 %`
+| Trade-offs arquitectónicos y mejoras operativas acotadas (`TH-004`, `TH-007`, `TH-010`, `TH-013`, `TH-041`, `TH-048`, `TH-051`).
+
+| **Abiertas — `Low`**
+| `6`
+| `11.8 %`
+| Riesgos menores de usabilidad, visibilidad pública intencional, entorno local `setup/` y registro histórico de credencial de ejemplo deprecada (`TH-009`, `TH-036`, `TH-037`, `TH-039`, `TH-040`, `TH-050`).
+
+| **Total evaluado**
+| **`51`**
+| **`100 %`**
+| **`0` abiertas de prioridad Crítica (`Critical`).**
+|===
+
+[cols="2,1,1,1,3",options="header"]
+|===
+| Categoría STRIDE | Total | Mitigadas | Abiertas | Enfoque Principal de Controles
+
+| `Spoofing`
+| `6`
+| `6`
+| `0`
+| Allowlist `TRUST_PROXY`, cookies `HttpOnly`/`SameSite=Lax`, HMAC en OTP, rotación de refresh tokens, validación de remitente OAuth y bloqueo por firewall en 3 VMs.
+
+| `Tampering`
+| `12`
+| `9`
+| `3`
+| Bloqueo pesimista `LOCK.UPDATE`, idempotencia `(checkoutId, sellerId)`, decodificación aislada Sharp, prefijos Cloudinary por `UUID`, firma de llaves RS256 y escape contextual en Razor.
+
+| `Repudiation`
+| `3`
+| `2`
+| `1`
+| Bitácora transaccional _append-only_ en `audit_logs` con `X-Request-Id` y sanitización de PII/secretos; queda abierta la bitácora operativa de rotaciones manuales (`TH-051`).
+
+| `Information disclosure`
+| `13`
+| `7`
+| `6`
+| TLS 1.3 extremo a extremo, `DB_SSL=true`, `Cache-Control: no-store`, permisos mínimos `ecommerce_app` y ocultamiento de secretos; permanecen riesgos operativos manuales y anti-enumeración de registro.
+
+| `Denial of service`
+| `10`
+| `5`
+| `5`
+| Cola acotada de `scrypt` (`N={scrypt-n}`), `rate-limit` y lockout en Redis (`PEN-05`), cuotas de imágenes (`{img-vendedor-min}`/min) y diseño _fail-closed_ `503`.
+
+| `Elevation of privilege`
+| `7`
+| `7`
+| `0`
+| Verificación en vivo de estado/perfil/vendedor `APPROVED` por petición (`Authorize`), privilegios `ecommerce_app` sin DDL y separación estricta `BUYER`/`SELLER`/`ADMIN`.
+|===
+
+=== Diagramas de Flujo de Datos (DFD) y Fronteras de Confianza
+
+==== DFD 01 · Contexto y fronteras de confianza (`7` amenazas: `5` mitigadas, `2` abiertas)
+
+Representa las seis fronteras de confianza del sistema completo: `B1` Dispositivo no confiable (navegador), `B2` Aplicación MVC (`frontendnet/`), `B3` API y lógica de negocio (`backendnode/`), `B4` Servicios de datos internos (`MySQL 8.4` y `Redis 8.2`), `B5` Proveedores externos (`Gmail API` OAuth 2.0 y `Cloudinary`) y `B6` Secretos locales/Docker (`.secrets/`).
+
+image::td_01_contexto_fronteras.svg[DFD 01 · Contexto y fronteras de confianza,width=100%,align="center"]
+
+* **Mitigadas (`5`):** suplantación por cabeceras de proxy (`TH-001`), exposición de cookies sin TLS (`TH-002`), privilegios excesivos en MySQL (`TH-003`), robo de llaves/tokens en servidor Linux (`TH-005`) y borrado cruzado en Cloudinary (`TH-006`).
+* **Abiertas (`2`):** indisponibilidad de Redis deteniendo autenticación _fail-closed_ (`TH-004`, `Medium`) y dependencia operativa de disponibilidad/cuota en Gmail API (`TH-007`, `Medium`).
+
+==== DFD 02 · Identidad, OTP y sesiones (`13` amenazas: `10` mitigadas, `3` abiertas)
+
+Modela el registro de `BUYER`/`SELLER` con OTP de `{otp-digitos}` dígitos en memoria (`TTL` `{otp-ttl-min}` min, _cooldown_ `{otp-cooldown-seg}` s, `{otp-max-intentos}` intentos), autenticación `POST /api/auth`, firma JWT RS256 (`{jwt-rsa-bits}` bits, `{jwt-ttl-seg}` s), gestión de sesiones en Redis TLS y recuperación de contraseña.
+
+image::td_02_identidad_otp_sesiones.svg[DFD 02 · Identidad OTP y sesiones,width=100%,align="center"]
+
+* **Mitigadas (`10`):** filtración de credenciales en registro (`TH-008`), fuerza bruta OTP (`TH-011`), remitente Gmail no autorizado (`TH-012`), robo/reúso de refresh tokens (`TH-014`), exhaustión de Redis (`TH-015`), sustitución de llave RSA/manifiesto (`TH-016`), secuestro de cookie MVC (`TH-017`), _credential stuffing_ validado en `PEN-05` (`TH-018`), trazabilidad OTP en `audit_logs` (`TH-019`) y escalamiento de perfil en registro (`TH-020`).
+* **Abiertas (`3`):** reintento OTP con payload distinto durante el _cooldown_ (`TH-009`, `Low`), pérdida de OTP en RAM tras reinicio (`TH-010`, `Medium`) y respuesta `409` en registro frente a anti-enumeración (`TH-013`, `Medium`).
+
+==== DFD 03 · Catálogo, carrito, pedidos e imágenes (`16` amenazas: `15` mitigadas, `1` abierta)
+
+Modela los flujos autenticados por rol (`BUYER`, `SELLER`, `ADMIN`) sobre productos, categorías, carrito, checkout con cotización HMAC (`{quote-ttl-seg}` s), máquina de estados de pedidos, procesamiento aislado de imágenes en `Sharp` (`{img-max-mib}` MiB, `{img-max-dim-px}` px) y auditoría transaccional en `audit_logs`.
+
+image::td_03_catalogo_carrito_pedidos_imagenes.svg[DFD 03 · Catálogo carrito pedidos e imágenes,width=100%,align="center"]
+
+* **Mitigadas (`15`):** IDOR entre vendedores/compradores (`TH-021`, `TH-032`), manipulación de estado de vendedor (`TH-022`), alteración de precios en cliente (`TH-023`), condiciones de carrera/sobreventa e integridad de inventario (`TH-024`, `TH-033`), transiciones inválidas (`TH-025`), bombas de descompresión y elusión MIME/polyglot (`TH-026`, `TH-027`), borrado cruzado y abuso de cuotas en Redis (`TH-028`, `TH-029`), atomicidad y redacción de PII en `audit_logs` (`TH-030`, `TH-031`), exposición de pedidos y caché (`TH-034`) y XSS almacenado/reflejado en títulos o descripciones (`TH-035`).
+* **Abierta (`1`):** visibilidad pública intencional de URLs de catálogo en Cloudinary una vez eliminados los metadatos EXIF por `Sharp` (`TH-036`, `Low`).
+
+==== DFD 04 · Instalación, secretos y despliegue (`15` amenazas: `6` mitigadas, `9` abiertas)
+
+Analiza la superficie operativa del instalador local (`backendnode/setup/install.ps1` + `backendnode/setup/install.cjs`), secretos en disco, cadena de suministro (`npm` / Docker), despliegue en contenedores aislados y proxy inverso Apache 2 TLS en arquitectura distribuida de 3 VMs.
+
+image::td_04_instalacion_secretos_despliegue.svg[DFD 04 · Instalación secretos y despliegue,width=100%,align="center"]
+
+* **Mitigadas (`6`):** privilegios mínimos en `MySQL 8.4` (`TH-042`), identidad `run_id` y recuperación explícita en `Redis` (`TH-043`), separación de activos Cloudinary por entorno (`TH-045`), `TRUST_PROXY` por IP exacta `/32` y bloqueo por firewall (`TH-046`), cifrado TLS 1.3 entre VMs y `DB_SSL=true` (`TH-047`) y exposición de puertos restringida (`TH-049`).
+* **Abiertas (`9`):** distribución humana de `.env` (`TH-038`, `High`) y `token.json` (`TH-044`, `High`), permisos NTFS en desarrollo Windows (`TH-041`, `Medium`), fijación de digest SHA-256 en imágenes base Docker (`TH-048`, `Medium`), bitácora operativa de rotaciones (`TH-051`, `Medium`), más 4 ítems `Low` (`TH-037`, `TH-039`, `TH-040`, `TH-050`).
+
+=== Matriz Consolidada de Amenazas STRIDE (`TH-001`..`TH-051`)
+
+[cols="1,1,2,2,1,1,4",options="header"]
+|===
+| ID | DFD | Categoría STRIDE | Elemento / Flujo | Sev. | Estado | Título y Control / Acción Residual
+
+| `TH-001` | DFD 01 | `Spoofing` | JSON y JWT | `High` | `Mitigated` | **Suplantación del origen y del cliente.** Allowlist `TRUST_PROXY` en API, proxy confiable en BFF y reglas `ufw` + `DOCKER-USER` en 3 VMs.
+| `TH-002` | DFD 01 | `Information disclosure` | Páginas y formularios | `High` | `Mitigated` | **Exposición de cookies por HTTP externo.** Apache 2 TLS 1.3 extremo a extremo, redirección HTTP a HTTPS y cookies `Secure`/`HttpOnly`/`SameSite=Lax`.
+| `TH-003` | DFD 01 | `Elevation of privilege` | MySQL 8.4 `secure_ecommerce` | `High` | `Mitigated` | **Privilegios excesivos en MySQL.** Cuenta `ecommerce_app` con permisos mínimos por tabla verificados con `SHOW GRANTS` sin DDL ni `root`.
+| `TH-004` | DFD 01 | `Denial of service` | Redis 8.2 TLS y ACL | `Medium` | `Open` | **Indisponibilidad de Redis afecta autenticación.** Política _fail-closed_ `503` intencional; pendiente monitoreo operativo y alertas en producción.
+| `TH-005` | DFD 01 | `Information disclosure` | `.secrets/` JWT, Redis, Gmail | `High` | `Mitigated` | **Robo de llaves y tokens locales.** Secretos fuera de Git, montajes de solo lectura `chmod 600`, usuario sin privilegios y contenedor `--read-only`.
+| `TH-006` | DFD 01 | `Tampering` | Cloudinary imágenes | `High` | `Mitigated` | **Borrado de activos externos ajenos.** Prefijos amarrados a identidad de instancia y validación de propiedad antes de destruir recursos.
+| `TH-007` | DFD 01 | `Denial of service` | Gmail API OAuth 2.0 | `Medium` | `Open` | **Dependencia de la disponibilidad de Gmail.** Afecta solo registro/recuperación; considerar publicación de app OAuth (en Testing el token caduca cada 7 días).
+| `TH-008` | DFD 02 | `Information disclosure` | `POST /register` | `High` | `Mitigated` | **Filtración de credenciales de registro.** TLS 1.3 hasta VM 2, `Cache-Control: no-store` verificado y bitácoras HTTP sin cuerpos ni contraseñas.
+| `TH-009` | DFD 02 | `Tampering` | OTP + datos pendientes (RAM) | `Low` | `Open` | **Reintento OTP usa datos de solicitud anterior.** Caso menor de consistencia/UX durante el _cooldown_ de `{otp-cooldown-seg}` s sin exposición de credenciales.
+| `TH-010` | DFD 02 | `Denial of service` | OTP + datos pendientes (RAM) | `Medium` | `Open` | **Pérdida de OTP al reiniciar proceso.** Retos en memoria local se pierden ante reinicio de la API; evaluar persistencia compartida si escala a múltiples réplicas.
+| `TH-011` | DFD 02 | `Spoofing` | OTP + datos pendientes (RAM) | `High` | `Mitigated` | **Ataque de fuerza bruta sobre OTP.** Código HMAC de `{otp-digitos}` dígitos, `{otp-max-intentos}` intentos, TTL `{otp-ttl-min}` min y rate limit dedicado.
+| `TH-012` | DFD 02 | `Spoofing` | Gmail API | `High` | `Mitigated` | **Uso de OAuth remitente no autorizado.** Validación estricta de `client_id`, remitente y scope de envío verificados en vivo en VM 2.
+| `TH-013` | DFD 02 | `Information disclosure` | Cuentas y perfiles MySQL 8.4 | `Medium` | `Open` | **Enumeración de cuentas por respuestas.** Recuperación es uniforme (`202`), mientras registro retorna `409` ante correo duplicado (trade-off UX documentado).
+| `TH-014` | DFD 02 | `Spoofing` | Sesiones Redis TLS 8.2 | `High` | `Mitigated` | **Uso de refresh tokens robados.** Rotación de un solo uso con revocación completa por `REFRESH_REUSED` y candado single-flight en BFF.
+| `TH-015` | DFD 02 | `Denial of service` | Sesiones Redis TLS 8.2 | `Medium` | `Mitigated` | **Exhaustión Redis por sesión y rate limit.** ACL acotada, política sin desalojo, timeouts y pruebas en vivo (`RUN_STAGE2_REDIS=1` y `PEN-05`).
+| `TH-016` | DFD 02 | `Tampering` | RS256 + HMAC `.secrets/auth` | `High` | `Mitigated` | **Sustitución de manifiesto o clave RSA.** Validación de identificador de llave, RSA `{jwt-rsa-bits}` bits, emparejamiento criptográfico e inodos estables.
+| `TH-017` | DFD 02 | `Spoofing` | `AuthController` ASP.NET MVC | `High` | `Mitigated` | **Secuestro de cookie MVC.** Cookie `.frontendnet` con `HttpOnly`, `SameSite=Lax`, `Secure`, antiforgery global y expiración absoluta de `{sesion-absoluto-h}` h.
+| `TH-018` | DFD 02 | `Denial of service` | Credenciales login | `High` | `Mitigated` | **Credential stuffing y bloqueo indebido.** Lockout exponencial desde `{lockout-umbral}` fallos y cola `scrypt` acotada; validado en `PEN-05` con `k6`.
+| `TH-019` | DFD 02 | `Repudiation` | `POST /register/verify` | `Medium` | `Mitigated` | **Disputa sobre verificación de correo.** Auditoría inmutable en `audit_logs` con IP, usuario, resultado y `X-Request-Id` sin guardar OTP en claro.
+| `TH-020` | DFD 02 | `Elevation of privilege` | Crear/verificar cuenta | `High` | `Mitigated` | **Perfil incorrecto durante registro.** Validador admite únicamente `BUYER` o `SELLER`; cuentas `ADMIN` excluidas de registro público.
+| `TH-021` | DFD 03 | `Elevation of privilege` | Productos y categorías | `High` | `Mitigated` | **Modificación de productos de otro vendedor.** Validación de propiedad `sellerId` en backend en toda lectura/edición/eliminación de producto.
+| `TH-022` | DFD 03 | `Elevation of privilege` | Catálogo y autorización | `High` | `Mitigated` | **Aprobación de vendedor manipulada.** `Authorize` consulta en MySQL el estado vigente y exige vendedor `APPROVED` en cada petición.
+| `TH-023` | DFD 03 | `Tampering` | Carrito y checkout | `High` | `Mitigated` | **Alteración de precio por el cliente.** Precios recalculados en servidor y asegurados con cotización HMAC firmada (`{quote-ttl-seg}` s).
+| `TH-024` | DFD 03 | `Tampering` | Pedidos y transiciones | `High` | `Mitigated` | **Condición de carrera y sobreventa.** Transacción SQL con `LOCK.UPDATE` en orden ascendente e idempotencia `(checkoutId, sellerId)` probada en `MySQL 8.4`.
+| `TH-025` | DFD 03 | `Elevation of privilege` | Pedidos y transiciones | `High` | `Mitigated` | **Transición no autorizada del pedido.** Máquina de estados estricta y control de participante (`BUYER`/`SELLER`/`ADMIN`) verificados en pruebas SQL.
+| `TH-026` | DFD 03 | `Denial of service` | Procesador de imágenes | `High` | `Mitigated` | **Archivo bomba o imagen malformada.** Límites de bytes (`{img-max-mib}` MiB), dimensiones (`{img-max-dim-px}` px), píxeles y decodificación en worker aislado.
+| `TH-027` | DFD 03 | `Tampering` | Procesador de imágenes | `High` | `Mitigated` | **Elusión de validación MIME/extension.** Inspección de magic bytes, contenedor, decodificación real y re-codificación limpia con Sharp.
+| `TH-028` | DFD 03 | `Tampering` | Guardar/borrar activo | `High` | `Mitigated` | **Borrado cruzado de imágenes.** Verificación de prefijo por entorno/producto y metadatos remotos antes de invocar destrucción en Cloudinary.
+| `TH-029` | DFD 03 | `Denial of service` | Redis límites de imágenes | `Medium` | `Mitigated` | **Abuso de cuotas de subida.** Límite `{img-vendedor-min}`/min y `{img-vendedor-conc}` en vuelo por vendedor con respuestas `429` + `Retry-After`.
+| `TH-030` | DFD 03 | `Repudiation` | `audit_logs` append-only | `High` | `Mitigated` | **Operación crítica sin auditoría.** Registro transaccional obligatorio acoplado a mutaciones de negocio; hooks impiden `UPDATE`/`DELETE`.
+| `TH-031` | DFD 03 | `Information disclosure` | `audit_logs` append-only | `Medium` | `Mitigated` | **PII o tokens en bitácora.** Sanitización estricta de `details` y redacción de correos/tokens sensibles verificada en pruebas.
+| `TH-032` | DFD 03 | `Elevation of privilege` | Carrito y cotización | `High` | `Mitigated` | **Carrito de otro comprador.** Rutas restringidas a `BUYER` usando exclusivamente el `id` autenticado de servidor.
+| `TH-033` | DFD 03 | `Tampering` | MySQL 8.4 14 tablas | `High` | `Mitigated` | **Cambio de inventario fuera de transacción.** Descuentos y restituciones atómicos con bloqueo pesimista verificados en `91/91` suites locales.
+| `TH-034` | DFD 03 | `Information disclosure` | Pedidos y estados | `High` | `Mitigated` | **Exposición de pedidos y direcciones.** Control de propiedad en servidor y cabecera `Cache-Control: no-store` obligatoria en rutas sensibles.
+| `TH-035` | DFD 03 | `Tampering` | Catálogo y autorización | `Medium` | `Mitigated` | **Datos maliciosos en títulos o descripciones.** Validación de entradas en API, codificación automática Razor y CSP restrictiva en BFF.
+| `TH-036` | DFD 03 | `Information disclosure` | Cloudinary activos externos | `Low` | `Open` | **Exposición inadvertida por URL pública de imagen.** Sharp elimina metadatos EXIF al re-codificar; fotos de productos aprobados son públicas por diseño.
+| `TH-037` | DFD 04 | `Information disclosure` | Repositorio GitHub | `Low` | `Open` | **Credencial histórica expuesta en Git.** Credencial de ejemplo deprecada creada solo para el alta local inicial (retirada en `c8a22f3` y `11c58cc`), sin uso en `ecommerce_app` ni en las 3 VMs (`<<RSG-10>>`).
+| `TH-038` | DFD 04 | `Information disclosure` | Compañero / operador | `High` | `Open` | **Distribución del `.env` entre compañeros.** Evitar compartir archivos `.env` con valores reales fuera de ejemplos; rotar credenciales si se difunden.
+| `TH-039` | DFD 04 | `Denial of service` | `backendnode/setup/install.ps1` + `install.cjs` | `Low` | `Open` | **Versión de Node incompatible.** `Dockerfile` y `package.json` fijan Node.js 24 LTS; afecta solo estaciones locales con versiones previas.
+| `TH-040` | DFD 04 | `Tampering` | `backendnode/setup/install.ps1` + `install.cjs` | `Low` | `Open` | **Sustitución de binarios auxiliares.** Alcance acotado al equipo local donde el desarrollador ejecuta manualmente `openssl`/`docker`/`node`.
+| `TH-041` | DFD 04 | `Information disclosure` | Directorio local `.secrets/` | `Medium` | `Open` | **Permisos demasiado amplios sobre secretos.** Mitigado en VMs Linux con `chmod 600`; revisar ACL NTFS en estaciones Windows compartidas.
+| `TH-042` | DFD 04 | `Elevation of privilege` | MySQL 8.4 privado 14 tablas | `High` | `Mitigated` | **Cuenta de aplicación con privilegios elevados.** Instalador y despliegue aplican únicamente los 15 `GRANT`s mínimos sobre el esquema final.
+| `TH-043` | DFD 04 | `Denial of service` | Redis TLS ACL y estado | `Medium` | `Mitigated` | **Reinicio Redis invalida identidad de sesión.** Verificación de identidad y recuperación manual controlada mediante `backendnode/scripts/redis/control.js`.
+| `TH-044` | DFD 04 | `Information disclosure` | Proveedores externos Google + Cloudinary | `High` | `Open` | **OAuth token copiado o reutilizado entre equipos.** El instalador no copia tokens OAuth; evitar reutilizar `token.json` personal entre máquinas distintas.
+| `TH-045` | DFD 04 | `Tampering` | Proveedores externos Google + Cloudinary | `High` | `Mitigated` | **Entornos comparten activos Cloudinary.** Prefijo por entorno/UUID de BD impide que una instancia elimine o modifique imágenes de otra.
+| `TH-046` | DFD 04 | `Spoofing` | Proxy inverso TLS (Apache 2 / VM) | `High` | `Mitigated` | **CIDR de proxy confía en un segmento amplio.** `TRUST_PROXY` fijado a IP `/32` exacta de VM 1 y acceso a `:443` de VM 2 filtrado por firewall.
+| `TH-047` | DFD 04 | `Information disclosure` | Proxy inverso TLS (Apache 2 / VM) | `High` | `Mitigated` | **TLS termina antes del backend sin cifrado interno.** Apache 2 cifra tanto VM 1 como VM 2 con TLS 1.3 y CA interna, más `DB_SSL=true` en VM 3.
+| `TH-048` | DFD 04 | `Tampering` | Registro de dependencias | `Medium` | `Open` | **Dependencia o imagen de contenedor comprometida.** `package-lock.json`, `npm ci --ignore-scripts` y `npm audit` activos en CI; pendiente fijar digest SHA-256 de imágenes Docker.
+| `TH-049` | DFD 04 | `Information disclosure` | Docker Compose proyecto aislado | `High` | `Mitigated` | **Puerto publicado fuera de loopback.** En perfil local, API/Redis se vinculan a loopback y `MySQL` permanece en red interna sin exposición externa.
+| `TH-050` | DFD 04 | `Denial of service` | Docker Compose proyecto aislado | `Low` | `Open` | **Frontend no encuentra la API local.** Configurable vía URL base por entorno en desarrollo; no afecta al despliegue distribuido TLS en 3 VMs.
+| `TH-051` | DFD 04 | `Repudiation` | Directorio local `.secrets/` | `Medium` | `Open` | **Falta de evidencia de rotación y recovery.** Los comandos de recuperación existen en CLI; falta registrar operativamente fecha y responsable de cada rotación manual.
+|===
+
+=== Gestión de Riesgos Residuales Abiertos y Trazabilidad `RSG`
+
+Las `15` amenazas abiertas restantes no representan fallas sin control en los flujos transaccionales ni de autorización (donde `Spoofing` y `Elevation of privilege` están `100 %` mitigadas), sino riesgos operativos de equipo, decisiones de diseño conscientes y mejoras incrementales documentadas:
+
+* **Prioridad Alta (`2` operativas):** `TH-038` (gestión segura de `.env` fuera de repositorio y mensajería informal) y `TH-044` (emisión individual de `token.json` OAuth sin compartir credenciales personales).
+* **Prioridad Media (`7` de arquitectura/operación):** monitoreo ante rechazo _fail-closed_ `503` en caída de Redis (`TH-004`), publicación OAuth o reautorización cada 7 días (`TH-007`), eventual almacenamiento compartido si se escalan réplicas OTP (`TH-010`), evaluación de política `409` en registro (`TH-013`), revisión de ACLs NTFS locales (`TH-041`), fijación por digest SHA-256 de imágenes base Docker (`TH-048`) y bitácora operativa de rotaciones (`TH-051`).
+* **Prioridad Baja (`6` menores/históricas):** reintento durante _cooldown_ OTP (`TH-009`), visibilidad pública esperada del catálogo (`TH-036`), credencial histórica deprecada de ejemplo sin uso productivo (`TH-037` / `<<RSG-10>>`) y casos locales del instalador (`TH-039`, `TH-040`, `TH-050`).
+
+[cols="1,2,3,1",options="header"]
+|===
+| Riesgo | Amenazas Threat Dragon (`TH`) | Mecanismo Verificado | Estado `RSG`
+
+| `<<RSG-01>>` | `TH-035` | Codificación automática Razor, validadores de entrada y `CSP` estricta | Mitigado (verificación `PEN-02` planificada)
+| `<<RSG-02>>` | `TH-002`, `TH-017` | Antiforgery global en BFF, cookies `HttpOnly`/`SameSite=Lax`/`Secure` y `Bearer` en API | Mitigado (verificación `PEN-03` planificada)
+| `<<RSG-03>>` | `TH-003`, `TH-042` | Consultas parametrizadas Sequelize, `escapeLike` y cuenta `ecommerce_app` sin DDL | Mitigado (verificación `PEN-01` planificada)
+| `<<RSG-04>>` | `TH-011`, `TH-013`, `TH-018` | Lockout exponencial, `rate-limit` Redis, `createDummyHash()` y OTP HMAC | Mitigado (`PEN-05` verificado con `k6`)
+| `<<RSG-05>>` | `TH-005`, `TH-014`, `TH-016`, `TH-017`, `TH-043` | JWT RS256 (`{jwt-ttl-seg}` s), Redis TLS, rotación single-use + `REFRESH_REUSED` | Mitigado (`RUN_STAGE2_REDIS=1` y `69/69` BFF)
+| `<<RSG-06>>` | `TH-020`, `TH-021`, `TH-022`, `TH-025`, `TH-032` | `Authorize` en vivo contra MySQL/Redis y verificación de propiedad en servicios | Mitigado (`91/91` suites locales)
+| `<<RSG-07>>` | `TH-006`, `TH-026`, `TH-027`, `TH-028`, `TH-029`, `TH-045` | Validación en 6 capas, worker Sharp aislado y cuotas distribuidas en Redis | Mitigado (verificación `PEN-04` planificada)
+| `<<RSG-08>>` | `TH-023`, `TH-024`, `TH-030`, `TH-033` | Cotización HMAC (`{quote-ttl-seg}` s), `LOCK.UPDATE` e idempotencia por vendedor | Mitigado (`91/91` suites en `MySQL 8.4`)
+| `<<RSG-09>>` | `TH-034`, `TH-036` | URLs Cloudinary acotadas, borrado de metadatos EXIF con Sharp y `no-store` | Mitigado / `Low` residual público
+| `<<RSG-10>>` | `TH-037` | Credencial de ejemplo deprecada para alta local inicial, retirada en `c8a22f3`/`11c58cc` y sin uso en `ecommerce_app` | Riesgo residual `Low` documentado
+|===
