@@ -46,8 +46,8 @@ function buildAttributes(baseline) {
   assertPattern(baseline, /maxDimension = 4096 px`/, 'img-max-dim-px');
   assertPattern(baseline, /maxPixels = 8,000,000`/, 'img-max-pixels');
   assertPattern(baseline, /quote-ttl|vigencia `600 s`/, 'quote-ttl-seg');
-  assertPattern(baseline, /91 \(`83 passed`, `8 skipped`\)/, 'be-tests');
-  assertPattern(baseline, /`94\.89 % Stmts`/, 'be-cov-stmts');
+  assertPattern(baseline, /91 \(`86 passed`, `5 skipped`\)/, 'be-tests');
+  assertPattern(baseline, /`95 % Stmts`/, 'be-cov-stmts');
   assertPattern(baseline, /69 \(`69 passed`, `0 skipped`\)/, 'fe-tests');
 
   return [
@@ -129,15 +129,15 @@ function buildAttributes(baseline) {
     ':endpoints-operativos: 46',
     ':endpoints-retirados: 7',
     ':be-suites-total: 91',
-    ':be-suites-pasadas: 83',
-    ':be-suites-omitidas: 8',
+    ':be-suites-pasadas: 86',
+    ':be-suites-omitidas: 5',
     ':be-tests-total: 1151',
-    ':be-tests-pasados: 1098',
-    ':be-tests-omitidos: 53',
-    ':be-cov-stmts: 94.89',
-    ':be-cov-branch: 90.43',
-    ':be-cov-funcs: 96.24',
-    ':be-cov-lines: 98',
+    ':be-tests-pasados: 1101',
+    ':be-tests-omitidos: 50',
+    ':be-cov-stmts: 95',
+    ':be-cov-branch: 90.87',
+    ':be-cov-funcs: 96.57',
+    ':be-cov-lines: 98.11',
     ':fe-tests-pasados: 69',
     ''
   ].join('\n');

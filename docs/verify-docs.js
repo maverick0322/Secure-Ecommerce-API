@@ -58,10 +58,10 @@ const LITERAL_CONSTANT_RULES = [
   { regex: /\b10\s+categor[íi]as\s+activas\b/i, attr: '{cuota-categorias-producto} categorías activas' },
   { regex: /\b30\s+escrituras\b/i, attr: '{catalogo-escrituras-max} escrituras' },
   { regex: /\b512\s*bytes\b/i, attr: '{pwd-max-bytes} bytes' },
-  { regex: /\b1098\b/, attr: '{be-tests-pasados}' },
+  { regex: /\b1101\b/, attr: '{be-tests-pasados}' },
   { regex: /\b1151\b/, attr: '{be-tests-total}' },
-  { regex: /\b94\.89\b/, attr: '{be-cov-stmts}' },
-  { regex: /\b98(?:\.00)?\s*%\s*(?:en\s+)?l[ií]neas\b/i, attr: '{be-cov-lines} % líneas' }
+  { regex: /\b95(?:\.00)?\s*%\s*(?:de\s+|en\s+)?(?:sentencias|stmts)\b/i, attr: '{be-cov-stmts}% sentencias' },
+  { regex: /\b98\.11\b/, attr: '{be-cov-lines}' }
 ];
 
 function checkForbiddenTerms(skipStage3 = false) {

@@ -390,10 +390,22 @@
 
 | Repositorio | Comando Ejecutado | Suites | Tests | Fallos | Tiempo | Cobertura Global |
 |---|---|---:|---:|---:|---:|---|
-| **`backendnode`** (`eaf6616`) | `npm test -- --coverage` | 91 (`83 passed`, `8 skipped`) | 1,151 (`1,098 passed`, `53 skipped`) | 0 | `246.385 s` | `94.89 % Stmts`, `90.43 % Branch`, `96.24 % Funcs`, `98 % Lines` |
+| **`backendnode`** (`eaf6616` + rama actual) | `$env:RUN_STAGE5_MYSQL='1'; $env:RUN_STAGE2_REDIS='1'; npm test -- --coverage` | 91 (`86 passed`, `5 skipped`) | 1,151 (`1,101 passed`, `50 skipped`) | 0 | `515.907 s` | `95 % Stmts`, `90.87 % Branch`, `96.57 % Funcs`, `98.11 % Lines` |
+| **`backendnode`** (histórico MySQL) | `node scripts/database/stage5-historical-tests.js` | 2 (`2 passed`) | 11 (`11 passed`) | 0 | `51.512 s` | `schema.mysql.test.js` (`3/3`, `43.662 s`) + `secure-ecommerce-transition.mysql.test.js` (`8/8`, `7.85 s`) |
 | **`frontendnet`** (`90635a6`) | `dotnet test frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj` | 9 clases (`9 passed`) | 69 (`69 passed`, `0 skipped`) | 0 | `3 s` | **`NO_VERIFICABLE`** (sin recolector de cobertura NuGet) |
 
-- **Desglose de cobertura `backendnode` (`2026-11-26`):** `backendnode/index.js` (`88.65 % Stmts`, `90.21 % Lines`), `backendnode/config` (`96.42 % Stmts`, `100 % Lines`), `backendnode/controllers` (`94.58 % Stmts`, `96.49 % Lines`), `backendnode/middlewares` (`93.89 % Stmts`, `98.18 % Lines`), `backendnode/models` (`97.16 % Stmts`, `98.03 % Lines`), `backendnode/routes` (`100 %`), `backendnode/services` (`94.79 % Stmts`, `98.33 % Lines`), `backendnode/validators` (`100 %`).
+- **Consolidado `backendnode` (`91/91` suites locales verificadas):** En la corrida principal con `RUN_STAGE5_MYSQL=1` y `RUN_STAGE2_REDIS=1` (`515.907 s`), además de las 86 suites en Jest, `backendnode/tests/database/final-backend.mysql.test.js` orquestó e invocó contra MySQL 8.4 desechable 3 de las 5 suites omitidas (`accounts.mysql.test.js`, `catalog.mysql.test.js`, `account-session-security.mysql.test.js` -> `3 passed`, `39 tests`); las 2 suites históricas restantes (`schema.mysql.test.js` y `secure-ecommerce-transition.mysql.test.js`) pasaron (`11/11`) mediante `backendnode/scripts/database/stage5-historical-tests.js`. Total acumulado: **91/91 suites y 1,151/1,151 pruebas aprobadas (`0` fallos)** en Docker local.
+- **Desglose de cobertura `backendnode` (`2026-11-26`):** `backendnode/index.js` (`88.65 % Stmts`, `90.21 % Lines`), `backendnode/config` (`96.42 % Stmts`, `100 % Lines`), `backendnode/controllers` (`95.66 % Stmts`, `97.8 % Lines`), `backendnode/middlewares` (`93.89 % Stmts`, `98.18 % Lines`), `backendnode/models` (`99.05 % Stmts`, `99.01 % Lines`), `backendnode/routes` (`100 %`), `backendnode/services` (`94.75 % Stmts`, `98.28 % Lines`), `backendnode/validators` (`100 %`).
+- **Prueba de carga, latencia (`<<RNF-06>>`) y fuerza bruta (`PEN-05` con `grafana/k6:1.3.0` en Docker local):**
+  - Comando: `node scripts/load/run-k6-local.js` (stack efímero aislado con `mysql:8.4`, `redis:8.2` TLS y contenedor `Dockerfile` endurecido con `NODE_ENV=production`, `--read-only`, `--cap-drop ALL`, `512m` RAM, `1.0` CPU) ejecutando `backendnode/scripts/load/k6-pen05.js`.
+  - Verificaciones previas de superficie HTTP (`httpSurfaceChecks`): `/health` `200`, ausencia de `X-Powered-By`, `/swagger` deshabilitado (`404`), `/api/files/1` retirado (`410`), `/api/roles` sin autenticar (`401`) y `/api/auth/time` con `Cache-Control: no-store`.
+  - Métricas observadas (`327` peticiones HTTP, `434/434` checks aprobados, `0` fallos de checks, `0` errores `5xx`):
+    - `health_duration`: `avg 1.02 ms`, `p50 0.88 ms`, `p95 1.97 ms`, `max 5.13 ms`.
+    - `catalog_read_duration` (`GET /api/products`, 3 VUs, `20 s`): `avg 9.25 ms`, `p50 6.88 ms`, `p95 17.32 ms`, `max 78.36 ms` (umbral `< 500 ms` OK).
+    - `catalog_search_duration` (`GET /api/products?s=Laptop`, 3 VUs, `20 s`): `avg 8.32 ms`, `p50 6.28 ms`, `p95 20.84 ms`, `max 39.01 ms` (umbral `< 500 ms` OK).
+    - `checkout_flow_duration` (`cart/items` + `checkout/quote` + `checkout`, `5` iteraciones): `avg 56.6 ms`, `p50 54 ms`, `p95 70 ms`, `max 73 ms` (umbral `< 1500 ms` OK).
+    - `login_duration` (`POST /api/auth`, `3` sesiones en `setup()`): `avg 191.76 ms`, `p50 187.56 ms`, `p95 202.93 ms`, `max 204.63 ms` (umbral `< 1500 ms` OK).
+    - `login_bruteforce_containment` (`12` intentos inválidos sobre una misma cuenta): `5` respuestas `401` seguidas de `7` respuestas `429` todas con cabecera `Retry-After` presente (`bruteforce_429 = 7`, `bruteforce_retry_after = 7`).
 - **Pipeline UML fijado:** PlantUML `1.2024.8` (SHA-256 `2e1f42a9879cd25236b5725ca7db25cb9996e8e37a0a1440b2eb559f259c54aa` en `backendnode/docs/generate-diagrams.js:30-32`).
 
 ---
@@ -441,10 +453,9 @@
 | Ítem | Clasificación | Motivo Técnico |
 |---|---|---|
 | **Cobertura de líneas/ramas en `frontendnet`** | **`NO_VERIFICABLE`** | `frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj` no incluye paquete recolector de cobertura (coverlet). |
-| **Ejecución local en vivo de las 8 suites (`53 tests`) omitidas en `backendnode`** | **`NO_VERIFICABLE`** | Requieren instancias dedicadas de MySQL/Redis de prueba (`RUN_STAGE5_MYSQL=1`, `RUN_STAGE2_REDIS=1`); en CI (`backendnode/.github/workflows/test.yml`) corren automáticamente en GitHub Actions. |
 | **Estado remoto del Quality Gate en SonarCloud** | **`NO_VERIFICABLE`** | Requiere acceso autenticado al panel remoto del servicio (los workflows de PR #10 y PR #11 reportaron estado aprobatorio en GitHub). |
 | **Despliegue distribuido en 3 VMs vs. secretos privados (`.env` / `.secrets/`)** | **`PARCIALMENTE VERIFICADO`** | Los manifiestos y scripts de 3 VMs (`frontendnet/compose.vm1-frontend.yaml`, `backendnode/compose.vm2-backend.yaml`, `backendnode/compose.vm3-db.yaml`, `backendnode/scripts/deploy/generate-lan-certs.sh`, `backendnode/scripts/deploy/verify-vm.sh`, `frontendnet/scripts/deploy/verify-vm.sh`) están implementados y probados en red local del equipo; los valores secretos de `.env`/`.secrets/` quedan excluidos y sin exposición documental. |
-| **Pruebas formales de pentesting (`OWASP ZAP`, `Nmap`) y estrés (`k6`)** | **`PLANIFICADO` (`NO_VERIFICABLE`)** | Planificadas en el Capítulo 7; aún sin corrida formal de carga ni escaneo completo. |
+| **Pruebas ofensivas restantes (`PEN-01..04`) y escaneos externos (`SCN-01..02` con `Nmap` / OWASP ZAP)** | **`PLANIFICADO` (`NO_VERIFICABLE`)** | Planificadas en el Capítulo 7; aún sin corrida de payloads ofensivos ni escaneo completo externo (`PEN-05` con `k6` ya fue verificado en Docker local). |
 
 ---
 
