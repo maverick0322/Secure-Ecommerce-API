@@ -14,10 +14,9 @@ El diseño, construcción y despliegue de la plataforma **Tienda en Línea Segur
 * **Modelado de amenazas STRIDE:** El Capítulo 4 (`04_modelado_amenazas.adoc`, `backendnode/docs/threat-model/secure-ecommerce-threat-model.json`) documenta `4` DFDs en OWASP Threat Dragon con **`51` amenazas identificadas**: **`36` mitigadas** (`70.6 %`) y **`15` riesgos residuales acotados** (`2` `High` operativos de equipo, `7` `Medium` y `6` `Low`, `0` críticos).
 * **Trazabilidad código–documentación:** Los 26 diagramas UML 2.5.1, los 4 DFDs STRIDE, el registro único de identificadores (`docs/asciidoc/_registro_ids.adoc`), la línea base (`docs/BASELINE.md`) y las constantes centralizadas (`docs/asciidoc/_hechos.adoc`) pasan de manera automática las compuertas de verificación (`backendnode/docs/verify-traces.js` y `backendnode/docs/verify-docs.js`).
 
-=== Trabajo Pendiente y Líneas de Mejora
+=== Líneas de Mejora Futura
 
-Para el cierre integral de la entrega académica permanecen acotados los elementos siguientes:
+Para la evolución operativa posterior de la plataforma se contemplan las líneas de mejora siguientes:
 
-. **Escaneo de red multi-VM:** Ejecutar `SCN-01` con `Nmap` desde el equipo evaluador frente a las 3 VMs en red LAN para documentar la topología de puertos externos filtrados por `ufw` y `DOCKER-USER`.
-. **Evidencia visual en el Capítulo 2:** Incorporar las capturas reales de interfaz de `frontendnet/Views/` en `02_requisitos.adoc` durante la sesión de pruebas integrales en `tienda.lan`.
-. **Endurecimiento continuo de CI/CD:** Incorporar `coverlet`, analizadores `.NET` y flujo de GitHub Actions en `frontendnet/`, además de fijar digests SHA-256 de imágenes Docker y completar las acciones operativas residuales registradas en `<<RSG-10>>` y `TH-048`.
+. **Endurecimiento continuo de CI/CD:** Incorporar `coverlet`, analizadores `.NET` y flujo de GitHub Actions en `frontendnet/`, además de fijar digests SHA-256 de imágenes Docker y dar seguimiento a las acciones operativas acotadas en `<<RSG-10>>` y `TH-048`.
+. **Auditoría externa periódica de red:** Complementar el escaneo de superficie aplicativa `SCN-02` (OWASP ZAP) con barridos periódicos externos `Nmap` (`SCN-01`) tras cada cambio de reglas `ufw` o exposición de nodos en red LAN/producción.
