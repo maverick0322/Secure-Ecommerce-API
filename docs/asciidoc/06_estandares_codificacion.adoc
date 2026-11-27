@@ -1,10 +1,10 @@
 == Estándares de Codificación para C# y Node.js
 
-Este capítulo establece los estándares de codificación observados actualmente en ambos repositorios (`backendnode/` y `frontendnet/`) y distingue de manera explícita las convenciones ya adoptadas en el código fuente (`IMPLEMENTADO Y VERIFICADO`) de las herramientas de linting, formateo y análisis estático cuya adopción queda propuesta (`PLANIFICADO`).
+Este capítulo establece los estándares de codificación aplicados en ambos repositorios (`backendnode/` y `frontendnet/`) y distingue las convenciones vigentes en el código fuente de las herramientas de linting, formateo y análisis estático propuestas como mejora futura.
 
 === Estándar para Node.js (`backendnode/`)
 
-==== Convenciones Implementadas en Código (`IMPLEMENTADO Y VERIFICADO`)
+==== Convenciones Vigentes en Código
 
 [cols="2,4,2",options="header"]
 |===
@@ -41,16 +41,16 @@ Este capítulo establece los estándares de codificación observados actualmente
 . **Sin secretos en código ni en logs:** Ningún módulo debe contener credenciales literales ni registrar `req.url`, parámetros de consulta, contraseñas o tokens en salida estándar o `audit_logs` (`readEnvSecret`, `normalizedRoute`).
 . **Subprocesos acotados para binarios no confiables:** Operaciones intensivas de decodificación de imágenes se aíslan mediante `fork` con límite de memoria (`--max-old-space-size={img-worker-mem-mb}`) y timeout (`{img-timeout-ms}` ms) en `backendnode/services/image-validation.service.js`.
 
-==== Herramientas Faltantes y Mejoras Propuestas (`PLANIFICADO`)
+==== Herramientas Propuestas de Mejora
 
 La inspección del repositorio confirma que `backendnode/` **no cuenta actualmente** con archivos `.eslintrc*`, `.prettierrc*` ni `.editorconfig`, aunque sí dispone de configuración para análisis continuo en `backendnode/sonar-project.properties` y `.github/workflows/sonar.yml`:
 
-* **`PLANIFICADO` — Reglas ESLint + Security Plugin:** Incorporar ESLint como verificación previa al commit y en CI para detectar variables sin usar, comparaciones no estrictas (`==`), uso inseguro de objetos dinámicos y dependencias declaradas sin uso (como `request-ip`).
-* **`PLANIFICADO` — Formato unificado (`.editorconfig` y Prettier):** Estandarizar indentación de 2 espacios, punto y coma y fin de línea LF entre desarrolladores.
+* **Reglas ESLint + Security Plugin _(Propuesto)_:** Incorporar ESLint como verificación previa al commit y en CI para detectar variables sin usar, comparaciones no estrictas (`==`), uso inseguro de objetos dinámicos y dependencias declaradas sin uso (como `request-ip`).
+* **Formato unificado (`.editorconfig` y Prettier) _(Propuesto)_:** Estandarizar indentación de 2 espacios, punto y coma y fin de línea LF entre desarrolladores.
 
 === Estándar para C# / .NET 9 (`frontendnet/`)
 
-==== Convenciones Implementadas en Código (`IMPLEMENTADO Y VERIFICADO`)
+==== Convenciones Vigentes en Código
 
 [cols="2,4,2",options="header"]
 |===
@@ -77,9 +77,9 @@ La inspección del repositorio confirma que `backendnode/` **no cuenta actualmen
 | `frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj`, `frontendnet/FrontendNet.csproj`
 |===
 
-==== Herramientas Faltantes y Mejoras Propuestas (`PLANIFICADO`)
+==== Herramientas Propuestas de Mejora
 
 La inspección de `frontendnet/` confirma que **no existen actualmente** archivos `.editorconfig`, `stylecop.json`, analizadores Roslyn externos ni paquete `coverlet` en `FrontendNet.Tests.csproj`, ni flujos de integración continua bajo `.github/workflows/`:
 
-* **`PLANIFICADO` — `.editorconfig` y analizadores `.NET`:** Activar reglas de estilo IDE/CA (_AnalysisLevel=latest-recommended_, compilación estricta sin advertencias por etapas) y archivo de configuración StyleCop para verificar nomenclatura y documentación XML en compilación.
-* **`PLANIFICADO` — Cobertura y CI de `frontendnet/`:** Agregar `coverlet` a `frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj` y un flujo de GitHub Actions que ejecute compilación, pruebas xUnit y publicación de cobertura hacia SonarCloud.
+* **`.editorconfig` y analizadores `.NET` _(Propuesto)_:** Activar reglas de estilo IDE/CA (_AnalysisLevel=latest-recommended_, compilación estricta sin advertencias por etapas) y archivo de configuración StyleCop para verificar nomenclatura y documentación XML en compilación.
+* **Cobertura y CI de `frontendnet/` _(Propuesto)_:** Agregar `coverlet` a `frontendnet/FrontendNet.Tests/FrontendNet.Tests.csproj` y un flujo de GitHub Actions que ejecute compilación, pruebas xUnit y publicación de cobertura hacia SonarCloud.

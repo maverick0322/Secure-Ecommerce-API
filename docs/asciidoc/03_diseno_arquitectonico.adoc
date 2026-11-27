@@ -4,7 +4,7 @@ Este capítulo presenta la arquitectura visual UML 2.5.1 del sistema siguiendo l
 
 [NOTE]
 ====
-La vista de **Modelado de Amenazas** corresponde al Capítulo 4 (`PENDIENTE`), mientras la **Vista de Despliegue (`DEP-01` / `despliegue.puml`)** refleja la arquitectura distribuida en 3 VMs implementada y verificada en el Capítulo 8 (`08_despliegue_seguro.adoc`).
+El modelado de amenazas STRIDE se desarrolla en el Capítulo 4 (`04_modelado_amenazas.adoc`), mientras la **Vista de Despliegue (`DEP-01` / `despliegue.puml`)** refleja la arquitectura distribuida en 3 VMs descrita en el Capítulo 8 (`08_despliegue_seguro.adoc`).
 ====
 
 === Vista de Casos de Uso

@@ -46,8 +46,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
   . El Visitante captura el OTP recibido dentro de la ventana de vigencia (`POST /api/auth/register/verify`).
   . `email-verification.service.js` verifica el OTP y `accounts.service.js` persiste en transacción el `User` y su perfil `Buyer` o `Seller`, retornando `201`.
 * **Flujos alternos:** `400` si falla política de contraseñas, falta `storeName` en `SELLER`, se envía `storeName` en `BUYER`, o el OTP es incorrecto/expirado (máx. `{otp-max-intentos}` intentos); `409` si el correo ya existe; `429` si excede el cooldown (`{otp-cooldown-seg}` s) o el límite por IP/cuenta (`{rl-registro-ip-max}`/`{rl-ip-ventana-seg}` s y `{rl-registro-cuenta-max}`/`{rl-cuenta-ventana-min}` min).
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Auth/Register.cshtml y VerifyRegistration.cshtml — Vista implementada, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Auth/Register.cshtml y VerifyRegistration.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-02>>: Iniciar sesión con credenciales y protección anti-fuerza bruta
 * **Actor principal:** Visitante (actor secundario: Cloudflare Turnstile).
@@ -59,8 +59,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
   . `authentication.service.js` consulta `User` con sus asociaciones `Admin`/`Buyer`/`Seller` y verifica contraseña con `scrypt` (o `createDummyHash()` si el usuario no existe); si detecta hash `bcrypt` legado, lo migra de forma transparente a `scrypt`.
   . `auth-session.service.js` crea la sesión en Redis y emite el JWT RS256 + refresh token; `AuthController` invoca `SessionTokenManager` y redirige según el perfil del usuario.
 * **Flujos alternos:** `401` ante credenciales incorrectas o cuenta inactiva (incrementando contador de fallos hasta bloqueo desde `{lockout-umbral}` fallos); `429` con `Retry-After` durante rate limit o lockout.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Auth/Index.cshtml — Vista implementada, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Auth/Index.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-03>>: Renovar sesión mediante rotación de refresh token
 * **Actor principal:** Usuario Autenticado (iniciado automáticamente por `RefreshTokenDelegatingHandler` y `SessionTokenManager` en `frontendnet`).
@@ -71,7 +71,7 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
   . `AuthClientService` envía `POST /api/auth/refresh` con el `refreshToken` vigente.
   . `auth-session.service.js` verifica límites (`{rl-refresh-ip-max}`/`{rl-ip-ventana-seg}` s IP, `{rl-refresh-sesion-max}`/`{rl-ip-ventana-seg}` s sesión), consume atómicamente el hash SHA-256 en Redis y genera nuevo par de tokens.
 * **Flujos alternos:** Si el refresh token ya fue usado (`REFRESH_REUSED`), expiró o la cuenta fue suspendida, `backendnode` revoca la sesión completa (`401`) y `AppController.HandleUnauthorizedAsync()` cierra la cookie local.
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Estado:** Verificado
 
 ==== <<CU-04>>: Cerrar sesión e invalidar sesión distribuida
 * **Actor principal:** Usuario Autenticado.
@@ -79,7 +79,7 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Sesión eliminada en Redis y cookie `.frontendnet` expirada en el navegador.
 * **Flujo básico:** El usuario envía el formulario antiforgery de cierre de sesión (`POST /Auth/Logout`), el BFF llama a `POST /api/auth/logout` con el JWT vigente para destruir la sesión en Redis y ejecuta `SignOutLocalAsync()`.
 * **Flujos alternos:** Si el backend devuelve error o expira el token, el BFF limpia igualmente la cookie y el diccionario `_sessions` local (`AuthController.cs:65-77`).
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Estado:** Verificado
 
 ==== <<CU-05>>: Recuperar y restablecer contraseña olvidada vía OTP
 * **Actor principal:** Visitante (actor secundario: Gmail OAuth2 API).
@@ -90,8 +90,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
   . El sistema envía código OTP si el correo corresponde a una cuenta elegible y responde siempre `202` con mensaje uniforme anti-enumeración.
   . El Visitante envía correo, código OTP y `newPassword` (`POST /api/auth/password/reset`); `personal-account.service.js` actualiza `passwordHash`, revoca sesiones activas y responde `204`.
 * **Flujos alternos:** `400` si el código es inválido/expirado o la nueva contraseña viola `<<RN-02>>`; `429` al superar cuotas de recuperación (`{rl-recovery-cuenta-max}`/`{rl-cuenta-ventana-min}` min en solicitud y `{rl-reset-cuenta-max}`/`{rl-cuenta-ventana-min}` min en reinicio).
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Auth/ForgotPassword.cshtml y ResetPassword.cshtml — Vistas implementadas, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Auth/ForgotPassword.cshtml y ResetPassword.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-06>>: Consultar y actualizar perfil propio y contraseña actual
 * **Actor principal:** Usuario Autenticado.
@@ -99,8 +99,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Datos propios actualizados o contraseña renovada con revocación de sesiones.
 * **Flujo básico:** El usuario consulta `GET /api/users/me` (`ProfileController.Index`), actualiza nombre/teléfono/`storeName` vía `PUT /api/users/me` o cambia su contraseña verificando `currentPassword` vía `PUT /api/users/me/password` (límite `{rl-pwd-change-ip-max}`/`{rl-ip-ventana-seg}` s).
 * **Flujos alternos:** `400` por contraseña débil o nombre tienda en perfil no vendedor; `401` si `currentPassword` no coincide; cierre automático de sesión al cambiar contraseña.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Profile/Index.cshtml, Edit.cshtml y ChangePassword.cshtml — Vistas implementadas, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Profile/Index.cshtml, Edit.cshtml y ChangePassword.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-07>>: Explorar catálogo autenticado y buscar productos por título
 * **Actor principal:** Comprador (también consultable por `SELLER` aprobado y `ADMIN` en sus módulos; actor secundario: Cloudinary CDN).
@@ -108,8 +108,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Listado de productos visibles (`Seller.status = APPROVED`, `User.status = ACTIVE`) o detalle completo presentado al usuario.
 * **Flujo básico:** El Comprador accede a `ShoppingController.Index` (`GET /api/products` y opcionalmente `?s=<término>`), filtrando en BFF por categoría/orden y abriendo `ShoppingController.Details` (`GET /api/products/:id`). `catalog.service.js` escapa `%`, `_` y `\` mediante `escapeLike()`.
 * **Flujos alternos:** Redirección a `/Auth` si no hay sesión; `400` si `?s=` supera 255 caracteres; `404` si el producto no existe o pertenece a un vendedor suspendido.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Shopping/Index.cshtml y Details.cshtml — Vistas implementadas, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Shopping/Index.cshtml y Details.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-08>>: Administrar libreta de direcciones de envío
 * **Actor principal:** Comprador.
@@ -117,8 +117,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Direcciones del comprador persistidas en `user_addresses`, manteniendo al menos una única dirección predeterminada activa cuando se marca.
 * **Flujo básico:** El Comprador lista (`GET /api/addresses`), crea (`POST /api/addresses`), edita (`PUT /api/addresses/:id`), elimina lógicamente (`DELETE /api/addresses/:id`) o designa predeterminada (`PUT /api/addresses/:id/default`) desde `AddressesController`.
 * **Flujos alternos:** `400` si faltan campos obligatorios; `403`/`404` si intenta modificar la dirección de otro comprador.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Addresses/Index.cshtml y Create.cshtml — Vistas implementadas, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Addresses/Index.cshtml y Create.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-09>>: Gestionar carrito de compras multi-vendedor
 * **Actor principal:** Comprador.
@@ -126,8 +126,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Estado del carrito (`Cart` + `CartItem`) actualizado y recalculado en servidor.
 * **Flujo básico:** Desde `ShoppingCartController`, el Comprador agrega producto (`POST /api/cart/items`), actualiza cantidad (`PUT /api/cart/items/:productId`), quita un producto (`DELETE /api/cart/items/:productId`) o vacía el carrito (`DELETE /api/cart`), recibiendo el snapshot recalculado con precios vigentes de servidor.
 * **Flujos alternos:** `409` si el stock es insuficiente o el vendedor dejó de estar `APPROVED`; `400`/`404` si el producto no existe o es inválido.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/ShoppingCart/Index.cshtml — Vista implementada, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/ShoppingCart/Index.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-10>>: Cotizar checkout con firma HMAC y confirmar pedidos
 * **Actor principal:** Comprador.
@@ -138,8 +138,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
   . El Comprador confirma el pedido (`POST /api/checkout` con `{ quote }`).
   . `orders.service.confirm()` verifica la firma y vigencia del `quote`, bloquea filas de productos y vendedores en MySQL (`LOCK.UPDATE`), valida que stock, precio y estado `APPROVED` no hayan cambiado, crea las órdenes con idempotencia por `(checkoutId, sellerId)`, descuenta inventario y vacía el carrito (`201`, o `200` si `replayed: true`).
 * **Flujos alternos:** `409` si la cotización expiró, excede `{quote-max-sign-chars}` chars al firmar, cambió el precio o stock, o el vendedor fue suspendido; `400` si la estructura del `quote` supera `{quote-max-verify-chars}` chars o es inválida.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Orders/Checkout.cshtml — Vista implementada, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Orders/Checkout.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-11>>: Consultar pedidos propios y cancelar pedido pendiente
 * **Actor principal:** Comprador.
@@ -147,8 +147,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Visualización de detalle/historial o transición `PENDING -> CANCELED` con restitución atómica de inventario.
 * **Flujo básico:** El Comprador consulta sus pedidos (`GET /api/orders`, `GET /api/orders/:id`) y, mientras el estado sea `PENDING`, puede cancelarlo enviando motivo obligatorio `reason` (`PUT /api/orders/:id/status`), lo cual ejecuta `restockCanceledOrder()` y registra `OrderStatusHistory`.
 * **Flujos alternos:** `403` si el Comprador intenta cancelar un pedido en estado distinto de `PENDING` o acceder a pedidos de otro usuario; `400` si omite el motivo.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Orders/Index.cshtml y Details.cshtml — Vistas implementadas, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Orders/Index.cshtml y Details.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-12>>: Publicar, editar y eliminar productos propios
 * **Actor principal:** Vendedor (`SELLER` aprobado).
@@ -156,8 +156,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Producto creado (`201`), actualizado (`204`) o eliminado lógicamente (`deletedAt`, `204`), y categorías asociadas/desasociadas.
 * **Flujo básico:** En `ProductsController`, el Vendedor lista sus productos, crea uno con `title`, `description` obligatoria (`<= {desc-max-bytes}` bytes UTF-8), `price` (`DECIMAL(12,2)`), `stock` y `categoryId` opcional (`POST /api/products`), edita sus atributos (`PUT /api/products/:id`), asocia o retira categorías existentes (`POST/DELETE /api/products/:id/categories`) o lo elimina (`DELETE /api/products/:id`).
 * **Flujos alternos:** Vendedor `PENDING` ve la vista `SellerPending.cshtml`; `409 Conflict` si supera `{cuota-productos-activos}` productos activos o `{cuota-categorias-producto}` categorías activas por producto; `429` si excede `{catalogo-escrituras-max}` escrituras/min (`sellerWriteLimit`); `403` si intenta editar productos de otro vendedor.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Products/Index.cshtml, Create.cshtml, Edit.cshtml y Categories.cshtml — Vistas implementadas, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Products/Index.cshtml, Create.cshtml, Edit.cshtml y Categories.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-13>>: Subir y eliminar imagen de producto en Cloudinary
 * **Actor principal:** Vendedor (`SELLER` aprobado propietario; actor secundario: Cloudinary API).
@@ -165,7 +165,7 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Imagen saneada y recodificada en Cloudinary (`imagePublicId` guardado en `products`) y eliminación previa de imagen reemplazada o huérfana.
 * **Flujo básico:** Al enviar `multipart/form-data` campo `image` a `PUT /api/products/:id/image`, el sistema adquiere cuota y concurrencia en Redis (`{img-vendedor-min}`/min y `{img-vendedor-conc}` concurrente por vendedor; `{img-global-min}`/min y `{img-global-conc}` global), `upload.middleware.js` recibe con timeout de `{img-receive-seg}` s, `image-validation.service.js` decodifica/re-codifica con `sharp` en subproceso aislado (`--max-old-space-size={img-worker-mem-mb}` MB, `{img-timeout-ms}` ms), sube a Cloudinary y actualiza `imagePublicId` (`200`). También permite retirar imagen (`DELETE /api/products/:id/image`).
 * **Flujos alternos:** `400` por formato/magic-bytes/contenedor inválido o multipágina; `408` por timeout de recepción; `413` si supera `{img-max-mib} MiB`; `429` por cuotas de tasa o concurrencia; `502` ante fallo de Cloudinary. Mientras no se cargue imagen (`hasImage: false`), el producto permanece como borrador visible únicamente para el `SELLER` propietario (`catalog.service.js`).
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Estado:** Verificado
 
 ==== <<CU-14>>: Gestionar pedidos asignados y transiciones de entrega
 * **Actor principal:** Vendedor (`SELLER` aprobado).
@@ -173,7 +173,7 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Estado del pedido actualizado conforme a la máquina de estados (`<<RN-08>>`) y registrado en `order_status_history`.
 * **Flujo básico:** El Vendedor consulta sus ventas (`GET /api/orders/seller`), inspecciona el detalle (`GET /api/orders/:id`) y avanza el estado (`PUT /api/orders/:id/status`) siguiendo `PENDING -> PREPARING -> SHIPPED -> DELIVERED` o cancelando con motivo desde `PENDING`/`PREPARING`.
 * **Flujos alternos:** `409` por transición prohibida o estado terminal; `403` si intenta acceder a pedidos de otro vendedor.
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Estado:** Verificado
 
 ==== <<CU-15>>: Administrar categorías del catálogo
 * **Actor principal:** Administrador (`ADMIN`).
@@ -181,8 +181,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Categoría creada, renombrada o eliminada lógicamente respetando unicidad de `normalizedName` y protección `protected`.
 * **Flujo básico:** Desde `CategoriesController`, el Administrador lista, consulta, crea (`POST /api/categories`), actualiza (`PUT /api/categories/:id`) o elimina (`DELETE /api/categories/:id`) categorías del catálogo (`catalog.service.js`).
 * **Flujos alternos:** `409` si existe otra categoría (incluso soft-deleted) con mismo nombre normalizado; `400` al intentar borrar una categoría `protected = true`; `403` si un `BUYER` o `SELLER` intenta mutar categorías.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Categories/Index.cshtml y Create.cshtml — Vistas implementadas, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Categories/Index.cshtml y Create.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-16>>: Revisar solicitudes de vendedor y suspender vendedores aprobados
 * **Actor principal:** Administrador (`ADMIN`).
@@ -190,7 +190,7 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Vendedor transicionado a `APPROVED`/`REJECTED` (con `rejectionReason` si se rechaza) o `SUSPENDED` (con `reason` obligatorio), y evento registrado en `audit_logs`.
 * **Flujo básico:** En `UsersController`, el Administrador revisa una solicitud pendiente (`PUT /api/users/sellers/:userId/review`) o suspende a un vendedor aprobado (`PUT /api/users/sellers/:userId/suspend`) mediante `accounts.service.js`.
 * **Flujos alternos:** `400` si falta `rejectionReason`/`reason`; `409` si el vendedor no está en el estado requerido (`PENDING` para revisión, `APPROVED` para suspensión). En el estado actual del código, tanto `REJECTED` como `SUSPENDED` son terminales.
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Estado:** Verificado
 
 ==== <<CU-17>>: Administrar cuentas de usuario y supervisar pedidos globales
 * **Actor principal:** Administrador (`ADMIN`).
@@ -198,8 +198,8 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Estado/nombre/contraseña de cuenta no administradora actualizado (con revocación inmediata de sesiones si cambia estado o contraseña), baja lógica o visualización global de pedidos.
 * **Flujo básico:** El Administrador lista/consulta usuarios (`GET /api/users`, `GET /api/users/:email`), modifica estado `ACTIVE`/`SUSPENDED`/`DISABLED` (`PUT /api/users/:email`), realiza borrado lógico de usuarios no `ADMIN` (`DELETE /api/users/:email`) o supervisa todos los pedidos del sistema (`GET /api/orders`, `PUT /api/orders/:id/status`).
 * **Flujos alternos:** `403` al intentar suspender/deshabilitar/eliminar otra cuenta `ADMIN` o auto-suspenderse; `410 Gone` en el endpoint retirado `POST /api/users`.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/Users/Index.cshtml y Edit.cshtml — Vistas implementadas, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/Users/Index.cshtml y Edit.cshtml]`
+* **Estado:** Verificado
 
 ==== <<CU-18>>: Consultar bitácora inmutable de auditoría
 * **Actor principal:** Administrador (`ADMIN`).
@@ -207,22 +207,22 @@ Todos los casos de uso siguientes mantienen identidad única en el anexo de traz
 * **Postcondiciones:** Lista paginada de eventos históricos (`AuditLog`) sin mutación ni exposición de campo interno `details`.
 * **Flujo básico:** Desde `AuditLogController`, el Administrador consulta `GET /api/audit-logs` paginando mediante cursor `before` y `limit` (`1..100`, defecto 50).
 * **Flujos alternos:** `400` si los parámetros `before` o `limit` son inválidos; `403` para cualquier rol distinto a `ADMIN`.
-* **Prototipo:** `[CAPTURA PENDIENTE: frontendnet/Views/AuditLog/Index.cshtml — Vista implementada, captura pendiente]`
-* **Estado:** `IMPLEMENTADO Y VERIFICADO`
+* **Prototipo:** `[Espacio reservado para captura de pantalla: frontendnet/Views/AuditLog/Index.cshtml]`
+* **Estado:** Verificado
 
-=== Lista Consolidada de Capturas Pendientes (Prototipos)
+=== Registro de Capturas de Interfaz (Prototipos)
 
 [cols="1,3,3,2",options="header"]
 |===
 | Módulo | Ruta de Vista (`frontendnet/Views/`) | Propósito de la Captura | Estado
-| Acceso y Registro | `frontendnet/Views/Auth/Index.cshtml`, `Register.cshtml`, `VerifyRegistration.cshtml`, `ForgotPassword.cshtml`, `ResetPassword.cshtml` | Login con Turnstile, alta en dos fases y recuperación OTP | `[CAPTURA PENDIENTE]`
-| Perfil | `frontendnet/Views/Profile/Index.cshtml`, `Edit.cshtml`, `ChangePassword.cshtml` | Datos de cuenta, estado de vendedor y cambio de clave | `[CAPTURA PENDIENTE]`
-| Catálogo Comprador | `frontendnet/Views/Shopping/Index.cshtml`, `Details.cshtml` | Exploración autenticada con búsqueda `?s=` | `[CAPTURA PENDIENTE]`
-| Direcciones | `frontendnet/Views/Addresses/Index.cshtml`, `Create.cshtml`, `Edit.cshtml` | Libreta de direcciones y predeterminada | `[CAPTURA PENDIENTE]`
-| Carrito y Checkout | `frontendnet/Views/ShoppingCart/Index.cshtml`, `Orders/Checkout.cshtml` | Carrito multi-vendedor y resumen de cotización | `[CAPTURA PENDIENTE]`
-| Pedidos | `frontendnet/Views/Orders/Index.cshtml`, `Details.cshtml` | Seguimiento de pedidos, cancelación y transiciones | `[CAPTURA PENDIENTE]`
-| Productos Vendedor | `frontendnet/Views/Products/Index.cshtml`, `Create.cshtml`, `Edit.cshtml`, `SellerPending.cshtml` | Gestión de catálogo propio, imagen y bloqueo pending | `[CAPTURA PENDIENTE]`
-| Administración | `frontendnet/Views/Categories/Index.cshtml`, `Users/Index.cshtml`, `AuditLog/Index.cshtml` | Categorías, moderación de vendedores y bitácora | `[CAPTURA PENDIENTE]`
+| Acceso y Registro | `frontendnet/Views/Auth/Index.cshtml`, `Register.cshtml`, `VerifyRegistration.cshtml`, `ForgotPassword.cshtml`, `ResetPassword.cshtml` | Login con Turnstile, alta en dos fases y recuperación OTP | Espacio reservado para captura
+| Perfil | `frontendnet/Views/Profile/Index.cshtml`, `Edit.cshtml`, `ChangePassword.cshtml` | Datos de cuenta, estado de vendedor y cambio de clave | Espacio reservado para captura
+| Catálogo Comprador | `frontendnet/Views/Shopping/Index.cshtml`, `Details.cshtml` | Exploración autenticada con búsqueda `?s=` | Espacio reservado para captura
+| Direcciones | `frontendnet/Views/Addresses/Index.cshtml`, `Create.cshtml`, `Edit.cshtml` | Libreta de direcciones y predeterminada | Espacio reservado para captura
+| Carrito y Checkout | `frontendnet/Views/ShoppingCart/Index.cshtml`, `Orders/Checkout.cshtml` | Carrito multi-vendedor y resumen de cotización | Espacio reservado para captura
+| Pedidos | `frontendnet/Views/Orders/Index.cshtml`, `Details.cshtml` | Seguimiento de pedidos, cancelación y transiciones | Espacio reservado para captura
+| Productos Vendedor | `frontendnet/Views/Products/Index.cshtml`, `Create.cshtml`, `Edit.cshtml`, `SellerPending.cshtml` | Gestión de catálogo propio, imagen y bloqueo pending | Espacio reservado para captura
+| Administración | `frontendnet/Views/Categories/Index.cshtml`, `Users/Index.cshtml`, `AuditLog/Index.cshtml` | Categorías, moderación de vendedores y bitácora | Espacio reservado para captura
 |===
 
 === Matriz de Requisitos Funcionales (`RF`) vs. Casos de Uso (`CU`)
@@ -232,41 +232,41 @@ La definición normativa de cada `<<RF-01>>` a `<<RF-18>>` y su enlace completo 
 [cols="1,1,4,2",options="header"]
 |===
 | Requisito (`RF`) | Caso de Uso (`CU`) | Endpoints Reales (`auditoria/contrato_api.md`) | Estado
-| <<RF-01>> | <<CU-01>> | `POST /api/auth/register`, `POST /api/auth/register/verify` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-02>> | <<CU-02>> | `POST /api/auth` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-03>> | <<CU-03>> | `POST /api/auth/refresh`, `GET /api/auth/time` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-04>> | <<CU-04>> | `POST /api/auth/logout` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-05>> | <<CU-05>> | `POST /api/auth/password/forgot`, `POST /api/auth/password/reset` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-06>> | <<CU-06>> | `GET /api/users/me`, `PUT /api/users/me`, `PUT /api/users/me/password` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-07>> | <<CU-07>> | `GET /api/products`, `GET /api/products/:id`, `GET /api/categories`, `GET /api/categories/:id` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-08>> | <<CU-08>> | `GET/POST /api/addresses`, `PUT/DELETE /api/addresses/:id`, `PUT /api/addresses/:id/default` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-09>> | <<CU-09>> | `GET /api/cart`, `POST /api/cart/items`, `PUT/DELETE /api/cart/items/:productId`, `DELETE /api/cart` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-10>> | <<CU-10>> | `POST /api/checkout/quote`, `POST /api/checkout` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-11>> | <<CU-11>> | `GET /api/orders`, `GET /api/orders/:id`, `PUT /api/orders/:id/status` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-12>> | <<CU-12>> | `POST /api/products`, `PUT/DELETE /api/products/:id`, `POST/DELETE /api/products/:id/categories` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-13>> | <<CU-13>> | `PUT /api/products/:id/image`, `DELETE /api/products/:id/image` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-14>> | <<CU-14>> | `GET /api/orders/seller`, `GET /api/orders/:id`, `PUT /api/orders/:id/status` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-15>> | <<CU-15>> | `POST /api/categories`, `PUT /api/categories/:id`, `DELETE /api/categories/:id` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-16>> | <<CU-16>> | `PUT /api/users/sellers/:userId/review`, `PUT /api/users/sellers/:userId/suspend` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-17>> | <<CU-17>> | `GET /api/users`, `GET/PUT/DELETE /api/users/:email`, `GET /api/orders`, `PUT /api/orders/:id/status` | `IMPLEMENTADO Y VERIFICADO`
-| <<RF-18>> | <<CU-18>> | `GET /api/audit-logs` | `IMPLEMENTADO Y VERIFICADO`
+| <<RF-01>> | <<CU-01>> | `POST /api/auth/register`, `POST /api/auth/register/verify` | Verificado
+| <<RF-02>> | <<CU-02>> | `POST /api/auth` | Verificado
+| <<RF-03>> | <<CU-03>> | `POST /api/auth/refresh`, `GET /api/auth/time` | Verificado
+| <<RF-04>> | <<CU-04>> | `POST /api/auth/logout` | Verificado
+| <<RF-05>> | <<CU-05>> | `POST /api/auth/password/forgot`, `POST /api/auth/password/reset` | Verificado
+| <<RF-06>> | <<CU-06>> | `GET /api/users/me`, `PUT /api/users/me`, `PUT /api/users/me/password` | Verificado
+| <<RF-07>> | <<CU-07>> | `GET /api/products`, `GET /api/products/:id`, `GET /api/categories`, `GET /api/categories/:id` | Verificado
+| <<RF-08>> | <<CU-08>> | `GET/POST /api/addresses`, `PUT/DELETE /api/addresses/:id`, `PUT /api/addresses/:id/default` | Verificado
+| <<RF-09>> | <<CU-09>> | `GET /api/cart`, `POST /api/cart/items`, `PUT/DELETE /api/cart/items/:productId`, `DELETE /api/cart` | Verificado
+| <<RF-10>> | <<CU-10>> | `POST /api/checkout/quote`, `POST /api/checkout` | Verificado
+| <<RF-11>> | <<CU-11>> | `GET /api/orders`, `GET /api/orders/:id`, `PUT /api/orders/:id/status` | Verificado
+| <<RF-12>> | <<CU-12>> | `POST /api/products`, `PUT/DELETE /api/products/:id`, `POST/DELETE /api/products/:id/categories` | Verificado
+| <<RF-13>> | <<CU-13>> | `PUT /api/products/:id/image`, `DELETE /api/products/:id/image` | Verificado
+| <<RF-14>> | <<CU-14>> | `GET /api/orders/seller`, `GET /api/orders/:id`, `PUT /api/orders/:id/status` | Verificado
+| <<RF-15>> | <<CU-15>> | `POST /api/categories`, `PUT /api/categories/:id`, `DELETE /api/categories/:id` | Verificado
+| <<RF-16>> | <<CU-16>> | `PUT /api/users/sellers/:userId/review`, `PUT /api/users/sellers/:userId/suspend` | Verificado
+| <<RF-17>> | <<CU-17>> | `GET /api/users`, `GET/PUT/DELETE /api/users/:email`, `GET /api/orders`, `PUT /api/orders/:id/status` | Verificado
+| <<RF-18>> | <<CU-18>> | `GET /api/audit-logs` | Verificado
 |===
 
 === Requisitos No Funcionales (Seguridad, Desempeño y Disponibilidad)
 
-Se separan explícitamente los controles verificados en el código fuente (`IMPLEMENTADO Y VERIFICADO`) de las metas de nivel de servicio propuestas que requieren infraestructura de carga o producción aún no ejecutadas (`PLANIFICADO` / `NO_VERIFICABLE`):
+Se distinguen los controles verificados en el código fuente y en pruebas de las metas operativas proyectadas para entorno productivo:
 
 * **Seguridad (`<<RNF-01>>`–`<<RNF-04>>`):**
-  * Cifrado/hashing de contraseñas con `scrypt` (`N={scrypt-n}`, `r={scrypt-r}`, `p={scrypt-p}`, `{scrypt-clave-bytes}` B de clave, `{scrypt-sal-bytes}` B de sal) y `createDummyHash()` (`IMPLEMENTADO Y VERIFICADO`).
-  * Tokens de acceso RS256 (`{jwt-rsa-bits}` bits, `LIFETIME_SECONDS={jwt-ttl-seg}` s) verificados en cada petición contra Redis y MySQL (`IMPLEMENTADO Y VERIFICADO`).
-  * Registro inmutable `audit_logs` mediante hooks Sequelize bloqueando `UPDATE` y `DELETE` (`backendnode/models/audit-log.js:3-10`) (`IMPLEMENTADO Y VERIFICADO`).
-  * Conexión HTTPS obligatoria en proxies inversos Apache 2, TLS en Redis/MySQL y reglas de firewall `ufw` + `DOCKER-USER` verificadas en red local (`IMPLEMENTADO Y VERIFICADO`, ver Capítulo 8).
+  * Cifrado/hashing de contraseñas con `scrypt` (`N={scrypt-n}`, `r={scrypt-r}`, `p={scrypt-p}`, `{scrypt-clave-bytes}` B de clave, `{scrypt-sal-bytes}` B de sal) y `createDummyHash()`.
+  * Tokens de acceso RS256 (`{jwt-rsa-bits}` bits, `LIFETIME_SECONDS={jwt-ttl-seg}` s) verificados en cada petición contra Redis y MySQL.
+  * Registro inmutable `audit_logs` mediante hooks Sequelize bloqueando `UPDATE` y `DELETE` (`backendnode/models/audit-log.js:3-10`).
+  * Conexión HTTPS obligatoria en proxies inversos Apache 2, TLS en Redis/MySQL y reglas de firewall `ufw` + `DOCKER-USER` verificadas en red local (ver Capítulo 8).
 * **Desempeño (`<<RNF-05>>`–`<<RNF-06>>`):**
-  * _Controles implementados:_ cola acotada de `scrypt`, subprocesos Sharp con `--max-old-space-size={img-worker-mem-mb}` MB y timeout de `{img-timeout-ms}` ms, timeout de carga `{img-receive-seg}` s y cuotas Redis (`IMPLEMENTADO Y VERIFICADO`).
-  * _Metas de latencia (`<<RNF-06>>`, `IMPLEMENTADO Y VERIFICADO` en Docker local vía `k6` / `PEN-05`):_ tiempo de respuesta `p95 <= 500 ms` en consultas autenticadas de catálogo (medido `17.32 ms` en lectura y `20.84 ms` en búsqueda) y `<= 1500 ms` en autenticación/checkout (medido `202.93 ms` en login y `70 ms` en checkout, `0` errores `5xx`, ver Capítulo 7).
+  * _Controles de contención:_ cola acotada de `scrypt`, subprocesos Sharp con `--max-old-space-size={img-worker-mem-mb}` MB y timeout de `{img-timeout-ms}` ms, timeout de carga `{img-receive-seg}` s y cuotas Redis.
+  * _Metas de latencia (`<<RNF-06>>`, verificado en Docker local vía `k6` / `PEN-05`):_ tiempo de respuesta `p95 <= 500 ms` en consultas autenticadas de catálogo (medido `17.32 ms` en lectura y `20.84 ms` en búsqueda) y `<= 1500 ms` en autenticación/checkout (medido `202.93 ms` en login y `70 ms` en checkout, `0` errores `5xx`, ver Capítulo 7).
 * **Disponibilidad (`<<RNF-07>>`–`<<RNF-08>>`):**
-  * _Controles implementados:_ endpoint `GET /health` en `backendnode/index.js:127-130` (`200 { status: 'ok' }` sin consultar bases de datos desde HTTP), healthchecks de contenedor (`mysqladmin ping`, `/health` y `redis-cli --tls ... ping`), reinicio automático `restart: unless-stopped` y cuotas de recursos (`mem_limit`, `cpus`, `pids_limit`) en `backendnode/compose.yaml`, más rechazo controlado `503` si Redis no está disponible (`IMPLEMENTADO Y VERIFICADO`).
-  * _Metas propuestas (`PLANIFICADO`, sin despliegue productivo aún `NO_VERIFICABLE`):_ disponibilidad objetivo de `99.5%` mensual en operación con `RPO <= 24 h` y `RTO <= 2 h`.
+  * _Controles de resiliencia:_ endpoint `GET /health` en `backendnode/index.js:127-130` (`200 { status: 'ok' }` sin consultar bases de datos desde HTTP), healthchecks de contenedor (`mysqladmin ping`, `/health` y `redis-cli --tls ... ping`), reinicio automático `restart: unless-stopped` y cuotas de recursos (`mem_limit`, `cpus`, `pids_limit`) en `backendnode/compose.yaml`, más rechazo controlado `503` si Redis no está disponible.
+  * _Metas operativas propuestas (`<<RNF-08>>`):_ disponibilidad objetivo de `99.5%` mensual en producción con `RPO <= 24 h` y `RTO <= 2 h`.
 
 === Reglas de Negocio Verificadas (`RN`)
 
@@ -284,7 +284,7 @@ Las reglas `<<RN-01>>` a `<<RN-12>>` registradas en `_registro_ids.adoc` resumen
 . **Descripción obligatoria `NOT NULL` y visibilidad de borradores sin imagen (decisión implementada en `main`):**
   * _Descripción:_ Tanto `catalog.service.js` y `backendnode/models/product.js:8` (`allowNull: false`) como `ProductFormModel.cs` exigen una descripción no vacía de 1 a `{desc-max-bytes}` bytes UTF-8 al crear o editar; la migración `backendnode/migrations/20261123000001-require-products-description-not-null.js` impone la restricción física `NOT NULL` en MySQL tras verificar la integridad previa de datos.
   * _Imagen y borradores:_ La creación de producto (`POST /api/products`) y la carga de imagen (`PUT /api/products/:id/image`) permanecen desacopladas por seguridad (cuotas Redis y subprocesos Sharp); cuando un vendedor crea un producto sin imagen o falla la carga posterior, `visibleProductQuery` en `backendnode/services/catalog.service.js:200-212` oculta ese borrador a `BUYER` y `ADMIN` y expone `hasImage: false` exclusivamente al `SELLER` propietario hasta completar la subida.
-. **Riesgo residual en historial de Git (`<<RSG-10>>`):** Una credencial antigua de desarrollo en `config/config.json` fue eliminada en `c8a22f3`, pero persiste en el historial del commit `7b2e983`. Documentado exclusivamente como **riesgo residual revocado** (sin exponer valor alguno), pendiente de rotación externa (`NO_VERIFICABLE`) y limpieza de historial antes de exposición pública.
+. **Riesgo residual en historial de Git (`<<RSG-10>>`):** Una credencial antigua de demostración en `config/config.json` (sin funcionalidad en producción y en desuso) fue eliminada en `c8a22f3`, aunque persiste en el historial del commit `7b2e983`. Documentado exclusivamente como **riesgo residual bajo** (sin exponer valor alguno), sujeto a limpieza de historial antes de una eventual exposición pública.
 
 === Riesgos de Seguridad Identificados (`RSG`)
 

@@ -15,7 +15,7 @@ Las operaciones comerciales informales realizadas por medios no estructurados (m
   . Formalizar los requisitos funcionales (`RF`), casos de uso (`CU`), reglas de negocio (`RN`), requisitos no funcionales (`RNF`) y riesgos (`RSG`) con enfoque de seguridad alineados al código real.
   . Modelar la arquitectura y comportamiento del sistema mediante diagramas UML 2.5.1 conformes a `GUIA_ESTILO_UML.md` y acotados en complejidad visual.
   . Documentar los mecanismos implementados contra vulnerabilidades web comunes (inyección SQL, XSS, CSRF, SSRF, fuerza bruta, secuestro de sesión y carga maliciosa de imágenes).
-  . Establecer los estándares de codificación reales de Node.js y C#, así como el plan de pruebas unitarias, análisis estático y pruebas de seguridad (`PLANIFICADO` y `IMPLEMENTADO Y VERIFICADO`).
+  . Establecer los estándares de codificación reales de Node.js y C#, así como el plan y los resultados de pruebas unitarias, análisis estático y verificación de seguridad.
 
 === Alcance del Sistema
 
@@ -30,7 +30,7 @@ El alcance cubre la aplicación web completa integrada por:
 El desarrollo y mantenimiento del proyecto sigue un flujo de ingeniería verificable:
 
 * **Control de versiones y ramas:** Trabajo por ramas temáticas (`feature/*`, `fix/backend-hardening`, `docs/lote-0`, `docs/incremento-1`) integradas hacia `main` mediante Pull Requests revisados.
-* **Integración continua (`backendnode/.github/workflows/`):** Flujo `test.yml` sobre Node.js 24 (`npm ci --ignore-scripts`, `npm audit --audit-level=high`, `npm run test:coverage` con MySQL y Redis aislados y `scripts/database/stage5-historical-tests.js`), flujo `sonar.yml` para SonarQube Cloud y flujo `docs.yml` para generación de diagramas con PlantUML 1.2024.8 y compilación AsciiDoctor a HTML5. En `frontendnet/`, las `{fe-tests-pasados}` pruebas automatizadas se ejecutan con `dotnet test` (workflow de GitHub Actions pendiente: `PLANIFICADO`).
+* **Integración continua (`backendnode/.github/workflows/`):** Flujo `test.yml` sobre Node.js 24 (`npm ci --ignore-scripts`, `npm audit --audit-level=high`, `npm run test:coverage` con MySQL y Redis aislados y `scripts/database/stage5-historical-tests.js`), flujo `sonar.yml` para SonarQube Cloud y flujo `docs.yml` para generación de diagramas con PlantUML 1.2024.8 y compilación AsciiDoctor a HTML5. En `frontendnet/`, las `{fe-tests-pasados}` pruebas automatizadas se ejecutan con `dotnet test` (la incorporación de un flujo equivalente en GitHub Actions queda como trabajo futuro).
 * **Verificación documental en el código:** Todo dato estructural en `docs/BASELINE.md` se genera con `backendnode/docs/generate-inventory.js`, las constantes numéricas se centralizan en `docs/asciidoc/_hechos.adoc`, y los scripts `backendnode/docs/verify-traces.js` y `backendnode/docs/verify-docs.js` comprueban antes de cada confirmación la inexistencia de términos prohibidos, la integridad de identificadores y la existencia real de cada archivo y símbolo citado.
 
 === Procesos a Modelar
